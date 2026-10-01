@@ -48,6 +48,14 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.3" author="kallums" time="2026-10-02T00:30:00Z">
+        <changelog><![CDATA[A Measure is now melody, chords and bass - no drums. Drums are their own kind of idea, with their own beat, fills and cymbal; make a groove there and put it on its own track. A Measure on Tracks makes three tracks. Its tune, chords and bass are exactly what they were. The chord pace reads in numbers: 0.5, 1, 1.5, 2 and the new 4 a bar - a chord on every beat (three a bar in 3/4). 0.5 a bar is the old Slow, renamed. Any rolls 0.5, 1 and 2; 1.5 and 4 are there to choose, so every idea number from 1.0 keeps its pace.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
