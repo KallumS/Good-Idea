@@ -32,6 +32,14 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.1" author="kallums" time="2026-10-01T23:30:00Z">
+        <changelog><![CDATA[More rhythm, and borrowed chords. Figures: now and then a dotted rhythm or a triplet, in the tune and the chords, with the drums shuffling on triplets. Push: chords that arrive an eighth early, with the tune, bass and kick drum coming along. A Swing slider, from straight to full triplet swing, for every part of every idea. Borrowed chords: rarely - about one idea in four, one chord - a chord from another scale on the same key note (a minor iv or a bVI in a major key, a major IV in a minor one); the tune bends to it, and the window says which chord, where, and which scale it came from. With Figures on Plain, Push on None, Borrowed on Off and no swing, every idea number from 1.0 gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
