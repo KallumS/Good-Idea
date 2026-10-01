@@ -66,7 +66,8 @@ function M.random(seed)
 end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
-                  chords = 6, bass = 7, drums = 8, borrow = 9, push = 10 }
+                  chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
+                  pull = 11, kit = 12 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -138,9 +139,12 @@ local function snap(meter, x) return round(x / meter.beat) * meter.beat end
 -- shows only `when` it means something for what is chosen (no dead controls).
 ------------------------------------------------------------------------------
 
-M.KINDS = { "Motif", "Phrase", "Measure" }
+M.KINDS = { "Motif", "Phrase", "Measure", "Drums" }
 
-local function hasMelody(st) return st.kind ~= "Phrase" or st.content ~= "Chords" end
+local function notDrums(st) return st.kind ~= "Drums" end
+local function hasMelody(st)
+  return st.kind ~= "Drums" and (st.kind ~= "Phrase" or st.content ~= "Chords")
+end
 local function hasChords(st)
   return st.kind == "Measure" or (st.kind == "Phrase" and st.content ~= "Melody")
 end
@@ -159,6 +163,7 @@ function M.buildSettings()
         Motif = "A short melodic hook, 1 to 4 bars, built from one small cell repeated and varied.",
         Phrase = "A 1 to 4 bar phrase: a melody, a chord pattern, or both in one clip, with a proper ending.",
         Measure = "8 to 16 bars of music: melody, chords, bass and drums, laid out in a form.",
+        Drums = "1 to 16 bars of drums on General MIDI notes: a groove, varied, with fills where you ask for them.",
       } },
     { id = "motifBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4 }, any = true,
       default = "Any", name = barsName, weights = { 1, 3, 1, 2 },
@@ -179,11 +184,11 @@ function M.buildSettings()
       } },
 
     { id = "root", label = "Key", step = "Key", values = rootIdx, any = true, default = 1,
-      name = function(v) return T.ROOTS[v].name end,
+      name = function(v) return T.ROOTS[v].name end, when = notDrums,
       -- Any rolls the twelve common spellings, not C# and Db both.
       anyValues = { 1, 3, 4, 6, 7, 8, 9, 11, 13, 14, 16, 17 } },
     { id = "scale", label = "Scale", step = "Key", values = scaleIdx, any = true, default = 1,
-      name = function(v) return T.SCALES[v].name end,
+      name = function(v) return T.SCALES[v].name end, when = notDrums,
       -- Any rolls the scales a tune is usually written in; the colour scales
       -- (blues, whole tone, diminished) are there to be chosen.
       anyValues = { 1, 2, 5, 8, 3, 6, 7, 10, 11 },
@@ -229,11 +234,15 @@ function M.buildSettings()
         Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7.",
       } },
     { id = "chordPace", label = "Chord pace", step = "Chords",
-      values = { "Slow", "One a bar", "Two a bar" }, any = true, default = "Any",
-      weights = { 0.7, 1.6, 0.8 }, when = hasChords,
+      values = { "Slow", "One a bar", "1.5 a bar", "Two a bar" }, any = true, default = "Any",
+      -- Any rolls the three 1.0 had, with 1.0's weights, so a 1.0 idea
+      -- number still rolls the same pace; 1.5 a bar is there to choose.
+      anyValues = { "Slow", "One a bar", "Two a bar" }, anyWeights = { 0.7, 1.6, 0.8 },
+      when = hasChords,
       hints = {
         Slow = "A chord every two bars.",
         ["One a bar"] = "A chord a bar.",
+        ["1.5 a bar"] = "Three chords every two bars: in 4/4, three beats, three beats, two - the 3+3+2 that pushes a progression along. (Chosen, not rolled by Any.)",
         ["Two a bar"] = "Two chords a bar.",
       } },
     { id = "chordStyle", label = "Style", step = "Chords", values = { "Block", "Pulse", "Broken" },
@@ -261,13 +270,12 @@ function M.buildSettings()
         Pulse = "The root, in rhythm with the kick drum.",
         Moving = "On the beat: the root, then the fifth or the octave, and a step into the next chord.",
       } },
-    { id = "drums", label = "Drums", step = "Arrangement", values = { "On", "Off" },
-      default = "On", when = function(st) return st.kind == "Measure" end,
-      hints = {
-        On = "A drum part on MIDI channel 10 (General MIDI: kick 36, snare 38, hats 42 and 46).",
-        Off = "No drums.",
-      } },
-    { id = "layout", label = "Layout", step = "Arrangement", values = { "Tracks", "One item" },
+    -- Retired in 1.2: a Measure always has drums, and drums on their own are
+    -- the Drums kind. It stays in the list, never shown and always On,
+    -- because the list is the order the dice are drawn in.
+    { id = "drums", label = "Drums", step = "Arrangement", values = { "On" },
+      default = "On", retired = true, when = function() return false end },
+    { id = "layout", label = "Layout", step = "Out", values = { "Tracks", "One item" },
       default = "Tracks", when = function(st) return st.kind == "Measure" end,
       hints = {
         Tracks = "A new track for each part - Melody, Chords, Bass, Drums - under the selected track.",
@@ -289,22 +297,59 @@ function M.buildSettings()
       weights = { 2, 1, 1, 1 },
       hints = {
         Plain = "Straight eighths and sixteenths.",
-        Dotted = "Now and then a pair of notes becomes long-short: a dotted eighth and a sixteenth, a dotted quarter and an eighth.",
-        Triplets = "Now and then a beat becomes three: eighth-note triplets, or three quarter notes across two beats. The drums shuffle.",
+        Dotted = "Now and then a pair of notes becomes long-short: a dotted eighth and a sixteenth, a dotted quarter and an eighth - in the tune, the chords and a moving bass.",
+        Triplets = "Now and then a beat becomes three: eighth-note triplets, or three quarter notes across two beats. The drums shuffle and broken chords roll in threes.",
         Mixed = "Now and then dotted, now and then triplets.",
       } },
     { id = "push", label = "Push", step = "Feel", values = { "None", "Some", "Lots" },
-      any = true, default = "Any", weights = { 1.5, 1.5, 1 },
+      any = true, default = "Any", weights = { 1.5, 1.5, 1 }, when = notDrums,
       hints = {
         None = "Every chord arrives on the beat.",
         Some = "Some chords arrive an eighth early - on the 'and' before the beat - and the tune and the kick drum come with them.",
         Lots = "Most chords arrive an eighth early: a pushed, syncopated feel.",
       } },
     { id = "borrowed", label = "Borrowed", step = "Key", values = { "Off", "Rare" }, default = "Rare",
-      when = function(st) return st.scale == "Any" or #T.SCALES[st.scale].iv == 7 end,
+      when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
       hints = {
         Off = "Every chord from the scale.",
         Rare = "About one idea in four borrows one chord from another scale on the same key note - a minor iv or a bVI in a major key, a major IV in a minor one. The window says which chord, and where it is from. Seven-note scales only.",
+      } },
+
+    -- Added in 1.2, last for the same reason.
+    { id = "pull", label = "Pull", step = "Feel", values = { "None", "Some", "Lots" },
+      any = true, default = "Any", weights = { 1.5, 1.5, 1 }, when = hasChords,
+      hints = {
+        None = "Every chord is played on the beat.",
+        Some = "Some chords are played an eighth late, laid back behind the beat; the tune and the bass stay on it.",
+        Lots = "Most chords lie back an eighth: a lazy, behind-the-beat feel.",
+      } },
+    { id = "drumBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
+      any = true, default = "Any", name = function(v) return tostring(v) end,
+      weights = { 1, 3, 0.3, 3, 0.2, 0.3, 0.2, 2, 0.2, 0.2, 0.2, 0.6, 0.2, 0.2, 0.2, 1 },
+      when = function(st) return st.kind == "Drums" end },
+    { id = "beat", label = "Beat", step = "Drums",
+      values = { "Backbeat", "Half-time", "Four on the floor", "Breakbeat" }, any = true, default = "Any",
+      weights = { 2, 1, 1, 1 }, when = function(st) return st.kind == "Drums" end,
+      hints = {
+        Backbeat = "Kick on and around 1 and 3, snare on 2 and 4.",
+        ["Half-time"] = "The snare on 3 only: twice as slow, twice as heavy.",
+        ["Four on the floor"] = "A kick on every beat, a clap on 2 and 4, open hats on the off-beats.",
+        Breakbeat = "A broken kick, the snare on 2 and 4 with one knocked off it, sixteenths on the hats. (In 4/4; a backbeat elsewhere.)",
+      } },
+    { id = "fills", label = "Fills", step = "Drums",
+      values = { "None", "At the end", "Every 4 bars", "Every 2 bars" }, any = true, default = "Any",
+      weights = { 0.6, 2, 2, 1 }, when = function(st) return st.kind == "Drums" end,
+      hints = {
+        None = "The groove all the way.",
+        ["At the end"] = "A fill in the last bar, leading back to the top - and a crash when it gets there.",
+        ["Every 4 bars"] = "A fill at the end of every fourth bar, and of the last.",
+        ["Every 2 bars"] = "A fill at the end of every second bar.",
+      } },
+    { id = "cymbal", label = "Cymbal", step = "Drums", values = { "Hats", "Ride" }, any = true,
+      default = "Any", weights = { 3, 1 }, when = function(st) return st.kind == "Drums" end,
+      hints = {
+        Hats = "Time kept on the hi-hats (42), opening (46) now and then.",
+        Ride = "Time kept on the ride (51), the bell (53) on the beat, the hi-hat pedal (44) on the backbeat.",
       } },
   }
   M.BY_ID = {}
@@ -370,17 +415,20 @@ function M.resolve(st, seed)
   end
   if r.kind == "Motif" then r.bars = r.motifBars
   elseif r.kind == "Phrase" then r.bars = r.phraseBars
+  elseif r.kind == "Drums" then r.bars = r.drumBars
   else r.bars = r.measureBars end
   if r.kind == "Motif" then r.content = "Melody"
-  elseif r.kind == "Measure" then r.content = "All" end
-  r.melody = r.content ~= "Chords"
+  elseif r.kind == "Measure" then r.content = "All"
+  elseif r.kind == "Drums" then r.content = "Melody"; r.drumsOnly = true end
+  r.melody = r.content ~= "Chords" and not r.drumsOnly
   r.chords = r.content ~= "Melody"
   return r
 end
 
 -- The bars setting the kind uses.
 function M.barsSetting(kind)
-  return (kind == "Motif" and "motifBars") or (kind == "Phrase" and "phraseBars") or "measureBars"
+  return (kind == "Motif" and "motifBars") or (kind == "Phrase" and "phraseBars")
+      or (kind == "Drums" and "drumBars") or "measureBars"
 end
 
 ------------------------------------------------------------------------------
@@ -483,7 +531,7 @@ end
 -- 3. Harmony
 ------------------------------------------------------------------------------
 
-local RATE = { Slow = 0.5, ["One a bar"] = 1, ["Two a bar"] = 2 }
+local RATE = { Slow = 0.5, ["One a bar"] = 1, ["1.5 a bar"] = 1.5, ["Two a bar"] = 2 }
 
 -- Where an answer stops copying its source: half way, on a beat, and
 -- always before the end (a unit one beat long copies nothing).
@@ -595,7 +643,7 @@ function M.harmony(plan, key, r, meter, rnd, colour)
         last.e = u.start + rs.e
         sl = last
       else
-        sl = { s = u.start + rs.s, e = u.start + rs.e, degree = rs.degree, key = key,
+        sl = { s = u.start + rs.s, e = u.start + rs.e, beat = u.start + rs.s, degree = rs.degree, key = key,
                chord = T.chord(key, rs.degree, colour) }
         timeline[#timeline + 1] = sl
       end
@@ -696,6 +744,7 @@ end
 ------------------------------------------------------------------------------
 
 local PUSH = { None = 0, Some = 0.3, Lots = 0.65 }
+M.PULL_CHANCE = { None = 0, Some = 0.3, Lots = 0.65 }
 
 function M.push(timeline, meter, r, rnd)
   local p = PUSH[r.push] or 0
@@ -707,6 +756,38 @@ function M.push(timeline, meter, r, rnd)
       sl.pushed = true
     end
   end
+end
+
+------------------------------------------------------------------------------
+-- Pull: chords that arrive an eighth late
+-- (docs/decisions/0014-pull-the-chords-lie-back.md)
+--
+-- The opposite of a push, and only for the chords part: the comping lies
+-- back behind the beat while the tune, the bass and the drums stay on it.
+-- So it is done to a copy of the timeline that only the chords part plays
+-- from (`idea.chordTimeline`); the harmony everything else hears is the one
+-- on the beat. The chord before is held an eighth longer to meet it. A
+-- pushed chord is not also pulled, and a chord must be long enough to give
+-- up an eighth at its start.
+------------------------------------------------------------------------------
+
+function M.pull(timeline, meter, r, rnd)
+  local out = {}
+  for i, sl in ipairs(timeline) do
+    local c = {}
+    for k, v in pairs(sl) do c[k] = v end
+    out[i] = c
+  end
+  local p = M.PULL_CHANCE[r.pull] or 0
+  if p == 0 or meter.beat < 4 then return out end
+  for i = 2, #out do
+    local sl, prev = out[i], out[i - 1]
+    if not sl.pushed and sl.s % meter.beat == 0 and sl.e - sl.s >= meter.beat + 2 and rnd() < p then
+      sl.s, prev.e = sl.s + 2, prev.e + 2
+      sl.pulled = true
+    end
+  end
+  return out
 end
 
 ------------------------------------------------------------------------------
@@ -1357,12 +1438,28 @@ end
 -- A pushed chord is played as if it began on its beat, with its first
 -- stroke moved back onto the push: so it is struck on the "and", and not
 -- struck again an eighth later on the beat.
-local function gridStart(sl) return sl.pushed and sl.s + 2 or sl.s end
-local function onPush(sl, onsets)
-  if not sl.pushed then return onsets end
-  if onsets[1] == sl.s + 2 then onsets[1] = sl.s else table.insert(onsets, 1, sl.s) end
-  return onsets
+-- Every chord keeps the beat it belongs to (`sl.beat`), even when it is
+-- pushed an eighth early or pulled an eighth late. A chord's strokes are
+-- laid out on the grid from its beat, then its first stroke moves to where
+-- the chord really arrives (`onShift`): onto the push, so it is not struck
+-- again on the beat, or back to the pull, so nothing is struck before it.
+local function beatOf(sl) return sl.beat or sl.s end
+local function gridStart(sl) return beatOf(sl) end
+local function onShift(sl, onsets)
+  local beat = beatOf(sl)
+  if sl.s == beat then return onsets end
+  if sl.s < beat then
+    if onsets[1] == beat then onsets[1] = sl.s else table.insert(onsets, 1, sl.s) end
+    return onsets
+  end
+  -- Pulled: nothing before it, and nothing crowding in less than a
+  -- sixteenth after it (a triplet grid can put a stroke two thirds of a
+  -- sixteenth behind).
+  local out = { sl.s }
+  for _, o in ipairs(onsets) do if o >= sl.s + 1 then out[#out + 1] = o end end
+  return out
 end
+local onPush = onShift
 
 -- The onsets of a pulse inside [s, e), with dotted and triplet figures laid
 -- over it bar by bar.
@@ -1397,37 +1494,70 @@ local function addNote(list, step, len, pitch, accent)
   end
 end
 
+-- A held (Block) chord takes the figures as stabs: now and then struck
+-- again a dotted quarter in (the Charleston, 1 and the "and" of 2), or
+-- three times across the first two beats (a quarter-note triplet).
+local function blockFigures(meter, onsets, to, figures, rnd)
+  local F = FIGURES[figures]
+  if not F or meter.beat ~= 4 then return onsets end
+  local out = {}
+  for i, o in ipairs(onsets) do
+    out[#out + 1] = o
+    local stop = onsets[i + 1] or to
+    if o % 4 == 0 and stop - o >= 8 then
+      local x = rnd()
+      if x < F.tri then out[#out + 1] = o + 8 / 3; out[#out + 1] = o + 16 / 3
+      elseif x < F.tri + F.dot then out[#out + 1] = o + 6 end
+    end
+  end
+  return out
+end
+
 function M.chordsPart(ctx, timeline, r, rnd, win)
   local notes = {}
   local meter = ctx.meter
   local prev, prevBass
   local arp = pickOne(rnd, ARPEGGIOS)
   local pattern = {}
-  for _, sl in ipairs(timeline) do
+  for idx, sl in ipairs(timeline) do
     local v = T.voice(sl.chord.pcs, prev, win.lo, win.hi)
     if #v == 0 then v = T.voice(sl.chord.pcs, nil, win.lo, win.hi + 12) end
     prev = v
     local onsets, perNote = {}, false
+    -- The grid runs from this chord's beat to the next chord's beat (or to
+    -- where this one ends, if the next is pushed in front of it).
     local from = gridStart(sl)
+    local nextSl = timeline[idx + 1]
+    local to = nextSl and math.min(sl.e, beatOf(nextSl)) or sl.e
     if r.chordStyle == "Pulse" then
-      onsets = onPush(sl, pulseOnsets(meter, from, sl.e, r.pace, r.groove, rnd, pattern, r.figures))
+      onsets = onShift(sl, pulseOnsets(meter, from, to, r.pace, r.groove, rnd, pattern, r.figures))
     elseif r.chordStyle == "Broken" then
       local unit = (r.pace == "Calm") and meter.beat or (r.pace == "Busy" and 1 or 2)
       -- In triplets, an arpeggio rolls in eighth-note triplets.
       if r.pace ~= "Calm" and meter.beat == 4 and (r.figures == "Triplets" or
          (r.figures == "Mixed" and coin(rnd, 0.4))) then unit = 4 / 3 end
-      for st = from, sl.e - 1e-6, unit do onsets[#onsets + 1] = st end
-      onsets = onPush(sl, onsets)
+      for st = from, to - 1e-6, unit do onsets[#onsets + 1] = st end
+      if unit ~= 4 / 3 then
+        -- Otherwise the figures fall on the arpeggio: long-short pairs, or
+        -- a beat in three.
+        local rel = {}
+        for i, o in ipairs(onsets) do rel[i] = o - from end
+        onsets = {}
+        for _, o in ipairs(M.figure(meter, from % meter.bar, to - from, rel, r.figures, rnd)) do
+          onsets[#onsets + 1] = from + o
+        end
+      end
+      onsets = onShift(sl, onsets)
       perNote = true
     else
-      onsets = onPush(sl, barStarts(meter, from, sl.e))
+      onsets = onShift(sl, blockFigures(meter, barStarts(meter, from, to), to, r.figures, rnd))
     end
     for i, o in ipairs(onsets) do
       local stop = onsets[i + 1] or sl.e
       local accent = o % meter.bar == 0
       if perNote then
-        local idx = arp.order[(i - 1) % #arp.order + 1]
-        local pitch = (idx <= #v) and v[idx] or (v[idx - #v] + 12)
+        local k = arp.order[(i - 1) % #arp.order + 1]
+        local pitch = (k <= #v) and v[k] or (v[k - #v] + 12)
         addNote(notes, o, stop - o, pitch, accent)
       else
         for _, p in ipairs(v) do addNote(notes, o, stop - o, p, accent) end
@@ -1436,7 +1566,7 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     if win.bass then
       local b = T.bassNote(sl.chord.rootPc, prevBass, 36, 47)
       prevBass = b
-      local bars = onPush(sl, barStarts(meter, gridStart(sl), sl.e))
+      local bars = onShift(sl, barStarts(meter, gridStart(sl), to))
       for i, o in ipairs(bars) do addNote(notes, o, (bars[i + 1] or sl.e) - o, b, o % meter.bar == 0) end
     end
   end
@@ -1491,7 +1621,12 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
       local unit = meter.beat
       if r.pace == "Calm" and (meter.bar // 2) % meter.beat == 0 and meter.beats % 2 == 0 then unit = meter.bar // 2 end
       local beats = {}
-      for st = gridStart(sl), sl.e - 1, unit do beats[#beats + 1] = st end
+      local from = gridStart(sl)
+      for st = from, sl.e - 1, unit do beats[#beats + 1] = st - from end
+      -- Dotted and triplet figures fall on a walking bass too.
+      local figured = M.figure(meter, from % meter.bar, sl.e - from, beats, r.figures, rnd)
+      beats = {}
+      for i, o in ipairs(figured) do beats[i] = from + o end
       beats = onPush(sl, beats)
       for i, st in ipairs(beats) do
         local p
@@ -1522,7 +1657,8 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
   return notes
 end
 
-M.DRUM = { kick = 36, snare = 38, hat = 42, open = 46, crash = 49, tomHi = 50, tomMid = 47, tomLo = 45 }
+M.DRUM = { kick = 36, snare = 38, hat = 42, open = 46, crash = 49, tomHi = 50, tomMid = 47, tomLo = 45,
+           clap = 39, pedal = 44, ride = 51, bell = 53, tomHiMid = 48, tomFloor = 43, tomFloorLo = 41 }
 
 -- Which beats the snare plays: the backbeat (2 and 4), or the half-time
 -- beat 3 when the pace is calm.
@@ -1619,6 +1755,182 @@ function M.drumsPart(ctx, plan, r, rnd, kick, timeline)
 end
 
 ------------------------------------------------------------------------------
+-- Drums on their own (docs/decisions/0013-drums-are-a-kind-of-idea.md)
+--
+-- A groove a bar long, made for the beat style from the same pieces as a
+-- Measure's drums (the kick's metric or Euclidean pattern, the backbeat),
+-- played in pairs of bars where the second answers the first with one
+-- small change; then fills where the Fills setting asks, each a beat or two
+-- of snare, toms, or both (in triplets when the figures are), with a crash
+-- on the downbeat it leads to - the top of the idea, for the last one, since
+-- a drum idea is made to loop. General MIDI notes throughout, channel 10.
+------------------------------------------------------------------------------
+
+local TOMS = { 50, 48, 47, 45, 43, 41 }   -- high to floor
+
+-- The bar of groove: kick, snare and cymbal steps, and what plays them.
+local function drumGroove(meter, r, rnd)
+  local D = M.DRUM
+  local bar, beat = meter.bar, meter.beat
+  local style = r.beat
+  if style == "Breakbeat" and not (bar == 16 and beat == 4) then style = "Backbeat" end
+  local g = { kick = {}, snare = {}, snarePitch = D.snare, open = {}, style = style }
+  if style == "Four on the floor" then
+    for b = 0, bar - 1, beat do g.kick[#g.kick + 1] = b end
+    g.snare = backbeats(meter, "Flowing")
+    g.snarePitch = D.clap
+    if beat % 2 == 0 then
+      for b = 0, bar - 1, beat do g.open[#g.open + 1] = b + beat // 2 end
+    end
+  elseif style == "Half-time" then
+    g.snare = { meter.mid or (meter.beats - 1) * beat }
+    local calm = {}
+    for k, v in pairs(r) do calm[k] = v end
+    calm.pace = "Calm"
+    g.kick = M.kickPattern(meter, calm, rnd)
+  elseif style == "Breakbeat" then
+    g.kick = pickOne(rnd, { { 0, 10 }, { 0, 2, 10 }, { 0, 6, 10 }, { 0, 10, 11 } })
+    g.snare = { 4, 12 }
+    -- One snare knocked off the backbeat: a sixteenth or an eighth either
+    -- side of beat 4, or the "a" of 3.
+    if coin(rnd, 0.75) then table.insert(g.snare, pickOne(rnd, { 7, 9, 14, 15 })) end
+  else
+    g.kick = M.kickPattern(meter, r, rnd)
+    g.snare = backbeats(meter, "Flowing")
+  end
+  -- Dotted and triplet figures fall on the kick - but four on the floor is
+  -- four on the floor.
+  if style ~= "Four on the floor" then g.kick = M.figure(meter, 0, bar, g.kick, r.figures, rnd) end
+  if style ~= "Four on the floor" then
+    local onSnare = {}
+    for _, x in ipairs(g.snare) do onSnare[x] = true end
+    local k = {}
+    for _, x in ipairs(g.kick) do if not onSnare[x] then k[#k + 1] = x end end
+    g.kick = k
+  end
+  table.sort(g.snare)
+
+  -- Time: quarters when calm, eighths when flowing, sixteenths when busy (a
+  -- breakbeat is sixteenths at any pace but calm); eighths in 6/8 rather
+  -- than dotted quarters; in triplets, the shuffle.
+  local unit = ({ Calm = beat, Flowing = 2, Busy = 1 })[r.pace] or 2
+  if style == "Breakbeat" and r.pace ~= "Calm" then unit = 1 end
+  if beat % 4 ~= 0 and r.pace == "Calm" then unit = 2 end
+  g.time = {}
+  if r.figures == "Triplets" and r.pace ~= "Calm" and beat == 4 then
+    for b = 0, bar - 1, 4 do
+      g.time[#g.time + 1] = b
+      if r.pace == "Busy" then g.time[#g.time + 1] = b + 4 / 3 end
+      g.time[#g.time + 1] = b + 8 / 3
+    end
+  else
+    for t = 0, bar - 1, unit do g.time[#g.time + 1] = t end
+  end
+  g.timePitch = (r.cymbal == "Ride") and D.ride or D.hat
+  return g
+end
+
+-- A fill over [from, to) of a bar starting at `base`.
+local function drumFill(meter, r, rnd, base, from, to)
+  local D = M.DRUM
+  local out = {}
+  local unit = (r.pace == "Calm") and 2 or 1
+  local kinds = { "roll", "toms", "snare and toms" }
+  if meter.beat == 4 and (r.figures == "Triplets" or r.figures == "Mixed") then kinds[#kinds + 1] = "triplets" end
+  local kind = pickOne(rnd, kinds)
+  local steps = {}
+  if kind == "triplets" then
+    for t = from, to - 1e-6, 4 / 3 do steps[#steps + 1] = t end
+  else
+    for t = from, to - 1, unit do steps[#steps + 1] = t end
+  end
+  for i, t in ipairs(steps) do
+    local pitch
+    if kind == "roll" then pitch = D.snare
+    elseif kind == "snare and toms" then
+      pitch = (i <= #steps // 2) and D.snare or TOMS[math.min(#TOMS, 1 + (i - #steps // 2 - 1) * #TOMS // math.max(1, #steps - #steps // 2))]
+    else
+      pitch = TOMS[math.min(#TOMS, 1 + (i - 1) * #TOMS // #steps)]
+    end
+    out[#out + 1] = { step = base + t, len = 1, pitch = pitch, accent = (i == 1) }
+  end
+  -- The kick under the fill's first note, so it lands with weight.
+  out[#out + 1] = { step = base + from, len = 1, pitch = D.kick, accent = true }
+  return out, kind
+end
+
+function M.drumIdea(meter, r, rnd)
+  local D = M.DRUM
+  local bar, bars = meter.bar, r.bars
+  local g = drumGroove(meter, r, rnd)
+  -- The answering bar: one small change, chosen once for the whole idea.
+  local change = pickOne(rnd, { "pickup", "double", "open" })
+
+  local fills = {}
+  for b = 0, bars - 1 do
+    local last = (b == bars - 1)
+    if (r.fills == "At the end" and last) or
+       (r.fills == "Every 4 bars" and ((b + 1) % 4 == 0 or last)) or
+       (r.fills == "Every 2 bars" and ((b + 1) % 2 == 0 or last)) then fills[b] = true end
+  end
+  local crashes = {}
+  for b in pairs(fills) do crashes[(b + 1) % bars] = true end
+
+  local notes, fillKinds = {}, {}
+  local total = bars * bar
+  -- (An open hat or a crash near the end stops at the end.)
+  local function add(step, len, pitch, accent)
+    notes[#notes + 1] = { step = step, len = math.min(len, total - step), pitch = pitch, accent = accent or false }
+  end
+  for b = 0, bars - 1 do
+    local base = b * bar
+    -- A fill takes a beat - two when busy, or at the end of the idea or a
+    -- four-bar phrase when flowing - never the whole bar.
+    local fillBeats = (r.pace == "Busy" or (r.pace == "Flowing" and (b == bars - 1 or (b + 1) % 4 == 0))) and 2 or 1
+    local fillFrom = fills[b] and math.max(meter.beat, bar - fillBeats * meter.beat) or bar
+    local answer = (b % 2 == 1)
+    local kick = {}
+    for _, k in ipairs(g.kick) do kick[#kick + 1] = k end
+    local open = {}
+    for _, o in ipairs(g.open) do open[o] = true end
+    if answer then
+      local snareAt = {}
+      for _, x in ipairs(g.snare) do snareAt[x] = true end
+      if change == "pickup" and not snareAt[bar - 2] then kick[#kick + 1] = bar - 2
+      elseif change == "double" and g.snare[#g.snare] and g.snare[#g.snare] - 1 > 0 then kick[#kick + 1] = g.snare[#g.snare] - 1
+      elseif change == "open" then open[bar - 2] = true end
+    end
+    for _, k in ipairs(kick) do if k < fillFrom then add(base + k, 1, D.kick, k == 0) end end
+    for _, x in ipairs(g.snare) do if x < fillFrom then add(base + x, 1, g.snarePitch, true) end end
+    for _, t in ipairs(g.time) do
+      if t < fillFrom and not (crashes[b] and t == 0) then
+        if open[t] and g.timePitch == D.hat then add(base + t, 2, D.open, false)
+        else
+          local bell = g.timePitch == D.ride and t % meter.beat == 0 and t == 0
+          add(base + t, 1, bell and D.bell or g.timePitch, false)
+        end
+      end
+    end
+    if g.timePitch == D.ride then
+      for _, x in ipairs(g.snare) do if x < fillFrom then add(base + x, 1, D.pedal, false) end end
+    end
+    if crashes[b] then add(base, 4, D.crash, true) end
+    if fills[b] then
+      local f, kind = drumFill(meter, r, rnd, base, fillFrom, bar)
+      for _, n in ipairs(f) do notes[#notes + 1] = n end
+      fillKinds[#fillKinds + 1] = kind
+    end
+  end
+  table.sort(notes, function(a, c)
+    if a.step ~= c.step then return a.step < c.step end
+    return a.pitch < c.pitch
+  end)
+  local fillBars = {}
+  for b = 0, bars - 1 do if fills[b] then fillBars[#fillBars + 1] = tostring(b + 1) end end
+  return notes, { style = g.style, fills = fillBars, fillKinds = fillKinds, change = change }
+end
+
+------------------------------------------------------------------------------
 -- 7. The idea
 ------------------------------------------------------------------------------
 
@@ -1675,14 +1987,15 @@ local function toBlockNotes(list, chan, vel, warp)
 end
 
 -- The chords as a musician reads them: bar by bar, | C G | Am F |. A chord
--- pushed an eighth early is shown in the bar it belongs to, marked ^; a
--- borrowed chord is marked *.
+-- is shown in the bar its beat is in: pushed an eighth early it is marked
+-- ^, pulled an eighth late _, borrowed *.
 function M.chordLine(timeline, meter)
   local bars = {}
   for _, sl in ipairs(timeline) do
-    local b = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
+    local b = beatOf(sl) // meter.bar + 1
     bars[b] = bars[b] or {}
-    table.insert(bars[b], (sl.pushed and "^" or "") .. sl.chord.name .. (sl.borrowed and "*" or ""))
+    table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name ..
+                          (sl.borrowed and "*" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
       bars[x] = bars[x] or {}
@@ -1707,6 +2020,7 @@ end
 function M.make(st, meter, seed)
   seed = math.floor(tonumber(seed) or st.seed or 1)
   local r = M.resolve(st, seed)
+  if r.kind == "Drums" then return M.makeDrums(st, meter, seed, r) end
   local key = T.key(r.root, r.scale)
   -- With no chords to play, the tune still walks over chords - plain triads,
   -- one a bar - so its strong notes outline a harmony. The chord settings
@@ -1717,6 +2031,9 @@ function M.make(st, meter, seed)
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   M.push(timeline, meter, r, M.stream(seed, "push"))
+  -- The chords part plays from its own copy, pulled late where it is; the
+  -- tune, the bass and the drums play on the beat.
+  local chordTl = r.chords and M.pull(timeline, meter, r, M.stream(seed, "pull")) or timeline
 
   local lo, hi = M.melodyRange(key, r.register)
   local ctx = { key = key, meter = meter, lo = lo, hi = hi, timeline = timeline,
@@ -1745,7 +2062,7 @@ function M.make(st, meter, seed)
       top = math.max(57, math.min(69, low - 1))
     end
     local list
-    list, arpName = M.chordsPart(ctx, timeline, r, M.stream(seed, "chords"),
+    list, arpName = M.chordsPart(ctx, chordTl, r, M.stream(seed, "chords"),
                                  { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure" })
     parts[#parts + 1] = { name = "Chords", list = list }
   end
@@ -1795,6 +2112,7 @@ function M.make(st, meter, seed)
   if r.kind == "Measure" then said[#said + 1] = r.bass:lower() .. " bass" end
   if r.figures ~= "Plain" then said[#said + 1] = r.figures:lower() end
   if r.push ~= "None" then said[#said + 1] = r.push:lower() .. " push" end
+  if r.chords and r.pull ~= "None" then said[#said + 1] = r.pull:lower() .. " pull" end
   if warp then said[#said + 1] = math.floor(st.swing) .. "% swing" end
 
   -- Each borrowed chord, said in full for the window.
@@ -1812,10 +2130,40 @@ function M.make(st, meter, seed)
     seed = seed, r = r, key = key, plan = plan, timeline = timeline, melody = melody,
     block = block,
     summary = table.concat(said, "  /  "),
-    chords = M.chordLine(timeline, meter),
+    chords = M.chordLine(chordTl, meter),
+    chordTimeline = chordTl,
     shape = plan.shape,
     ending = cadNames[plan.ending] or "",
     borrowed = notes,
+  }
+end
+
+-- A Drums idea: one part, on channel 10, in one item.
+function M.makeDrums(st, meter, seed, r)
+  local total = r.bars * meter.bar
+  local list, info = M.drumIdea(meter, r, M.stream(seed, "kit"))
+  local notes = toBlockNotes(list, 9, r.velocity, M.swingWarp(meter, st.swing))
+  local block = { parts = { { name = "Drums", notes = notes, chan = 9, drums = true } },
+                  notes = {}, beats = total / 4, layout = "one" }
+  for i, n in ipairs(notes) do block.notes[i] = n end
+  local style = info.style:lower()
+  block.name = ("Good Idea %d - Drums (%s), %s"):format(seed, style, barsName(r.bars))
+  local said = { info.style, r.cymbal == "Ride" and "ride" or "hi-hats", r.pace, r.groove }
+  if r.figures ~= "Plain" then said[#said + 1] = r.figures:lower() end
+  if M.swingWarp(meter, st.swing) then said[#said + 1] = math.floor(st.swing) .. "% swing" end
+  local fills = (#info.fills == 0) and "no fills"
+                or ((#info.fills == 1 and "a fill in bar " or "fills in bars ") .. table.concat(info.fills, ", "))
+  return {
+    seed = seed, r = r, key = T.key(1, 1), meter = meter,
+    plan = { units = {}, total = total, shape = "", ending = "" },
+    timeline = {}, chordTimeline = {}, melody = nil,
+    block = block,
+    summary = table.concat(said, "  /  "),
+    chords = "",
+    shape = "",
+    ending = fills,
+    borrowed = {},
+    drums = info,
   }
 end
 

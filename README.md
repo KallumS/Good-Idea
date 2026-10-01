@@ -1,14 +1,15 @@
 # Good Idea
 
 Ideas for starting a track, for REAPER. Press **New Idea** and get a short
-motif, a phrase, or eight to sixteen bars of music - melody, chords, bass and
-drums - in your key, ready to drop into the project as MIDI and work on.
+motif, a phrase, eight to sixteen bars of music - melody, chords, bass and
+drums - in your key, or a drum groove with fills, ready to drop into the
+project as MIDI and work on.
 
 The hardest thing in music is the blank page. Good Idea fills it with
 something worth reacting to: not a finished piece, but a start you can keep,
 change, or throw away and roll again.
 
-## Three kinds of idea
+## Four kinds of idea
 
 - **Motif** - a short melodic hook, 1 to 4 bars. Built the way hooks are: one
   small cell, repeated, moved up or down, answered. Most motifs leave the door
@@ -21,6 +22,10 @@ change, or throw away and roll again.
   answer), a **Sentence** (an idea, the idea again, broken up and driven to a
   close), a **Song** (A A B A) or a **Loop** (one progression round and round
   with the tune varied over it).
+- **Drums** - **1 to 16 bars** of drums on General MIDI notes: a groove - a
+  backbeat, half-time, four on the floor or a breakbeat, on the hi-hats or
+  the ride - whose every second bar answers the first, with fills at the end,
+  every four bars or every two, and a crash where each fill lands.
 
 ## Why maths, and not a library or dice
 
@@ -69,7 +74,7 @@ Each idea has an **idea number**. The same number with the same settings is
   the key and you get the same tune, moved.
 
 A number written down from version 1.0 still gives the same idea with
-Figures on Plain, Push on None, Borrowed on Off and no swing.
+Figures on Plain, Push and Pull on None, Borrowed on Off and no swing.
 
 ## The settings
 
@@ -77,8 +82,12 @@ Every setting is a row of buttons. Most have an **Any** button: leave a
 setting on Any and it is rolled afresh for every new idea (hover over Any to
 see what this idea rolled). Choose a value and it stays put.
 
-1. **Idea** - Motif, Phrase or Measure, and how many **bars**. For a Phrase,
-   the **content**: Melody, Chords or Both.
+To keep the window short, **every step but the first is folded**: one line
+with its name and what is chosen in it ("pace Any  /  groove Syncopated
+..."). Click the step's name to open it, and again to fold it away.
+
+1. **Idea** - Motif, Phrase, Measure or Drums, and how many **bars**. For a
+   Phrase, the **content**: Melody, Chords or Both.
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
    out underneath. **Borrowed** - Off, or Rare (the default): whether an
@@ -86,8 +95,11 @@ see what this idea rolled). Choose a value and it stays put.
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
    and triplet rhythms now and then - with Triplets the drums shuffle and
-   broken chords roll in triplets); the **push** (None, Some, Lots: chords
-   arriving an eighth early); and **Swing**, a slider from 0 (straight) to
+   broken chords roll in triplets; with Dotted, held chords are struck again
+   a dotted quarter in and arpeggios go long-short); the **push** (None,
+   Some, Lots: chords arriving an eighth early, the tune and kick with them);
+   the **pull** (None, Some, Lots: the chords played an eighth late, laid
+   back, while the tune, bass and drums stay on the beat); and **Swing**, a slider from 0 (straight) to
    100% (full triplet swing, the off-beat eighth two thirds of the way
    through the beat). Swing is not rolled by Any - it is your groove, and it
    is kept between sessions. In 6/8 and 12/8 there is no slider (they are in
@@ -96,20 +108,27 @@ see what this idea rolled). Choose a value and it stays put.
    **register** (Low, Middle, High).
 5. **Chords** - the **colour** (Triads; Sevenths; Mixed - sevenths where they
    pull, added ninths elsewhere), the **chord pace** (a chord every two bars,
-   one a bar, two a bar) and the **style** (Block, Pulse, Broken).
-6. **Arrangement** (Measure only) - the **form**, the **bass** (Held; Pulse,
-   locked to the kick drum; Moving, stepping into each new chord), **drums**
-   on or off, and the **layout** (a track per part, or one item).
+   one a bar, 1.5 a bar - three chords over two bars, 3+3+2 beats - or two a
+   bar; Any rolls all but 1.5, which is there to choose) and the **style**
+   (Block, Pulse, Broken).
+6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
+   Pulse, locked to the kick drum; Moving, stepping into each new chord). A
+   Measure always has drums.
+7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
+   **beat** (Backbeat, Half-time, Four on the floor, Breakbeat), the
+   **fills** (None, At the end, Every 4 bars, Every 2 bars) and the
+   **cymbal** (Hats, or Ride).
 
 Steps that mean nothing for what you have chosen are not shown: a Motif has
-no chords to set, a chords-only Phrase has no melody.
+no chords to set, a chords-only Phrase has no melody, Drums have no key.
 
 ## Using it
 
 Press **New Idea**. The idea appears in the roll - the tune in yellow, chords
 and bass in grey, drums as ticks along the bottom - with its chords written
-out underneath, bar by bar. A chord marked **^** is pushed an eighth early; a
-chord marked **\*** is borrowed, and a line underneath says which chord, in
+out underneath, bar by bar. A drum idea fills the roll, a lane for each
+drum. A chord marked **^** is pushed an eighth early, **_** pulled an eighth
+late; a chord marked **\*** is borrowed, and a line underneath says which chord, in
 which bar, from which scale: "Borrowed chord: Ab (bVI) in bar 3, from C
 Minor".
 
@@ -118,10 +137,12 @@ Minor".
 - **Keep** turns every Any into what this idea rolled, so the next New Idea
   keeps the key, length and feel and changes only the music.
 - **Play new ideas** auditions each idea as soon as it is made.
+And get it out - at the bottom, with the buttons that send it:
+
 - **Velocity** - everything leaves at 100. Choose **Accents** and the downbeats
   and the start of each part of the idea rise to 115.
-
-And get it out:
+- **Layout** (a Measure) - **Tracks**, a new track per part, or **One item**,
+  every part in one item on its own MIDI channel.
 
 - **Insert at cursor** puts it on the selected track at the edit cursor, as
   one item. A Phrase with melody and chords keeps them on MIDI channels 1 and
@@ -137,8 +158,9 @@ And get it out:
   exact timing, insert it and press play.
 
 The drums are on **MIDI channel 10** with General MIDI notes (kick 36, snare
-38, closed hat 42, open hat 46, crash 49, toms 45, 47, 50), which any General
-MIDI drum kit understands.
+38, clap 39, closed hat 42, pedal hat 44, open hat 46, crash 49, ride 51,
+ride bell 53, toms 41, 43, 45, 47, 48, 50), which any General MIDI drum kit
+understands.
 
 The tempo and time signature are read from your project: an idea in 3/4 or
 6/8 has bars of that length and is felt that way. Your choices and the idea

@@ -22,3 +22,7 @@ the standing rules; this holds the decisions behind them.
 | [0009](0009-the-tune-in-the-accent.md) | The tune takes the accent in the roll; the accompaniment takes grey |
 | [0010](0010-figures-push-and-swing.md) | Rhythm: dotted and triplet figures, pushed chords, and swing - laid over, not built in |
 | [0011](0011-borrowed-chords-rarely-and-named.md) | Borrowed chords: rarely, from the same key note, and always named |
+| [0012](0012-steps-fold-away.md) | The steps fold away; the layout sits with the output buttons |
+| [0013](0013-drums-are-a-kind-of-idea.md) | Drums are a kind of idea; a Measure always has drums |
+| [0014](0014-pull-the-chords-lie-back.md) | Pull: the chords lie back an eighth; the tune, bass and drums stay on the beat |
+| [0015](0015-chord-rhythm-figures-and-one-and-a-half.md) | Figures reach every chord style and the walking bass; 1.5 chords a bar, chosen not rolled |

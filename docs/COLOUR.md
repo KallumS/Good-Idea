@@ -12,7 +12,9 @@ change a colour in `reascripts/Good Idea.lua`, change it here too.
 The one addition is in the preview roll, which shows several parts at once:
 the tune takes the accent, the chords and bass take the controls' grey, and
 the drums are a strip of ticks in the scrollbar-hover grey along the bottom.
-See [decision 0009](decisions/0009-the-tune-in-the-accent.md).
+See [decision 0009](decisions/0009-the-tune-in-the-accent.md). A drum idea
+has no tune, so its drums fill the roll in lanes and take the accent
+([0013](decisions/0013-drums-are-a-kind-of-idea.md)).
 
 ## The four that carry it
 

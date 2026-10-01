@@ -25,8 +25,12 @@ end
 
 local function show(idea)
   print(("== %s"):format(idea.block.name))
-  print(("   %s  /  shape %s, %s"):format(idea.summary, idea.plan.shape, idea.ending))
-  print("   " .. idea.chords)
+  if idea.plan.shape ~= "" then
+    print(("   %s  /  shape %s, %s"):format(idea.summary, idea.plan.shape, idea.ending))
+  else
+    print(("   %s  /  %s"):format(idea.summary, idea.ending))
+  end
+  if idea.chords ~= "" then print("   " .. idea.chords) end
   for _, b in ipairs(idea.borrowed) do print("   borrowed: " .. b.text) end
   for _, part in ipairs(idea.block.parts) do
     local out, lastBar = {}, -1

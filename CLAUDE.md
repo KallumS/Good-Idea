@@ -1,9 +1,9 @@
 # Good Idea
 
 A ReaScript that makes ideas for starting a track - a Motif (a 1-4 bar hook),
-a Phrase (1-4 bars of melody, chords, or both in one clip) or a Measure (8, 12
-or 16 bars of melody, chords, bass and drums in a form) - calculated from the
-rules of music, and puts the one you like into the project as MIDI. ReaImGui
+a Phrase (1-4 bars of melody, chords, or both in one clip), a Measure (8, 12
+or 16 bars of melody, chords, bass and drums in a form) or Drums (1-16 bars
+of General MIDI drums with fills) - calculated from the rules of music, and puts the one you like into the project as MIDI. ReaImGui
 for the window. **The user is a musician, not a programmer - explain in those
 terms.**
 
@@ -41,16 +41,25 @@ is a pure function of the settings, the metre and the idea number (1 to
 `I.MAX_SEED`, 99999). The dice are Midi Variator's Park-Miller generator
 (`I.random`), and every part of an idea draws from **its own stream**
 (`I.stream(seed, name)`: pick, plan, harmony, rhythm, melody, chords, bass,
-drums, and in 1.1 borrow and push), so changing how the chords are played
+drums, in 1.1 borrow and push, in 1.2 pull and kit), so changing how the chords are played
 leaves the tune alone, and turning the drums off leaves the bass alone. The
 tests hold all of that.
 
 **1.0's ideas are kept** ([0010](docs/decisions/0010-figures-push-and-swing.md)):
 `I.SETTINGS` is also the order `resolve` draws in, so **new settings go at
 the end of the list** (the window's layout is separate), and a new feature
-**draws nothing from the dice when it is off**. With Figures Plain, Push
-None, Borrowed Off and no swing, every 1.0 idea number gives exactly the 1.0
-idea; `test_idea` holds thirty, hashed before 1.1. Keep that true.
+**draws nothing from the dice when it is off** (or draws from a stream of
+its own). With Figures Plain, Push None, Pull None, Borrowed Off and no
+swing, every 1.0 idea number gives exactly the 1.0 idea; `test_idea` holds
+thirty, hashed by the 1.0 code in sorted order. Keep that true. So:
+
+- **A setting is never taken out of the list.** One no longer wanted is
+  *retired* (`retired = true`, never shown, one value): the Measure's
+  `drums` switch, since 1.2 ([0013](docs/decisions/0013-drums-are-a-kind-of-idea.md)).
+- **A value added to a setting Any rolls** goes outside Any
+  (`anyValues`/`anyWeights` keep 1.0's list): "1.5 a bar" in the chord pace
+  ([0015](docs/decisions/0015-chord-rhythm-figures-and-one-and-a-half.md)).
+  A value added to a setting with no Any (the kind's "Drums") is free.
 
 The randomness is only ever a choice among musically meaningful options
 ([0003](docs/decisions/0003-calculated-from-the-maths-of-music.md)): which
@@ -83,7 +92,8 @@ row of buttons, and it is never rolled. It is clamped, saved and passed in
 like `seed`, and `make` reads it from `st`.
 
 **No dead controls.** A setting whose `when` is false is not drawn, and must
-not change the idea: with no chords part, the tune walks over plain triads
+not change the idea (for Drums: the key, the tune, the chords, push and
+pull): with no chords part, the tune walks over plain triads
 one a bar whatever the chord settings say (`make` overwrites them in `r`).
 `test_idea` holds that hidden settings change nothing.
 
@@ -131,7 +141,12 @@ everywhere means strength >= 2.
    - **push** ([0010](docs/decisions/0010-figures-push-and-swing.md)):
      `I.push` moves a chord change on a beat back an eighth (`sl.s - 2`,
      `sl.pushed`), cutting the chord before. Quarter-note beats or longer
-     only.
+     only. Every slot keeps the beat it belongs to, `sl.beat`.
+   - **pull** ([0014](docs/decisions/0014-pull-the-chords-lie-back.md)):
+     `I.pull` makes a **copy** of the timeline (`idea.chordTimeline`) with
+     some chord changes an eighth late (`sl.s + 2`, `sl.pulled`, the chord
+     before held to meet it). **Only the chords part plays from the copy**;
+     the tune, bass and drums use the timeline on the beat.
    Borrowing and pushing touch one occurrence of the harmony, so even an
    exact repeat's tune is `fit` to the chords under it, ending included.
 4. **rhythm** - `I.cell`: Straight takes the k strongest grid steps;
@@ -178,10 +193,16 @@ everywhere means strength >= 2.
    (General MIDI, `I.DRUM`; kick pattern, backbeat or half-time snare when
    Calm, hats by pace - shuffled on triplets - open hat on syncopated
    grooves, a crash at the top and at each new section, a fill before each
-   new section and at the end, the kick moved onto each push). A pushed
-   chord is played from its beat (`gridStart`) with its first stroke moved
-   onto the push (`onPush`), so it is not struck again on the beat. Pulse
-   chords take figures; Broken chords roll in triplets.
+   new section and at the end, the kick moved onto each push). A chord's
+   strokes are laid out from its beat (`gridStart`) to the next chord's
+   beat, then the first moves to where the chord arrives (`onShift`): onto
+   a push (not struck again on the beat), or back to a pull (nothing
+   before it, nothing within a sixteenth after). **Figures reach every chord
+   style** ([0015](docs/decisions/0015-chord-rhythm-figures-and-one-and-a-half.md)):
+   Block takes stabs (`blockFigures`: a dotted quarter in, or a
+   quarter-note triplet), Pulse and Broken take `I.figure` over their
+   strokes (Broken rolls in triplets with Triplets), and a Moving bass takes
+   them too. Rate "1.5 a bar" is three chords to two bars, 3+3+2 beats.
 7. **block** - `{ name, beats, notes, parts = { { name, notes, chan, drums } },
    layout = "one" | "tracks" }`. Channels
    ([0007](docs/decisions/0007-a-measure-on-tracks-a-motif-in-one-item.md)):
@@ -192,6 +213,19 @@ everywhere means strength >= 2.
    and ends only (triplets are left alone); `I.swings(meter)` is false for
    6/8, 12/8 and 7/8. `idea.borrowed` lists borrowed chords with `text` for
    the window; the chord line marks a pushed chord `^` and a borrowed `*`.
+
+8. **Drums, the kind** ([0013](docs/decisions/0013-drums-are-a-kind-of-idea.md)):
+   `make` hands off to `I.makeDrums` before any harmony. `I.drumIdea` makes
+   a bar of groove for the Beat (`drumGroove`: the kick from `kickPattern`
+   or a breakbeat template, figures on it but for four on the floor; the
+   backbeat, half-time snare on 3, or a clap; the time on hats or ride by
+   pace, shuffled on triplets), plays bars in pairs with the second
+   answering the first (pickup kick, kick before the snare, or open hat),
+   puts fills where Fills says (`drumFill`: a beat, two when busy or at a
+   phrase end when flowing - roll, toms, snare and toms, or triplets - a
+   kick under the first note) and a crash on the downbeat each fill leads
+   to, wrapping to the top. Notes are cut at the end. One part, channel 10,
+   one item; `idea.drums` says the style, fills and change.
 
 The weights in `IV_WEIGHT`, `PULL`, `MOVES` and the rhythm tables were set by
 reading `tools/demo.lua` output. If you change one, read the demo for every
@@ -229,8 +263,16 @@ buttons out wrapping at the window's edge. Every row's buttons sit inside
 `PushID(setting id)`, which `test_ui` reads to tell one row's "Any" from
 another's.
 
+**The steps fold** ([0012](docs/decisions/0012-steps-fold-away.md)): every
+step but Idea is a button (`fold`) - "Feel  +" folded, with a dim summary
+line of its choices (`summaryOf`); "Feel  -" open, with its rows. The fold
+button sits inside `PushID("open:" .. name)`. All start folded; which are
+open (`ui.open`) is the view and is not saved. Velocity and Layout sit on
+one row by the output buttons.
+
 The steps are numbered as they are shown (a Motif has no Chords step, only a
-Measure has an Arrangement). Swing is a `SliderInt` in the Feel step; in a
+Measure has an Arrangement, Drums have no Key but a Drums step). Swing is a
+`SliderInt` in the Feel step; in a
 metre that cannot swing the window says why instead of showing it. A
 borrowed chord is flagged in the body text (not dim, not the accent, not
 the warning red) under the chord line. The idea is remade only when something changes
@@ -247,7 +289,9 @@ is blue-shifted, R < G < B. Every button takes the dark ink, chosen or not.
 **One departure**
 ([0009](docs/decisions/0009-the-tune-in-the-accent.md)): the roll shows
 several parts, so only the tune takes the accent; chords and bass take the
-controls' grey, and the drums are ticks in `#6D7581` along the bottom.
+controls' grey, and the drums are ticks in `#6D7581` along the bottom. A
+drum idea has nothing else, so its drums fill the roll in lanes, in the
+accent.
 
 ## Settings that outlive the window
 
@@ -291,23 +335,27 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing. |
-| `test_idea.lua` | 735 ideas across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it (about 570,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers, each setting does what its hint says, the four forms, bass and drums, figures (triplets whole), pushes, swing, borrowed chords (rare, placed, flagged, the tune bending). |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 745,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 a bar), each setting does what its hint says, the four forms, bass and drums, figures (triplets whole; on every chord style and the walking bass), pushes, pulls, swing, borrowed chords, the retired drums switch, and drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars). |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
-| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
+| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
 
 The sweep tallies each rule over every note it applies to and reports the
 rule once, with a count and the first idea that broke it. **Run the deep
 sweep after any musical change**: rare cases (one idea in thousands) only show
-there. At 40x it is about 26,000 ideas and 21.7 million checks, and it found
-four real bugs on the day it was written.
+there. At 40x it is about 39,000 ideas and 28.6 million checks; it has found
+real bugs in every release so far.
 
 **Prove a test bites.** Every suite here was checked by deliberately breaking
 what it covers - chord tones on the beat, the cadence's dominant, the drums'
 channel, the channel byte, the dark ink, one draw per setting, separate dice
 for chords and bass, the last tidy pass, gap-filling after a leap, the
 tonic-anchored range, hidden settings, a Loop's repeated chords, a track per
-part - and watching it fail. Separate dice were not covered at first:
+part; in 1.2 pull keeping the tune still, nothing struck before a pull, the
+held chord, 1.5 a bar kept out of Any, block stabs, the figured bass, fills
+where asked, the crash after a fill, the answering bar, the drum channel,
+the retired setting's place, folding, the layout row, the Drums step - and
+watching it fail. Separate dice were not covered at first:
 nothing compared the bass or drums under two chord styles. A test does now,
 and chords and bass drawing from one stream fails it.
 

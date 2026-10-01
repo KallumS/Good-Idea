@@ -99,6 +99,49 @@ local CADENCE_PCS = function(key, half)
   return s
 end
 
+-- A drum idea: General MIDI drums only, a kick on every downbeat, a snare
+-- (or clap) or a fill in every bar, fills where the idea says and nowhere
+-- else, and a crash on the downbeat each fill leads to.
+local GM = {}
+for _, v in pairs(I.DRUM) do GM[v] = true end
+local TOM = { [50] = true, [48] = true, [47] = true, [45] = true, [43] = true, [41] = true }
+
+local function auditDrums(idea, tag)
+  local b, r, meter = idea.block, idea.r, idea.meter
+  rule("a drum idea is one part, one item", #b.parts == 1 and b.parts[1].name == "Drums" and b.layout == "one", tag)
+  local bar = meter.bar
+  local kickOn, backed, toms, crashOn = {}, {}, {}, {}
+  for _, n in ipairs(b.notes) do
+    local step = n.start * 4
+    local bi = math.floor(step / bar + 1e-9)
+    rule("every drum is a General MIDI drum the generator knows", GM[n.pitch] == true, tag .. " " .. n.pitch)
+    if n.pitch == I.DRUM.kick and math.abs(step - bi * bar) < 1e-6 then kickOn[bi] = true end
+    if n.pitch == I.DRUM.snare or n.pitch == I.DRUM.clap then backed[bi] = true end
+    if TOM[n.pitch] then toms[bi] = true end
+    if n.pitch == I.DRUM.crash then crashOn[bi] = (math.abs(step - bi * bar) < 1e-6) end
+  end
+  local fills = {}
+  for _, f in ipairs(idea.drums.fills) do fills[tonumber(f) - 1] = true end
+  local wantFills = 0
+  for x = 0, r.bars - 1 do
+    local last = (x == r.bars - 1)
+    local want = (r.fills == "At the end" and last) or (r.fills == "Every 4 bars" and ((x + 1) % 4 == 0 or last))
+                 or (r.fills == "Every 2 bars" and ((x + 1) % 2 == 0 or last))
+    if want then wantFills = wantFills + 1 end
+    rule("fills are where the Fills setting puts them", (fills[x] == true) == (want == true), tag)
+    rule("every bar starts with a kick", kickOn[x] == true, tag .. " bar " .. (x + 1))
+    rule("every bar has a snare, a clap or a fill", backed[x] or fills[x] or toms[x], tag)
+    if not fills[x] then rule("toms only in fills", not toms[x], tag .. " bar " .. (x + 1)) end
+    local after = (x + 1) % r.bars
+    if fills[x] then rule("a crash on the downbeat a fill leads to", crashOn[after] == true, tag .. " bar " .. (after + 1)) end
+  end
+  if wantFills == 0 then
+    local any = false
+    for x = 0, r.bars - 1 do if crashOn[x] ~= nil then any = true end end
+    rule("no fills, no crashes", not any, tag)
+  end
+end
+
 local function audit(idea, tag)
   local b, r, key, meter = idea.block, idea.r, idea.key, nil
   meter = idea.meter
@@ -125,6 +168,8 @@ local function audit(idea, tag)
     end
   end
 
+  if r.kind == "Drums" then return auditDrums(idea, tag) end
+
   -- What the parts are.
   if r.kind == "Motif" then
     rule("a motif is a tune only", #b.parts == 1 and b.parts[1].name == "Melody", tag)
@@ -135,10 +180,9 @@ local function audit(idea, tag)
     rule("a phrase is what its content says", table.concat(got, " ") == want, tag)
     rule("a phrase is one item", b.layout == "one", tag)
   else
-    local want = r.drums == "On" and "Melody Chords Bass Drums" or "Melody Chords Bass"
     local got = {}
     for _, p in ipairs(b.parts) do got[#got + 1] = p.name end
-    rule("a measure is melody, chords, bass (and drums)", table.concat(got, " ") == want, tag)
+    rule("a measure is melody, chords, bass and drums", table.concat(got, " ") == "Melody Chords Bass Drums", tag)
     rule("a measure's layout is what it says",
          b.layout == (r.layout == "Tracks" and "tracks" or "one"), tag)
   end
@@ -225,7 +269,8 @@ local function audit(idea, tag)
   local cp = part(idea, "Chords")
   if cp then
     for _, n in ipairs(cp.notes) do
-      local ch = I.chordAt(tl, math.floor(n.start * 4 + 0.5)).chord
+      -- (Against the chords part's own timeline: a pulled chord comes late.)
+      local ch = I.chordAt(idea.chordTimeline, math.floor(n.start * 4 + 0.5)).chord
       rule("every note of the chords part is on its chord", ch.has[n.pitch % 12] == true, tag)
     end
   end
@@ -256,7 +301,6 @@ for mi, sig in ipairs(METERS) do
     local seeds = ((mi == 1) and 120 or 25) * DEPTH
     for seed = 1, seeds do
       local st = { kind = kind, velocity = (seed % 4 == 0) and "Accents" or "Flat",
-                   drums = (seed % 5 == 0) and "Off" or "On",
                    layout = (seed % 3 == 0) and "One item" or "Tracks",
                    register = (seed % 7 == 0) and "Any" or "Middle" }
       -- Every seventh idea in a scale other than major, all sixteen covered.
@@ -522,8 +566,30 @@ do
   local function chordsPerBar(idea) return #idea.timeline / idea.r.bars end
   local slow = average({ kind = "Measure", form = "Loop", chordPace = "Slow" }, chordsPerBar)
   local one = average({ kind = "Measure", form = "Loop", chordPace = "One a bar" }, chordsPerBar)
+  local onehalf = average({ kind = "Measure", form = "Loop", chordPace = "1.5 a bar" }, chordsPerBar)
   local two = average({ kind = "Measure", form = "Loop", chordPace = "Two a bar" }, chordsPerBar)
-  ok(slow < one and one < two, ("chord pace: %.2f, %.2f, %.2f chords a bar"):format(slow, one, two))
+  ok(slow < one and one < onehalf and onehalf < two,
+     ("chord pace: %.2f, %.2f, %.2f, %.2f chords a bar"):format(slow, one, onehalf, two))
+  -- 1.5 a bar in 4/4 is three chords to two bars, laid 3+3+2 beats.
+  local shaped, all = 0, 0
+  for seed = 1, 40 do
+    local idea = make({ kind = "Measure", form = "Loop", chordPace = "1.5 a bar", push = "None" }, seed)
+    local u = idea.plan.units[1]
+    if #u.rel >= 3 then
+      all = all + 1
+      local beats = {}
+      for i = 1, 3 do beats[i] = (u.rel[i].e - u.rel[i].s) // 4 end
+      if beats[1] == 3 and beats[2] == 2 and beats[3] == 3 or beats[1] == 3 and beats[2] == 3 and beats[3] == 2 then
+        shaped = shaped + 1
+      end
+    end
+  end
+  ok(all > 0 and shaped == all, ("1.5 a bar lays three chords over two bars as 3+3+2 (or 3+2+3): %d of %d"):format(shaped, all))
+  local rolled = false
+  for seed = 1, 400 do
+    if make({ kind = "Measure" }, seed).r.chordPace == "1.5 a bar" then rolled = true end
+  end
+  ok(not rolled, "Any never rolls 1.5 a bar: it is there to be chosen, so 1.0's numbers keep their pace")
 end
 
 do
@@ -690,8 +756,8 @@ end
 -- 1.1: figures, push, swing and borrowed chords
 ------------------------------------------------------------------------------
 
--- With the 1.1 settings plain, every 1.0 idea number gives exactly the 1.0
--- idea: the new settings draw last, and draw nothing when plain. These are
+-- With the 1.1 and 1.2 settings plain, every 1.0 idea number gives exactly
+-- the 1.0 idea: the new settings draw last, and draw nothing when plain. These are
 -- 1.0's own notes, hashed in sorted order (so the order notes that start
 -- together are listed in does not matter), made by the 1.0 code itself.
 do
@@ -734,7 +800,7 @@ do
   end
   local bad = {}
   for _, v in ipairs(V10) do
-    local b = make({ kind = v[1], figures = "Plain", push = "None", borrowed = "Off", swing = 0 }, v[2]).block
+    local b = make({ kind = v[1], figures = "Plain", push = "None", pull = "None", borrowed = "Off", swing = 0 }, v[2]).block
     local f = {}
     for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
     table.sort(f)
@@ -989,6 +1055,178 @@ do
   end
   ok(bent > 0, "the tune plays the borrowed scale's notes under a chord borrowed from C minor: " .. bent)
   eq(wrong, 0, "and never the key's own A, E or B against it")
+end
+
+------------------------------------------------------------------------------
+-- 1.2: pull, figures in the chords and bass, drums on their own
+------------------------------------------------------------------------------
+
+-- Pull: the chords part lies back an eighth; the tune, bass and drums stay.
+do
+  local nonePulled, lotsIdeas, late, early, held, tuneMoved, motif = 0, 0, 0, 0, 0, 0, 0
+  for seed = 1, 60 do
+    local none = make({ kind = "Measure", pull = "None" }, seed)
+    for _, sl in ipairs(none.chordTimeline) do if sl.pulled then nonePulled = nonePulled + 1 end end
+    local lots = make({ kind = "Measure", pull = "Lots", push = "None", chordStyle = "Block" }, seed)
+    local plain = make({ kind = "Measure", pull = "None", push = "None", chordStyle = "Block" }, seed)
+    if fingerprint(part(lots, "Melody").notes) ~= fingerprint(part(plain, "Melody").notes)
+       or fingerprint(part(lots, "Bass").notes) ~= fingerprint(part(plain, "Bass").notes)
+       or fingerprint(part(lots, "Drums").notes) ~= fingerprint(part(plain, "Drums").notes) then
+      tuneMoved = tuneMoved + 1
+    end
+    for _, sl in ipairs(lots.timeline) do if sl.pulled then tuneMoved = tuneMoved + 1 end end
+    local any = false
+    local starts = {}
+    for _, n in ipairs(part(lots, "Chords").notes) do starts[#starts + 1] = n end
+    for i, sl in ipairs(lots.chordTimeline) do
+      if sl.pulled then
+        any = true
+        if sl.s - sl.beat ~= 2 or sl.beat % 4 ~= 0 then late = late + 1 end
+        local prev = lots.chordTimeline[i - 1]
+        for _, n in ipairs(starts) do
+          local x = n.start * 4
+          -- Nothing is struck between the beat and the pull...
+          if x >= sl.beat - 1e-6 and x < sl.s - 1e-6 then early = early + 1 end
+        end
+        -- ...and the chord before is still sounding there.
+        local sounding = false
+        for _, n in ipairs(starts) do
+          local x, e = n.start * 4, (n.start + n.len) * 4
+          if x < sl.beat and e >= sl.s - 1e-6 and prev.chord.has[n.pitch % 12] then sounding = true end
+        end
+        if not sounding then held = held + 1 end
+      end
+    end
+    if any then lotsIdeas = lotsIdeas + 1 end
+    local m = make({ kind = "Motif", pull = "Lots" }, seed)
+    for _, sl in ipairs(m.chordTimeline) do if sl.pulled then motif = motif + 1 end end
+  end
+  eq(nonePulled, 0, "with no pull every chord is played on its beat")
+  ok(lotsIdeas >= 50, "with Lots, most Measures pull chords: " .. lotsIdeas .. " of 60")
+  eq(late, 0, "a pulled chord arrives exactly an eighth after its beat")
+  eq(early, 0, "nothing is struck between the beat and the pull")
+  eq(held, 0, "the chord before is held to meet it")
+  eq(tuneMoved, 0, "the tune, the bass and the drums stay on the beat")
+  eq(motif, 0, "a motif has no chords to pull")
+end
+
+-- Figures reach the chords, and a moving bass.
+do
+  local function count(settings, part_, test)
+    local n = 0
+    for seed = 1, 60 do
+      local idea = make(settings, seed)
+      for _, x in ipairs(part(idea, part_).notes) do if test(x.start * 4, idea) then n = n + 1 end end
+    end
+    return n
+  end
+  local function stab(x) return math.abs(x % 16 - 6) < 1e-6 end
+  local function third(x) return offGrid(x / 4) end
+  local base = { kind = "Phrase", content = "Chords", chordPace = "One a bar", push = "None", pull = "None" }
+  local function with(extra)
+    local s = {}
+    for k, v in pairs(base) do s[k] = v end
+    for k, v in pairs(extra) do s[k] = v end
+    return s
+  end
+  ok(count(with({ chordStyle = "Block", figures = "Dotted" }), "Chords", stab) > 0,
+     "Dotted: a held chord is struck again a dotted quarter in, now and then")
+  eq(count(with({ chordStyle = "Block", figures = "Plain" }), "Chords", stab), 0, "never when Plain")
+  ok(count(with({ chordStyle = "Block", figures = "Triplets" }), "Chords", third) > 0,
+     "Triplets: quarter-note triplet stabs")
+  local function dotted16(x) return math.abs(x % 4 - 3) < 1e-6 end
+  ok(count(with({ chordStyle = "Broken", figures = "Dotted", pace = "Flowing" }), "Chords", dotted16) > 0,
+     "Dotted: an arpeggio goes long-short")
+  eq(count(with({ chordStyle = "Broken", figures = "Plain", pace = "Flowing" }), "Chords", dotted16), 0,
+     "and not when Plain")
+  local function dottedQuarter(x) return math.abs(x % 8 - 6) < 1e-6 end
+  ok(count({ kind = "Measure", bass = "Moving", figures = "Dotted", pace = "Flowing", push = "None" }, "Bass", dottedQuarter) > 0,
+     "Dotted: a moving bass goes dotted quarter and eighth")
+  eq(count({ kind = "Measure", bass = "Moving", figures = "Plain", pace = "Flowing", push = "None" }, "Bass", dottedQuarter), 0,
+     "and walks straight when Plain")
+end
+
+-- The Measure's drums switch is retired: a Measure always has drums.
+do
+  local st = I.newState()
+  st.drums = "Off"
+  I.clampState(st)
+  eq(st.drums, "On", "an old saved drums=Off comes back On")
+  local alwaysDrums = true
+  for seed = 1, 20 do if not part(make({ kind = "Measure" }, seed), "Drums") then alwaysDrums = false end end
+  ok(alwaysDrums, "and every Measure has its drums")
+end
+
+-- Drums on their own.
+do
+  local D = I.DRUM
+  local styleOk, halfOk, fourOk, breakFallback, rideOk, shuffle, calmHats, answers, same = 0, 0, 0, 0, 0, 0, 0, 0, 0
+  for seed = 1, 40 do
+    local four = make({ kind = "Drums", beat = "Four on the floor", fills = "None", drumBars = 2 }, seed)
+    local kicks = {}
+    for _, n in ipairs(four.block.notes) do if n.pitch == D.kick then kicks[n.start] = true end end
+    local every = true
+    for b = 0, 7 do if not kicks[b] then every = false end end
+    if every then fourOk = fourOk + 1 end
+    local half = make({ kind = "Drums", beat = "Half-time", fills = "None", drumBars = 2 }, seed)
+    local snares = {}
+    for _, n in ipairs(half.block.notes) do if n.pitch == D.snare then snares[#snares + 1] = n.start % 4 end end
+    local only3 = #snares > 0
+    for _, x in ipairs(snares) do if x ~= 2 then only3 = false end end
+    if only3 then halfOk = halfOk + 1 end
+    local br = make({ kind = "Drums", beat = "Breakbeat" }, seed, I.meter(3, 4))
+    if br.drums.style == "Backbeat" then breakFallback = breakFallback + 1 end
+    local ride = make({ kind = "Drums", cymbal = "Ride", pace = "Flowing" }, seed)
+    local r51, h42 = 0, 0
+    for _, n in ipairs(ride.block.notes) do
+      if n.pitch == D.ride then r51 = r51 + 1 end
+      if n.pitch == D.hat then h42 = h42 + 1 end
+    end
+    if r51 > 0 and h42 == 0 then rideOk = rideOk + 1 end
+    local tri = make({ kind = "Drums", figures = "Triplets", pace = "Flowing", cymbal = "Hats" }, seed)
+    for _, n in ipairs(tri.block.notes) do if n.pitch == D.hat and offGrid(n.start) then shuffle = shuffle + 1; break end end
+    local calm = make({ kind = "Drums", pace = "Calm", cymbal = "Hats", figures = "Plain", fills = "None" }, seed)
+    local quarters = true
+    for _, n in ipairs(calm.block.notes) do if n.pitch == D.hat and n.start % 1 ~= 0 then quarters = false end end
+    if quarters then calmHats = calmHats + 1 end
+    -- The second bar answers the first: not the same bar twice.
+    local two = make({ kind = "Drums", drumBars = 2, fills = "None" }, seed)
+    local bars = { {}, {} }
+    for _, n in ipairs(two.block.notes) do
+      local b = n.start < 4 and 1 or 2
+      bars[b][#bars[b] + 1] = ("%g:%d"):format(n.start % 4, n.pitch)
+    end
+    table.sort(bars[1]); table.sort(bars[2])
+    if table.concat(bars[1], " ") ~= table.concat(bars[2], " ") then answers = answers + 1 end
+    -- Settings that do not show for drums do not change them.
+    local a = make({ kind = "Drums", root = 1, scale = 1, contour = "Arch", chordStyle = "Block", form = "Loop" }, seed)
+    local b = make({ kind = "Drums", root = 4, scale = 2, contour = "Fall", chordStyle = "Broken", form = "Song" }, seed)
+    if fingerprint(a.block.notes) == fingerprint(b.block.notes) then same = same + 1 end
+  end
+  eq(fourOk, 40, "Four on the floor: a kick on every beat")
+  eq(halfOk, 40, "Half-time: the snare on 3 only")
+  eq(breakFallback, 40, "a Breakbeat in 3/4 is played as a backbeat, and says so")
+  eq(rideOk, 40, "on the ride, the time is on the ride, not the hats")
+  ok(shuffle >= 35, "in triplets the hats shuffle: " .. shuffle .. " of 40")
+  eq(calmHats, 40, "a calm groove keeps time in quarters")
+  ok(answers >= 30, "the second bar answers the first, mostly: " .. answers .. " of 40")
+  eq(same, 40, "the key, the tune and the chords settings do not touch a drum idea")
+  -- Every length from 1 to 16 bars.
+  local lengths = true
+  for bars = 1, 16 do
+    local idea = make({ kind = "Drums", drumBars = bars }, bars)
+    if math.abs(idea.block.beats - bars * 4) > 1e-9 then lengths = false end
+  end
+  ok(lengths, "drum ideas from 1 to 16 bars")
+  -- Fills: where they are asked for (the sweep checks every idea), and of
+  -- every kind.
+  local kinds = {}
+  for seed = 1, 200 do
+    local idea = make({ kind = "Drums", fills = "Every 2 bars", figures = "Mixed" }, seed)
+    for _, k in ipairs(idea.drums.fillKinds) do kinds[k] = true end
+  end
+  ok(kinds.roll and kinds.toms and kinds["snare and toms"] and kinds.triplets,
+     "fills come as snare rolls, tom runs, both, and triplets")
 end
 
 ------------------------------------------------------------------------------

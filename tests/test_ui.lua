@@ -224,8 +224,52 @@ local function click(label, nth)
   frame(i)
   frame()
 end
+local T = dofile(C.SCRIPTS .. "gi_theory.lua")
+local I = dofile(C.SCRIPTS .. "gi_idea.lua").init(T)
+
+-- The steps fold away. Their buttons sit inside PushID("open:" .. name) and
+-- read "Name  +" closed, "Name  -" open.
+local function foldButton(name)
+  for i, b in ipairs(g.buttons) do
+    if g.paths[i] == "open:" .. name then return i, b:sub(-1) == "-" end
+  end
+end
+local function stepShown(name) return foldButton(name) ~= nil end
+local function openStep(name)
+  frame()
+  local i, isOpen = foldButton(name)
+  if i and not isOpen then frame(i); frame() end
+end
+local function foldStep(name)
+  frame()
+  local i, isOpen = foldButton(name)
+  if i and isOpen then frame(i); frame() end
+end
+local function openAll()
+  for _ = 1, 10 do
+    frame()
+    local any
+    for i, b in ipairs(g.buttons) do
+      if g.paths[i]:sub(1, 5) == "open:" and b:sub(-1) == "+" then any = i; break end
+    end
+    if not any then return end
+    frame(any)
+  end
+  frame()
+end
+local function rowShown(row)
+  for i in ipairs(g.buttons) do if g.paths[i] == row then return true end end
+  return false
+end
+-- Opens the step a setting's row is in, if it is folded.
+local function reach(row)
+  frame()
+  if not rowShown(row) and I.BY_ID[row] then openStep(I.BY_ID[row].step) end
+end
+
 -- The button labelled `label` in the row of setting `row`.
 local function clickIn(row, label)
+  reach(row)
   frame()
   local idx
   for i, b in ipairs(g.buttons) do if b == label and g.paths[i] == row then idx = i end end
@@ -234,6 +278,8 @@ local function clickIn(row, label)
   frame()
 end
 local function chosenIn(row)
+  reach(row)
+  frame()
   for i, b in ipairs(g.buttons) do
     if g.paths[i] == row and g.ink[i].bg == 0xFFF200FF then return b end
   end
@@ -255,9 +301,6 @@ local function fresh()
 end
 
 
-local T = dofile(C.SCRIPTS .. "gi_theory.lua")
-local I = dofile(C.SCRIPTS .. "gi_idea.lua").init(T)
-
 local function heading() return g.headings[#g.headings] or "" end
 local function ideaNumber() return tonumber(heading():match("^Good Idea (%d+)")) end
 
@@ -266,17 +309,24 @@ local function ideaNumber() return tonumber(heading():match("^Good Idea (%d+)"))
 ------------------------------------------------------------------------------
 
 local tr = fresh()
-ok(#g.buttons > 30, "the first frame draws its buttons: " .. #g.buttons)
+ok(#g.buttons >= 12 and #g.buttons <= 30,
+   "the first frame is short, the steps folded: " .. #g.buttons .. " buttons")
 ok(#g.rects > 1, "and the roll, with notes in it")
 eq(g.bgAlpha, 1.0, "the window is solid")
 eq(g.windowBg, 0x23272EFF, "on the house ground")
-for _, step in ipairs({ "Idea", "Key", "Feel", "Melody" }) do
-  ok(has(g.headings, step), "a motif shows the " .. step .. " step")
+ok(has(g.headings, "Idea"), "a motif shows the Idea step, open")
+for _, step in ipairs({ "Key", "Feel", "Melody" }) do
+  ok(stepShown(step), "a motif shows the " .. step .. " step")
+  ok(not select(2, foldButton(step)), "folded at first")
 end
-ok(not has(g.headings, "Chords"), "but no Chords step - a motif is a tune")
-ok(not has(g.headings, "Arrangement"), "and no Arrangement")
+ok(not stepShown("Chords"), "but no Chords step - a motif is a tune")
+ok(not stepShown("Arrangement"), "and no Arrangement")
+ok(not stepShown("Drums"), "and no Drums")
 ok(heading():find("^Good Idea 1 %- Motif"), "the first idea is number 1, a motif: " .. heading())
-ok(has(g.texts, "C  D  E  F  G  A  B"), "the key's notes are spelled out")
+ok(has(g.texts, "C Major"), "the folded Key step says what is chosen")
+ok(has(g.texts, "pace Any  /  groove Any"), "and so does the folded Feel step")
+openStep("Key")
+ok(has(g.texts, "C  D  E  F  G  A  B"), "opened, the key's notes are spelled out")
 eq(chosenIn("kind"), "Motif", "Motif is chosen")
 eq(chosenIn("root"), "C", "in C")
 eq(chosenIn("scale"), "Major", "major")
@@ -308,18 +358,22 @@ do
     fresh()
     clickIn("kind", kind)
     if kind == "Phrase" then clickIn("content", "Both") end
-    frame()
+    openAll()
     for i, b in ipairs(g.buttons) do
       shown[g.paths[i] .. "=" .. b] = true
     end
   end
   for _, s in ipairs(I.SETTINGS) do
+    -- (A retired setting is kept in the list only for the order of the
+    -- dice, and is never shown.)
+    if s.retired then goto continue end
     local values = {}
     if s.any then values[1] = "Any" end
     for _, v in ipairs(s.values) do values[#values + 1] = I.valueName(s, v) end
     for _, v in ipairs(values) do
       if not shown[s.id .. "=" .. v] then missing[#missing + 1] = s.id .. "=" .. v end
     end
+    ::continue::
   end
   eq(#missing, 0, "every value of every setting has a button: " .. table.concat(missing, ", "))
 end
@@ -358,12 +412,17 @@ end
 for _, kind in ipairs(I.KINDS) do
   fresh()
   clickIn("kind", kind)
-  sweep("a " .. kind)
+  sweep("a " .. kind .. ", folded")
+  fresh()
+  clickIn("kind", kind)
+  openAll()
+  sweep("a " .. kind .. ", open")
 end
 for _, content in ipairs({ "Melody", "Chords", "Both" }) do
   fresh()
   clickIn("kind", "Phrase")
   clickIn("content", content)
+  openAll()
   sweep("a phrase of " .. content)
 end
 
@@ -374,6 +433,7 @@ do
     fresh()
     clickIn("kind", kind)
     if kind == "Phrase" then clickIn("content", "Both") end
+    openAll()
     for _, s in ipairs(I.SETTINGS) do
       frame()
       local present = false
@@ -403,14 +463,14 @@ end
 
 fresh()
 clickIn("kind", "Phrase")
-ok(has(g.headings, "Melody") and has(g.headings, "Chords"), "a phrase on Any shows Melody and Chords")
+ok(stepShown("Melody") and stepShown("Chords"), "a phrase on Any shows Melody and Chords")
 clickIn("content", "Chords")
-ok(not has(g.headings, "Melody"), "a chords-only phrase hides the Melody step")
-ok(has(g.headings, "Chords"), "and shows Chords")
+ok(not stepShown("Melody"), "a chords-only phrase hides the Melody step")
+ok(stepShown("Chords"), "and shows Chords")
 clickIn("content", "Melody")
-ok(not has(g.headings, "Chords"), "a melody-only phrase hides the Chords step")
+ok(not stepShown("Chords"), "a melody-only phrase hides the Chords step")
 clickIn("kind", "Measure")
-ok(has(g.headings, "Arrangement"), "a Measure shows the Arrangement")
+ok(stepShown("Arrangement"), "a Measure shows the Arrangement")
 eq(count("Insert on new tracks"), 1, "and inserts on new tracks")
 local bars = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "measureBars" then bars[#bars + 1] = b end end
@@ -429,6 +489,69 @@ clickIn("kind", "Measure")
 numbers = {}
 for _, t in ipairs(g.texts) do if t:match("^%d$") then numbers[#numbers + 1] = t end end
 eq(table.concat(numbers, ""), "123456", "a Measure's 1 to 6")
+
+------------------------------------------------------------------------------
+-- 1.2: folding steps, Drums, pull, 1.5 a bar, the layout by the buttons
+------------------------------------------------------------------------------
+
+-- A step opens and folds again, and what was chosen stays chosen.
+fresh()
+local closed = #g.buttons
+openStep("Feel")
+ok(#g.buttons > closed, "opening Feel shows its rows")
+ok(rowShown("pace") and rowShown("figures") and rowShown("push") and rowShown("pull") == false,
+   "pace, figures and push (no pull: a motif has no chords to lie back)")
+clickIn("pace", "Busy")
+foldStep("Feel")
+ok(not rowShown("pace"), "folding it hides them again")
+ok(has(g.texts, "pace Busy"), "and its line says what is chosen")
+eq(#g.buttons, closed, "and the window is as short as before")
+openAll()
+local all = #g.buttons
+ok(all > closed * 2, "every step open, the window is long again: " .. all .. " buttons")
+
+-- Drums sit beside Motif, Phrase and Measure.
+fresh()
+local kinds = {}
+for i, b in ipairs(g.buttons) do if g.paths[i] == "kind" then kinds[#kinds + 1] = b end end
+eq(table.concat(kinds, ","), "Motif,Phrase,Measure,Drums", "four kinds of idea")
+clickIn("kind", "Drums")
+ok(heading():find("Drums", 1, true), "a drum idea: " .. heading())
+ok(not stepShown("Key") and not stepShown("Melody") and not stepShown("Chords"), "with no key, tune or chords")
+ok(stepShown("Feel") and stepShown("Drums"), "but a Feel and a Drums step")
+local nums = {}
+for _, x in ipairs(g.texts) do if x:match("^%d$") then nums[#nums + 1] = x end end
+eq(table.concat(nums, ""), "123", "numbered 1 to 3")
+local dbars = {}
+for i, b in ipairs(g.buttons) do if g.paths[i] == "drumBars" then dbars[#dbars + 1] = b end end
+eq(#dbars, 17, "Any and 1 to 16 bars")
+clickIn("drumBars", "4")
+clickIn("fills", "Every 2 bars")
+ok(has(g.texts, "fills in bars 2, 4"), "the fills are said: " .. tostring(g.texts[#g.texts]))
+ok(#g.rects > 10, "the roll draws the drums")
+ok(not rowShown("layout"), "a drum idea is one item: no layout to choose")
+tr = P.selTracks[1]
+click("Insert at cursor")
+eq(#P.tracks, 1, "it goes on the selected track")
+local drumOnTen = #tr.items[1].take.notes > 0
+for _, n in ipairs(tr.items[1].take.notes) do if n.chan ~= 9 then drumOnTen = false end end
+ok(drumOnTen, "every note on channel 10")
+
+-- Pull, and one and a half chords a bar.
+fresh()
+clickIn("kind", "Phrase")
+clickIn("content", "Both")
+ok(rowShown("pull") or (function() openStep("Feel"); return rowShown("pull") end)(), "a phrase with chords can pull them")
+clickIn("pull", "Lots")
+local pulled = false
+for seed = 1, 12 do
+  frame(nil, nil, seed)
+  frame()
+  if has(g.texts, "_ pulled an eighth late") then pulled = true; break end
+end
+ok(pulled, "a pulled chord is marked _ in the chord line, and the mark explained")
+clickIn("chordPace", "1.5 a bar")
+eq(chosenIn("chordPace"), "1.5 a bar", "1.5 a bar can be chosen")
 
 ------------------------------------------------------------------------------
 -- New Idea, back and forward, the number, Keep
@@ -518,23 +641,21 @@ for _, n in ipairs(tr.items[2].take.notes) do
 end
 ok(sawAccent, "and does accent something")
 
--- A Measure inserts four tracks.
+-- A Measure inserts four tracks: it always has drums now.
 fresh()
 clickIn("kind", "Measure")
-clickIn("drums", "On")
+ok(not rowShown("drums"), "there is no drums switch any more")
+ok(rowShown("layout"), "the layout is down by the output buttons, with no step to open")
 clickIn("layout", "Tracks")
 click("Insert on new tracks")
 eq(#P.tracks, 5, "a Measure: four new tracks under the selected one")
 eq(P.tracks[2].name, "Melody", "named Melody")
 eq(P.tracks[5].name, "Drums", "to Drums")
 ok(has(g.texts, "Inserted 4 tracks"), "and says so")
-clickIn("drums", "Off")
-click("Insert on new tracks")
-eq(#P.tracks, 8, "without drums, three")
 clickIn("layout", "One item")
 eq(count("Insert at cursor"), 1, "in one item it inserts at the cursor")
 click("Insert at cursor")
-eq(#P.tracks, 8, "with no new tracks")
+eq(#P.tracks, 5, "with no new tracks")
 
 -- Export writes a file.
 click("Export .mid")
@@ -591,6 +712,7 @@ clickIn("kind", "Phrase")
 clickIn("content", "Melody")
 clickIn("pace", "Flowing")
 clickIn("figures", "Plain")
+openStep("Feel")
 eq(#g.sliders, 1, "a swing slider in 4/4")
 eq(g.sliders[1].v, 0, "starting straight")
 eq(g.sliders[1].lo .. "-" .. g.sliders[1].hi, "0-100", "from 0 to 100")
@@ -614,10 +736,12 @@ atexitFn()
 ok(P.ext["GoodIdea:state"]:find("swing=100", 1, true), "the swing is saved")
 start()
 frame()
+openStep("Feel")
 eq(g.sliders[1].v, 100, "and comes back")
 
 -- In 6/8 there is nothing to swing, and the window says so.
 fresh()
+openStep("Feel")
 P.num, P.den = 6, 8
 frame()
 frame()
@@ -631,6 +755,7 @@ P.num, P.den = 4, 4
 
 -- The new rows are there, and Borrowed only for scales that can borrow.
 fresh()
+openAll()
 for _, row in ipairs({ "figures", "push", "borrowed" }) do
   local n = 0
   for i in ipairs(g.buttons) do if g.paths[i] == row then n = n + 1 end end

@@ -1,6 +1,7 @@
 # 0010. Rhythm: dotted and triplet figures, pushed chords, and swing - laid over, not built in
 
-Taken 2026-10-01. Stands.
+Taken 2026-10-01. Stands, widened by [0014](0014-pull-the-chords-lie-back.md) (pull)
+and [0015](0015-chord-rhythm-figures-and-one-and-a-half.md) (figures on every chord style).
 
 ## Context
 

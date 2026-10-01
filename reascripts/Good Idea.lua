@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.1
+ * Version:        1.2
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -124,6 +124,7 @@ local ui = {
   idea = nil, meter = nil, sig = "",
   dirty = true, playhead = nil, playNext = false,
   history = {}, at = 0,     -- the ideas made this session, and where we are in them
+  open = {},                -- which folded steps are open: the view, not saved
 }
 
 local ctx
@@ -230,7 +231,7 @@ local function heading(n, text)
 end
 
 -- The space between one numbered step and the next. A gap, not an arrow.
-local STEP_GAP = 14
+local STEP_GAP = 6
 local function stepGap() ImGui.Dummy(ctx, 16, STEP_GAP) end
 
 local function tip(text)
@@ -338,6 +339,29 @@ local function pianoRoll(block, width, height, playhead)
     if p.drums then drums = #p.notes > 0
     else for _, n in ipairs(p.notes) do lo, hi = math.min(lo, n.pitch), math.max(hi, n.pitch) end end
   end
+  -- A drum idea has nothing else to show, so its drums fill the roll, a
+  -- lane for each drum, in the accent: they are the idea.
+  if drums and hi < lo then
+    local lanes, order = {}, {}
+    for _, p in ipairs(block.parts) do
+      for _, n in ipairs(p.notes) do
+        if not lanes[n.pitch] then lanes[n.pitch] = true; order[#order + 1] = n.pitch end
+      end
+    end
+    table.sort(order)
+    local row = {}
+    for i, pitch in ipairs(order) do row[pitch] = i end
+    local laneh = height / #order
+    for _, p in ipairs(block.parts) do
+      for _, n in ipairs(p.notes) do
+        local nx = x + width * (n.start / beats)
+        local ny = y + height - row[n.pitch] * laneh
+        ImGui.DrawList_AddRectFilled(dl, nx, ny + 1, nx + math.max(3, width * (n.len / beats) - 1),
+                                     ny + math.max(2, laneh - 1), NOTE_COL, 1)
+      end
+    end
+    drums = false
+  end
   local strip = drums and 14 or 0
   local tonal = height - strip
   if hi >= lo then
@@ -381,30 +405,67 @@ end
 -- The steps
 ------------------------------------------------------------------------------
 
+-- What a folded step has chosen, on one dim line: "pace Any  /  groove
+-- Syncopated  /  ...". Only the settings that show.
+local function summaryOf(ids)
+  local out = {}
+  for _, id in ipairs(ids) do
+    local s = I.BY_ID[id]
+    if I.shows(s, st) then out[#out + 1] = s.label:lower() .. " " .. I.valueName(s, st[id]) end
+  end
+  return table.concat(out, "  /  ")
+end
+
+-- A step that folds away: its number, then a button with its name that opens
+-- and closes it. Closed, a dim line says what is chosen in it; open, its
+-- rows. Small until asked, like Midi Catalogue's chords and instruments.
+local function fold(n, name, summary, draw)
+  ImGui.PushStyleColor(ctx, ImGui.Col_Text, STEP)
+  ImGui.Text(ctx, tostring(n))
+  ImGui.PopStyleColor(ctx, 1)
+  ImGui.SameLine(ctx, 0, 10)
+  local isOpen = ui.open[name]
+  ImGui.PushID(ctx, "open:" .. name)
+  if pick(name .. (isOpen and "  -" or "  +"), false, 128) then
+    isOpen = not isOpen
+    ui.open[name] = isOpen
+  end
+  ImGui.PopID(ctx)
+  tip(isOpen and "Fold this step away" or "Open this step")
+  if isOpen then
+    draw()
+  else
+    ImGui.SameLine(ctx, 0, 14)
+    dim(summary)
+  end
+end
+
 local function drawIdea(n)
   heading(n, "Idea")
   settingRow({ "kind" }, 84)
   ImGui.SameLine(ctx, 0, 24)
-  settingRow({ I.barsSetting(st.kind) }, 52)
+  settingRow({ I.barsSetting(st.kind) }, st.kind == "Drums" and 30 or 52)
   settingRow({ "content" }, 64)
 end
 
 local function drawKey(n)
-  heading(n, "Key")
-  settingRow({ "root" }, 36)
-  settingRow({ "scale" }, 84)
   local key = ui.idea and ui.idea.key or T.key(1, 1)
-  local names = {}
-  for d = 0, T.scaleLen(key) - 1 do names[#names + 1] = T.noteName(key, d) end
+  local rootName = (st.root == "Any") and "any key" or T.ROOTS[st.root].name
+  local scaleName = (st.scale == "Any") and "any scale" or T.SCALES[st.scale].name
   local rolled = ui.idea and (ui.idea.r.rolled.root or ui.idea.r.rolled.scale)
-  dim((rolled and ("This idea: " .. I.keyName(key) .. "  -  ") or "") .. table.concat(names, "  "))
-  settingRow({ "borrowed" }, 52)
+  local summary = rootName .. " " .. scaleName .. (rolled and ("  (this idea: " .. I.keyName(key) .. ")") or "")
+  if I.shows(I.BY_ID.borrowed, st) then summary = summary .. "  /  borrowed " .. st.borrowed end
+  fold(n, "Key", summary, function()
+    settingRow({ "root" }, 36)
+    settingRow({ "scale" }, 84)
+    local names = {}
+    for d = 0, T.scaleLen(key) - 1 do names[#names + 1] = T.noteName(key, d) end
+    dim((rolled and ("This idea: " .. I.keyName(key) .. "  -  ") or "") .. table.concat(names, "  "))
+    settingRow({ "borrowed" }, 52)
+  end)
 end
 
-local function drawFeel(n)
-  heading(n, "Feel")
-  settingRow({ "pace", "groove" }, 60)
-  settingRow({ "figures", "push" }, 60)
+local function drawSwing()
   dim("Swing")
   ImGui.SameLine(ctx)
   -- Swing stretches the eighths inside a quarter-note beat; a metre without
@@ -426,21 +487,45 @@ local function drawFeel(n)
   end
 end
 
+local FEEL = { "pace", "groove", "figures", "push", "pull" }
+
+local function drawFeel(n)
+  local swing = (ui.meter and I.swings(ui.meter)) and ("  /  swing " .. st.swing .. "%") or ""
+  fold(n, "Feel", summaryOf(FEEL) .. swing, function()
+    settingRow({ "pace", "groove" }, 60)
+    settingRow({ "figures" }, 60)
+    settingRow({ "push", "pull" }, 52)
+    drawSwing()
+  end)
+end
+
 local function drawMelody(n)
-  heading(n, "Melody")
-  settingRow({ "contour", "register" }, 56)
+  fold(n, "Melody", summaryOf({ "contour", "register" }), function()
+    settingRow({ "contour", "register" }, 56)
+  end)
 end
 
 local function drawChords(n)
-  heading(n, "Chords")
-  settingRow({ "colour", "chordPace" }, 60)
-  settingRow({ "chordStyle" }, 60)
+  fold(n, "Chords", summaryOf({ "colour", "chordPace", "chordStyle" }), function()
+    settingRow({ "colour" }, 60)
+    settingRow({ "chordPace" }, 60)
+    settingRow({ "chordStyle" }, 60)
+  end)
 end
 
 local function drawArrangement(n)
-  heading(n, "Arrangement")
-  settingRow({ "form", "bass" }, 60)
-  settingRow({ "drums", "layout" }, 44)
+  fold(n, "Arrangement", summaryOf({ "form", "bass" }), function()
+    settingRow({ "form" }, 60)
+    settingRow({ "bass" }, 60)
+  end)
+end
+
+local function drawDrums(n)
+  fold(n, "Drums", summaryOf({ "beat", "fills", "cymbal" }), function()
+    settingRow({ "beat" }, 60)
+    settingRow({ "fills" }, 60)
+    settingRow({ "cymbal" }, 52)
+  end)
 end
 
 local function drawNew()
@@ -496,9 +581,12 @@ local function drawResult()
     dimWrapped(idea.summary)
     local marks = {}
     if idea.chords:find("^", 1, true) then marks[#marks + 1] = "^ pushed an eighth early" end
+    if idea.chords:find("_", 1, true) then marks[#marks + 1] = "_ pulled an eighth late" end
     if idea.chords:find("*", 1, true) then marks[#marks + 1] = "* borrowed" end
-    dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords ..
-               (#marks > 0 and ("   (" .. table.concat(marks, ", ") .. ")") or ""))
+    if idea.chords ~= "" then
+      dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords ..
+                 (#marks > 0 and ("   (" .. table.concat(marks, ", ") .. ")") or ""))
+    end
     -- A borrowed chord is said in full, in the body text rather than the
     -- dim, so it is noticed: which chord, where, and from which scale.
     for _, b in ipairs(idea.borrowed) do
@@ -508,15 +596,21 @@ local function drawResult()
     end
     local parts = {}
     for _, p in ipairs(block.parts) do parts[#parts + 1] = p.name end
-    dim(("Shape  %s, %s  /  %d notes  /  %s  /  %s, %g bpm"):format(idea.plan.shape, idea.ending,
-      #block.notes, table.concat(parts, ", "), ui.sig, Place.tempo()))
+    if idea.plan.shape ~= "" then
+      dim(("Shape  %s, %s  /  %d notes  /  %s  /  %s, %g bpm"):format(idea.plan.shape, idea.ending,
+        #block.notes, table.concat(parts, ", "), ui.sig, Place.tempo()))
+    else
+      dim(("%s  /  %d notes  /  %s, %g bpm"):format(idea.ending, #block.notes, ui.sig, Place.tempo()))
+    end
   end
 end
 
 local function drawActions()
   local block = ui.idea and ui.idea.block
   ImGui.Dummy(ctx, 0, 4)
-  settingRow({ "velocity" }, 64)
+  -- How it goes out: the velocity, and for a Measure whether it lands as a
+  -- track per part or one item - beside the buttons that send it.
+  settingRow({ "velocity", "layout" }, 64)
   ImGui.Dummy(ctx, 0, 2)
   if not block then return end
 
@@ -568,15 +662,17 @@ local function frame()
   ui.playhead = Place.previewTick(nil, ui.loop)
 
   -- The steps are numbered as they are shown: a Motif has no Chords step,
-  -- only a Measure has an Arrangement.
+  -- only a Measure has an Arrangement, and Drums have no key. All but the
+  -- first fold away.
   local n = 0
   local function step(draw) n = n + 1; draw(n); stepGap() end
   step(drawIdea)
-  step(drawKey)
+  if st.kind ~= "Drums" then step(drawKey) end
   step(drawFeel)
   if I.hasMelody(st) then step(drawMelody) end
   if I.hasChords(st) then step(drawChords) end
   if st.kind == "Measure" then step(drawArrangement) end
+  if st.kind == "Drums" then step(drawDrums) end
   drawNew()
   drawResult()
   drawActions()
