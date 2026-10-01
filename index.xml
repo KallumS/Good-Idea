@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ReaPack index for Good Idea.
+
+  Add this repository in REAPER with Extensions > ReaPack > Import repositories,
+  pasting the raw URL of this file on the default branch:
+
+    https://raw.githubusercontent.com/KallumS/Good-Idea/main/index.xml
+
+  That URL only resolves once this file is on the default branch.
+
+  Each <source> is pinned to a commit rather than a branch, so an installed
+  version is the exact set of files that was tested and cannot change
+  underneath anyone. Publishing a new version means adding a <version> block
+  with a fresh commit hash - never editing an existing one.
+
+  The five files are one package and install into one folder, because the
+  main script loads the other four from beside itself.
+
+  ReaPack keys an installed package by its NAME, so renaming the script is
+  not an upgrade. Rename sparingly.
+-->
+<index version="1" name="Good Idea">
+  <category name="MIDI Editor">
+
+    <reapack name="Good Idea.lua" type="script" desc="Good Idea">
+      <version name="1.0" author="kallums" time="2026-10-01T22:00:00Z">
+        <changelog><![CDATA[First release. Ideas for starting a track: a Motif (a 1-4 bar hook), a Phrase (1-4 bars of melody, chords, or both in one clip) or a Measure (8, 12 or 16 bars of melody, chords, bass and drums as a period, a sentence, a song or a loop), made at the press of New Idea. Calculated from the maths of music - metric and Euclidean rhythms, a tonic-subdominant-dominant walk ending in real cadences, melodies walking a contour on the chords - never from a library. Every idea has a number, so the same number always gives the same idea, and changing the key, the feel or the chords keeps it. Every setting is in the window, and any can be left to chance. Insert it at the edit cursor (a Measure on a track per part, drums on channel 10), export a .mid, or audition it. Needs ReaImGui.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_place.lua</source>
+      </version>
+    </reapack>
+
+  </category>
+</index>
