@@ -1,8 +1,8 @@
 # Good Idea
 
 Ideas for starting a track, for REAPER. Press **New Idea** and get a short
-motif, a phrase, eight to sixteen bars of music - melody, chords, bass and
-drums - in your key, or a drum groove with fills, ready to drop into the
+motif, a phrase, eight to sixteen bars of music - melody, chords and bass -
+in your key, or a drum groove with fills, ready to drop into the
 project as MIDI and work on.
 
 The hardest thing in music is the blank page. Good Idea fills it with
@@ -17,8 +17,8 @@ change, or throw away and roll again.
 - **Phrase** - 1 to 4 bars of a **melody**, a **chord pattern**, or **both**
   together in one clip. A phrase has a proper ending: it comes home, or pauses
   on the dominant, or leaves itself open to go round again.
-- **Measure** - **8, 12 or 16 bars** of music: a melody, chords, a bass line
-  and a drum part, laid out in a form - a **Period** (a question and its
+- **Measure** - **8, 12 or 16 bars** of music: a melody, chords and a bass
+  line, laid out in a form - a **Period** (a question and its
   answer), a **Sentence** (an idea, the idea again, broken up and driven to a
   close), a **Song** (A A B A) or a **Loop** (one progression round and round
   with the tune varied over it).
@@ -52,8 +52,9 @@ that make music sound like music:
   answer (the same start, a different ending), fragments of it, and a cadence.
 - **Rhythmic colour.** Now and then a pair of notes becomes long-short
   (dotted) or a beat becomes three (a triplet); chords can be **pushed** an
-  eighth early, onto the "and" before the beat, with the tune and the kick
-  drum coming along; and the whole idea can **swing**.
+  eighth early, onto the "and" before the beat, with the tune and the bass
+  coming along; or **pulled** an eighth late, laid back; and the whole idea
+  can **swing**.
 - **Borrowed chords.** Rarely - about one idea in four, at most one chord -
   a chord is borrowed from another scale on the same key note: the minor iv
   or the bVI in a major key, the major IV in a minor one. The tune bends to
@@ -97,9 +98,9 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    and triplet rhythms now and then - with Triplets the drums shuffle and
    broken chords roll in triplets; with Dotted, held chords are struck again
    a dotted quarter in and arpeggios go long-short); the **push** (None,
-   Some, Lots: chords arriving an eighth early, the tune and kick with them);
+   Some, Lots: chords arriving an eighth early, the tune and bass with them);
    the **pull** (None, Some, Lots: the chords played an eighth late, laid
-   back, while the tune, bass and drums stay on the beat); and **Swing**, a slider from 0 (straight) to
+   back, while the tune and bass stay on the beat); and **Swing**, a slider from 0 (straight) to
    100% (full triplet swing, the off-beat eighth two thirds of the way
    through the beat). Swing is not rolled by Any - it is your groove, and it
    is kept between sessions. In 6/8 and 12/8 there is no slider (they are in
@@ -107,13 +108,15 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
 4. **Melody** - the **contour** (Arch, Rise, Fall, Wave, Valley) and the
    **register** (Low, Middle, High).
 5. **Chords** - the **colour** (Triads; Sevenths; Mixed - sevenths where they
-   pull, added ninths elsewhere), the **chord pace** (a chord every two bars,
-   one a bar, 1.5 a bar - three chords over two bars, 3+3+2 beats - or two a
-   bar; Any rolls all but 1.5, which is there to choose) and the **style**
+   pull, added ninths elsewhere), the **chord pace** (0.5 a bar - a chord
+   every two bars; 1 a bar; 1.5 a bar - three chords over two bars, 3+3+2
+   beats; 2 a bar; or 4 a bar - a chord on every beat, three a bar in 3/4.
+   Any rolls 0.5, 1 and 2; 1.5 and 4 are there to choose) and the **style**
    (Block, Pulse, Broken).
 6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
-   Pulse, locked to the kick drum; Moving, stepping into each new chord). A
-   Measure always has drums.
+   Pulse, in the rhythm a kick drum would play; Moving, stepping into each
+   new chord). A Measure has no drums: make a groove with **Drums**, the
+   fourth kind, and put it on a track of its own.
 7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
    **beat** (Backbeat, Half-time, Four on the floor, Breakbeat), the
    **fills** (None, At the end, Every 4 bars, Every 2 bars) and the
@@ -125,7 +128,7 @@ no chords to set, a chords-only Phrase has no melody, Drums have no key.
 ## Using it
 
 Press **New Idea**. The idea appears in the roll - the tune in yellow, chords
-and bass in grey, drums as ticks along the bottom - with its chords written
+and bass in grey - with its chords written
 out underneath, bar by bar. A drum idea fills the roll, a lane for each
 drum. A chord marked **^** is pushed an eighth early, **_** pulled an eighth
 late; a chord marked **\*** is borrowed, and a line underneath says which chord, in
@@ -149,7 +152,7 @@ And get it out - at the bottom, with the buttons that send it:
   2, so you can split them apart later with REAPER's explode-by-channel
   action (search the action list for "explode").
 - **Insert on new tracks** (a Measure laid out on Tracks) makes a track for
-  each part - Melody, Chords, Bass, Drums - under the selected track.
+  each part - Melody, Chords, Bass - under the selected track.
 - **Export .mid** writes a MIDI file into a `Good Idea` folder in REAPER's
   resource path. Point the Media Explorer at it and every idea you export is
   one drag away.
@@ -157,7 +160,7 @@ And get it out - at the bottom, with the buttons that send it:
   with monitoring on will sound it. It is a preview, not a performance - for
   exact timing, insert it and press play.
 
-The drums are on **MIDI channel 10** with General MIDI notes (kick 36, snare
+A drum idea is on **MIDI channel 10** with General MIDI notes (kick 36, snare
 38, clap 39, closed hat 42, pedal hat 44, open hat 46, crash 49, ride 51,
 ride bell 53, toms 41, 43, 45, 47, 48, 50), which any General MIDI drum kit
 understands.
@@ -218,8 +221,7 @@ so it needs a track that is record-armed with input monitoring on, with an
 instrument on it. Insert and Export do not need that.
 
 **The drums play as piano notes.** The instrument on the track is not a drum
-kit. Put the Drums track (or the whole item, in one-item layout) through a
-General MIDI drum instrument.
+kit. Put the drum idea's track through a General MIDI drum instrument.
 
 ## Checking it
 

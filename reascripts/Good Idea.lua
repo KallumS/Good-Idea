@@ -1,10 +1,10 @@
 --[[
  * ReaScript Name: Good Idea
- * Description:    Ideas for starting a track - a motif, a phrase or a full
- *                 measure of music - made from the maths of music, and put
- *                 into the project as MIDI.
+ * Description:    Ideas for starting a track - a motif, a phrase, a full
+ *                 measure of music or a drum groove - made from the maths
+ *                 of music, and put into the project as MIDI.
  *
- * About:          Choose Motif, Phrase or Measure and press New Idea. Each
+ * About:          Choose Motif, Phrase, Measure or Drums and press New Idea. Each
  *                 idea is calculated from your settings and an idea number -
  *                 rhythms from the metric grid and Euclidean spreads, chords
  *                 from the tonic-subdominant-dominant cycle, melodies walking
@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.2
+ * Version:        1.3
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -91,7 +91,6 @@ local INK       = 0x14171CFF   -- the text on every button, grey or yellow
 local STEP      = 0xBFC5CEFF   -- the step numbers: neutral
 local NOTE_COL  = SELECTED     -- the melody in the roll
 local PART_COL  = 0xA9AFBAFF   -- chords and bass in the roll: the controls' grey
-local DRUM_COL  = 0x6D7581FF   -- the drum strip
 local ROLL_BG   = 0x111419FF
 local ROLL_BAR  = 0x3A404AFF
 local ROLL_BEAT = 0x1E2228FF
@@ -310,8 +309,8 @@ end
 ------------------------------------------------------------------------------
 -- The preview roll
 --
--- The tune in the accent, the chords and bass in the controls' grey, and the
--- drums as a strip of ticks along the bottom.
+-- The tune in the accent, the chords and bass in the controls' grey; a drum
+-- idea in lanes.
 ------------------------------------------------------------------------------
 
 local function pianoRoll(block, width, height, playhead)
@@ -360,10 +359,8 @@ local function pianoRoll(block, width, height, playhead)
                                      ny + math.max(2, laneh - 1), NOTE_COL, 1)
       end
     end
-    drums = false
   end
-  local strip = drums and 14 or 0
-  local tonal = height - strip
+  local tonal = height
   if hi >= lo then
     -- A repeated single note would fill the whole box, so always show at
     -- least an octave of context around it.
@@ -384,17 +381,6 @@ local function pianoRoll(block, width, height, playhead)
       end
     end
   end
-  if drums then
-    for _, p in ipairs(block.parts) do
-      if p.drums then
-        for _, n in ipairs(p.notes) do
-          local nx = x + width * (n.start / beats)
-          ImGui.DrawList_AddRectFilled(dl, nx, y + tonal + 3, nx + 2, y + height - 2, DRUM_COL, 0)
-        end
-      end
-    end
-  end
-
   if playhead then
     local px = x + width * math.min(1, playhead)
     ImGui.DrawList_AddLine(dl, px, y, px, y + height, PLAYHEAD, 2)
@@ -622,7 +608,7 @@ local function drawActions()
     elseif res == Place.NOTHING then say("Nothing to insert", true)
     else say("No track selected", true) end
   end
-  tip(many and "One new track per part - Melody, Chords, Bass, Drums - under the selected track"
+  tip(many and "One new track per part - Melody, Chords, Bass - under the selected track"
            or "As one item on the selected track, at the edit cursor")
 
   ImGui.SameLine(ctx)

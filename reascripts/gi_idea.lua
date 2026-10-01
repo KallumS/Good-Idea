@@ -162,7 +162,7 @@ function M.buildSettings()
       hints = {
         Motif = "A short melodic hook, 1 to 4 bars, built from one small cell repeated and varied.",
         Phrase = "A 1 to 4 bar phrase: a melody, a chord pattern, or both in one clip, with a proper ending.",
-        Measure = "8 to 16 bars of music: melody, chords, bass and drums, laid out in a form.",
+        Measure = "8 to 16 bars of music: melody, chords and bass, laid out in a form.",
         Drums = "1 to 16 bars of drums on General MIDI notes: a groove, varied, with fills where you ask for them.",
       } },
     { id = "motifBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4 }, any = true,
@@ -234,16 +234,22 @@ function M.buildSettings()
         Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7.",
       } },
     { id = "chordPace", label = "Chord pace", step = "Chords",
-      values = { "Slow", "One a bar", "1.5 a bar", "Two a bar" }, any = true, default = "Any",
-      -- Any rolls the three 1.0 had, with 1.0's weights, so a 1.0 idea
-      -- number still rolls the same pace; 1.5 a bar is there to choose.
+      values = { "Slow", "One a bar", "1.5 a bar", "Two a bar", "4 a bar" }, any = true, default = "Any",
+      -- Shown as numbers (0.5, 1, 1.5, 2, 4 a bar); kept by their 1.0 names
+      -- so saved settings still load. Any rolls the three 1.0 had, with
+      -- 1.0's weights, so a 1.0 idea number still rolls the same pace; 1.5
+      -- and 4 a bar are there to choose.
+      name = function(v)
+        return ({ Slow = "0.5 a bar", ["One a bar"] = "1 a bar", ["Two a bar"] = "2 a bar" })[v] or v
+      end,
       anyValues = { "Slow", "One a bar", "Two a bar" }, anyWeights = { 0.7, 1.6, 0.8 },
       when = hasChords,
       hints = {
-        Slow = "A chord every two bars.",
+        Slow = "Half a chord a bar: a chord every two bars.",
         ["One a bar"] = "A chord a bar.",
         ["1.5 a bar"] = "Three chords every two bars: in 4/4, three beats, three beats, two - the 3+3+2 that pushes a progression along. (Chosen, not rolled by Any.)",
-        ["Two a bar"] = "Two chords a bar.",
+        ["Two a bar"] = "Two chords a bar: one every half bar.",
+        ["4 a bar"] = "A chord on every beat - four a bar in 4/4, three in 3/4. (Chosen, not rolled by Any.)",
       } },
     { id = "chordStyle", label = "Style", step = "Chords", values = { "Block", "Pulse", "Broken" },
       any = true, default = "Any", weights = { 1, 1.2, 1 }, when = hasChords,
@@ -267,19 +273,19 @@ function M.buildSettings()
       when = function(st) return st.kind == "Measure" end,
       hints = {
         Held = "The root, held under each chord.",
-        Pulse = "The root, in rhythm with the kick drum.",
+        Pulse = "The root, in the rhythm a kick drum would play: on 1 and 3, or syncopated.",
         Moving = "On the beat: the root, then the fifth or the octave, and a step into the next chord.",
       } },
-    -- Retired in 1.2: a Measure always has drums, and drums on their own are
-    -- the Drums kind. It stays in the list, never shown and always On,
-    -- because the list is the order the dice are drawn in.
-    { id = "drums", label = "Drums", step = "Arrangement", values = { "On" },
-      default = "On", retired = true, when = function() return false end },
+    -- Retired: in 1.2 a Measure always had drums; since 1.3 it has none -
+    -- drums are the Drums kind. It stays in the list, never shown and only
+    -- ever Off, because the list is the order the dice are drawn in.
+    { id = "drums", label = "Drums", step = "Arrangement", values = { "Off" },
+      default = "Off", retired = true, when = function() return false end },
     { id = "layout", label = "Layout", step = "Out", values = { "Tracks", "One item" },
       default = "Tracks", when = function(st) return st.kind == "Measure" end,
       hints = {
-        Tracks = "A new track for each part - Melody, Chords, Bass, Drums - under the selected track.",
-        ["One item"] = "Every part in one item on the selected track, each on its own MIDI channel (1, 2, 3, drums on 10).",
+        Tracks = "A new track for each part - Melody, Chords, Bass - under the selected track.",
+        ["One item"] = "Every part in one item on the selected track, each on its own MIDI channel (1, 2, 3).",
       } },
 
     { id = "velocity", label = "Velocity", step = "Out", values = { "Flat", "Accents" },
@@ -305,7 +311,7 @@ function M.buildSettings()
       any = true, default = "Any", weights = { 1.5, 1.5, 1 }, when = notDrums,
       hints = {
         None = "Every chord arrives on the beat.",
-        Some = "Some chords arrive an eighth early - on the 'and' before the beat - and the tune and the kick drum come with them.",
+        Some = "Some chords arrive an eighth early - on the 'and' before the beat - and the tune and the bass come with them.",
         Lots = "Most chords arrive an eighth early: a pushed, syncopated feel.",
       } },
     { id = "borrowed", label = "Borrowed", step = "Key", values = { "Off", "Rare" }, default = "Rare",
@@ -531,7 +537,7 @@ end
 -- 3. Harmony
 ------------------------------------------------------------------------------
 
-local RATE = { Slow = 0.5, ["One a bar"] = 1, ["1.5 a bar"] = 1.5, ["Two a bar"] = 2 }
+local RATE = { Slow = 0.5, ["One a bar"] = 1, ["1.5 a bar"] = 1.5, ["Two a bar"] = 2, ["4 a bar"] = 4 }
 
 -- Where an answer stops copying its source: half way, on a beat, and
 -- always before the end (a unit one beat long copies nothing).
@@ -546,7 +552,8 @@ local function countFor(meter, len, r, kind, cad, first)
   local bars = len / meter.bar
   local rate = RATE[r.chordPace] or 1
   -- A continuation speeds the harmony up (Open Music Theory, the sentence).
-  if kind == "frag" then rate = math.min(2, rate * 2) end
+  -- (Never slower than the pace chosen: at four a bar it is already quick.)
+  if kind == "frag" then rate = math.max(rate, math.min(2, rate * 2)) end
   local n = math.max(1, round(bars * rate))
   local beats = len // meter.beat
   -- An ending needs two chords: one to lead to it, and the one it lands on.
@@ -738,8 +745,8 @@ end
 -- A chord change on a beat moves back an eighth, onto the "and" before it
 -- (some, or most, by the Push setting). The chord before is cut short to
 -- make room, so the chords still follow each other with no gap. The tune's
--- note on that beat comes early with it (`M.melody`), and so does the kick
--- (`M.drumsPart`). Only where the beat is a quarter or longer, and only
+-- note on that beat comes early with it (`M.melody`), and so does the bass.
+-- Only where the beat is a quarter or longer, and only
 -- where the chord before is long enough to give up an eighth.
 ------------------------------------------------------------------------------
 
@@ -1671,94 +1678,12 @@ local function backbeats(meter, pace)
   return out
 end
 
-function M.drumsPart(ctx, plan, r, rnd, kick, timeline)
-  local D = M.DRUM
-  local meter = ctx.meter
-  local notes = {}
-  local bars = plan.total // meter.bar
-  local snare = backbeats(meter, r.pace)
-  local hatUnit = ({ Calm = meter.beat, Flowing = 2, Busy = 1 })[r.pace] or 2
-  local fillUnit = (r.pace == "Calm") and 2 or 1
-
-  -- A fill goes in the last beat before a new section, and at the very end.
-  local fills, crashes = {}, { [0] = true }
-  for i, u in ipairs(plan.units) do
-    local nextU = plan.units[i + 1]
-    if not nextU or nextU.letter ~= u.letter then
-      local lastBar = (u.start + u.len - 1) // meter.bar
-      if u.len >= 2 * meter.bar or not nextU then fills[lastBar] = true end
-    end
-    if i > 1 and plan.units[i - 1].letter ~= u.letter and u.start % meter.bar == 0 then
-      crashes[u.start // meter.bar] = true
-    end
-  end
-
-  for b = 0, bars - 1 do
-    local base = b * meter.bar
-    local fillFrom = fills[b] and (meter.bar - meter.beat) or meter.bar
-    local snareAt = {}
-    for _, s in ipairs(snare) do snareAt[s] = true end
-    for _, k in ipairs(kick) do
-      if k < fillFrom and not snareAt[k] then addNote(notes, base + k, 1, D.kick, k == 0) end
-    end
-    for _, s in ipairs(snare) do
-      if s < fillFrom then addNote(notes, base + s, 1, D.snare, true) end
-    end
-    -- In triplets the hats shuffle: the first and last of each beat's
-    -- three (all three when busy).
-    local hats = {}
-    if r.figures == "Triplets" and r.pace ~= "Calm" and meter.beat == 4 then
-      for beat = 0, fillFrom - 1, 4 do
-        hats[#hats + 1] = beat
-        if r.pace == "Busy" then hats[#hats + 1] = beat + 4 / 3 end
-        hats[#hats + 1] = beat + 8 / 3
-      end
-    else
-      for h = 0, fillFrom - 1, hatUnit do hats[#hats + 1] = h end
-    end
-    for _, h in ipairs(hats) do
-      local openHat = r.groove == "Syncopated" and b % 2 == 1 and h == meter.bar - 2 and hatUnit <= 2
-      if not (crashes[b] and h == 0) then
-        addNote(notes, base + h, openHat and 2 or 1, openHat and D.open or D.hat, false)
-      end
-    end
-    if crashes[b] then addNote(notes, base, 4, D.crash, true) end
-    if fills[b] then
-      local toms = { D.snare, D.tomHi, D.tomMid, D.tomLo }
-      local i = 0
-      for f = fillFrom, meter.bar - 1, fillUnit do
-        addNote(notes, base + f, fillUnit, toms[i % #toms + 1], f == fillFrom)
-        i = i + 1
-      end
-    end
-  end
-
-  -- A pushed chord takes the kick with it: on the push, not on the beat
-  -- after - unless a fill is playing there.
-  for _, sl in ipairs(timeline or {}) do
-    if sl.pushed then
-      local b = sl.s // meter.bar
-      local inFill = fills[b] and (sl.s - b * meter.bar) >= meter.bar - meter.beat
-      if not inFill then
-        for i = #notes, 1, -1 do
-          if notes[i].pitch == D.kick and notes[i].step == sl.s + 2 then table.remove(notes, i) end
-        end
-        addNote(notes, sl.s, 1, D.kick, true)
-      end
-    end
-  end
-  table.sort(notes, function(a, c)
-    if a.step ~= c.step then return a.step < c.step end
-    return a.pitch < c.pitch
-  end)
-  return notes
-end
-
 ------------------------------------------------------------------------------
 -- Drums on their own (docs/decisions/0013-drums-are-a-kind-of-idea.md)
 --
--- A groove a bar long, made for the beat style from the same pieces as a
--- Measure's drums (the kick's metric or Euclidean pattern, the backbeat),
+-- A groove a bar long, made for the beat style from the same pieces 1.0's
+-- Measures had for their drums (the kick's metric or Euclidean pattern, the
+-- backbeat),
 -- played in pairs of bars where the second answers the first with one
 -- small change; then fills where the Fills setting asks, each a beat or two
 -- of snare, toms, or both (in triplets when the figures are), with a crash
@@ -2068,24 +1993,23 @@ function M.make(st, meter, seed)
   end
 
   if r.kind == "Measure" then
+    -- No drums in a Measure since 1.3 (drums are their own kind), but a
+    -- pulsing bass still plays the pattern a kick drum would, drawn as it
+    -- always was so the bass is unchanged.
     local kick = M.kickPattern(meter, r, M.stream(seed, "drums"))
     parts[#parts + 1] = { name = "Bass", list = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick) }
-    if r.drums == "On" then
-      parts[#parts + 1] = { name = "Drums", list = M.drumsPart(ctx, plan, r, M.stream(seed, "drums"), kick, timeline),
-                            drums = true }
-    end
   end
 
-  -- Channels: in one item each part has its own (drums on 10, as General
-  -- MIDI expects); on tracks of their own every part is on 1 but the drums.
+  -- Channels: in one item each part has its own; on tracks of their own
+  -- every part is on 1. (A drum idea, on 10, makes its own block: makeDrums.)
   local oneItem = r.kind ~= "Measure" or r.layout == "One item"
   local warp = M.swingWarp(meter, st.swing)
   local block = { parts = {}, notes = {}, beats = plan.total / 4,
                   layout = (oneItem and "one") or "tracks" }
   for i, p in ipairs(parts) do
-    local chan = p.drums and 9 or (oneItem and (i - 1) or 0)
+    local chan = oneItem and (i - 1) or 0
     local notes = toBlockNotes(p.list, chan, r.velocity, warp)
-    block.parts[#block.parts + 1] = { name = p.name, notes = notes, chan = chan, drums = p.drums }
+    block.parts[#block.parts + 1] = { name = p.name, notes = notes, chan = chan }
     for _, n in ipairs(notes) do block.notes[#block.notes + 1] = n end
   end
   -- Fully ordered: Lua's sort is not stable, and may shuffle notes that
@@ -2106,7 +2030,7 @@ function M.make(st, meter, seed)
   if r.melody then said[#said + 1] = r.contour:lower() .. " contour" end
   if r.chords then
     said[#said + 1] = r.colour:lower()
-    said[#said + 1] = r.chordPace:lower()
+    said[#said + 1] = M.valueName(M.BY_ID.chordPace, r.chordPace)
     said[#said + 1] = r.chordStyle:lower() .. ((r.chordStyle == "Broken" and arpName) and (" (" .. arpName .. ")") or "")
   end
   if r.kind == "Measure" then said[#said + 1] = r.bass:lower() .. " bass" end

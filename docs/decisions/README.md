@@ -26,3 +26,4 @@ the standing rules; this holds the decisions behind them.
 | [0013](0013-drums-are-a-kind-of-idea.md) | Drums are a kind of idea; a Measure always has drums |
 | [0014](0014-pull-the-chords-lie-back.md) | Pull: the chords lie back an eighth; the tune, bass and drums stay on the beat |
 | [0015](0015-chord-rhythm-figures-and-one-and-a-half.md) | Figures reach every chord style and the walking bass; 1.5 chords a bar, chosen not rolled |
+| [0016](0016-a-measure-has-no-drums-paces-in-numbers.md) | A Measure has no drums; chord paces in numbers, 0.5 to 4 a bar |

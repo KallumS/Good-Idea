@@ -1,6 +1,8 @@
 # 0013. Drums are a kind of idea; a Measure always has drums
 
-Taken 2026-10-01. Stands. Retires the Measure's Drums switch
+Taken 2026-10-01. Stands, but for the Measure's drums: since
+[0016](0016-a-measure-has-no-drums-paces-in-numbers.md) a Measure has none.
+Retires the Measure's Drums switch
 ([0007](0007-a-measure-on-tracks-a-motif-in-one-item.md)).
 
 ## Context

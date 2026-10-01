@@ -97,27 +97,25 @@ local top = P.track("Top")
 local sel = P.track("Selected")
 local bottom = P.track("Bottom")
 P.selTracks = { sel }
-local m = idea({ kind = "Measure", measureBars = 8, drums = "On", layout = "Tracks" })
+local m = idea({ kind = "Measure", measureBars = 8, layout = "Tracks" })
 eq(m.layout, "tracks", "a Measure on tracks")
-eq(#m.parts, 4, "melody, chords, bass and drums")
+eq(#m.parts, 3, "melody, chords and bass - no drums")
 eq(Place.insert(m), Place.OK, "inserting it works")
-eq(#P.tracks, 7, "four new tracks")
+eq(#P.tracks, 6, "three new tracks")
 eq(P.tracks[1], top, "the track above stays where it was")
 eq(P.tracks[2], sel, "and the selected one")
 eq(P.tracks[3].name, "Melody", "the tune first, under the selected track")
 eq(P.tracks[4].name, "Chords", "then the chords")
 eq(P.tracks[5].name, "Bass", "the bass")
-eq(P.tracks[6].name, "Drums", "the drums")
-eq(P.tracks[7], bottom, "and the track below is pushed down")
-for i = 3, 6 do
+eq(P.tracks[6], bottom, "and the track below is pushed down")
+for i = 3, 5 do
   eq(#P.tracks[i].items, 1, P.tracks[i].name .. " has one item")
   eq(#P.tracks[i].items[1].take.notes, #m.parts[i - 2].notes, P.tracks[i].name .. " has its part's notes")
 end
-for _, nt in ipairs(P.tracks[6].items[1].take.notes) do
-  if nt.chan ~= 9 then ok(false, "every drum note is on channel 10"); break end
-end
-for _, nt in ipairs(P.tracks[3].items[1].take.notes) do
-  if nt.chan ~= 0 then ok(false, "on its own track the tune is on channel 1"); break end
+for i = 3, 5 do
+  for _, nt in ipairs(P.tracks[i].items[1].take.notes) do
+    if nt.chan ~= 0 then ok(false, "on its own track every part is on channel 1"); break end
+  end
 end
 eq(P.undoDepth, 0, "one undo block, closed")
 eq(#P.undoNames, 1, "just one")
@@ -127,20 +125,32 @@ eq(P.refreshDepth, 0, "and the UI refresh is let go")
 P.reset()
 P.track("Only")
 eq(Place.insert(m), Place.OK, "with nothing selected it still inserts")
-eq(#P.tracks, 5, "four new tracks")
+eq(#P.tracks, 4, "three new tracks")
 eq(P.tracks[2].name, "Melody", "at the end of the project")
 
 -- A Measure in one item: every part on the selected track, on its own channel.
 P.reset()
 tr = P.track("One")
 P.selTracks = { tr }
-local one = idea({ kind = "Measure", measureBars = 8, drums = "On", layout = "One item" })
+local one = idea({ kind = "Measure", measureBars = 8, layout = "One item" })
 eq(one.layout, "one", "a Measure in one item")
 eq(Place.insert(one), Place.OK, "inserts")
 eq(#P.tracks, 1, "no new tracks")
 chans = {}
 for _, nt in ipairs(tr.items[1].take.notes) do chans[nt.chan] = true end
-ok(chans[0] and chans[1] and chans[2] and chans[9], "channels 1, 2, 3 and 10 (0, 1, 2, 9 to REAPER)")
+ok(chans[0] and chans[1] and chans[2] and not chans[9], "channels 1, 2 and 3 (0, 1, 2 to REAPER), and no drums")
+
+-- A drum idea: one item on the selected track, every note on channel 10.
+P.reset()
+tr = P.track("Drums")
+P.selTracks = { tr }
+local kit = idea({ kind = "Drums", drumBars = 4 })
+eq(kit.layout, "one", "a drum idea is one item")
+eq(Place.insert(kit), Place.OK, "inserts")
+eq(#P.tracks, 1, "on the selected track")
+local allTen = #tr.items[1].take.notes > 0
+for _, nt in ipairs(tr.items[1].take.notes) do if nt.chan ~= 9 then allTen = false end end
+ok(allTen, "every drum note on channel 10")
 
 ------------------------------------------------------------------------------
 -- Export
@@ -166,7 +176,7 @@ f = io.open(mpath, "rb")
 data = f and f:read("a") or ""
 if f then f:close() end
 eq(data:byte(10), 1, "a Measure on tracks is format 1")
-eq(data:byte(12), 5, "a tempo track and one per part")
+eq(data:byte(12), 4, "a tempo track and one per part")
 eq(Place.export({ notes = {}, parts = {}, beats = 4, name = "x" }), Place.NOTHING, "an empty idea writes nothing")
 
 ------------------------------------------------------------------------------
@@ -178,13 +188,13 @@ ok(Place.previewStart(one, 120, 0), "audition starts")
 ok(Place.previewRunning(), "and is running")
 local at = Place.previewTick(0.01)
 ok(at and at >= 0, "the first tick says where it is")
-local sawDrum, sawMelody = false, false
+local sawBass, sawMelody = false, false
 for _, msg in ipairs(P.stuffed) do
   eq(msg.mode, 0, "to the virtual keyboard")
-  if msg.a == 0x99 then sawDrum = true end
+  if msg.a == 0x92 then sawBass = true end
   if msg.a == 0x90 then sawMelody = true end
 end
-ok(sawDrum, "the drums play on channel 10")
+ok(sawBass, "the bass plays on channel 3")
 ok(sawMelody, "the tune on channel 1")
 -- Halfway, then past the end.
 Place.previewTick(one.beats * 0.5 / 2)
@@ -199,6 +209,15 @@ end
 local hanging = 0
 for k in pairs(ons) do if not offs[k] then hanging = hanging + 1 end end
 eq(hanging, 0, "every note that started was stopped, on its own channel")
+
+-- A drum idea auditions on channel 10.
+P.reset()
+Place.previewStart(kit, 120, 0)
+Place.previewTick(0.01)
+local sawDrum = false
+for _, msg in ipairs(P.stuffed) do if msg.a == 0x99 then sawDrum = true end end
+ok(sawDrum, "the drums play on channel 10")
+Place.previewStop()
 
 -- Looping goes round again.
 P.reset()

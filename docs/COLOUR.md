@@ -10,11 +10,13 @@ Blocks) and is **not generated**: it is a reference kept by hand. If you
 change a colour in `reascripts/Good Idea.lua`, change it here too.
 
 The one addition is in the preview roll, which shows several parts at once:
-the tune takes the accent, the chords and bass take the controls' grey, and
-the drums are a strip of ticks in the scrollbar-hover grey along the bottom.
+the tune takes the accent and the chords and bass take the controls' grey.
 See [decision 0009](decisions/0009-the-tune-in-the-accent.md). A drum idea
 has no tune, so its drums fill the roll in lanes and take the accent
-([0013](decisions/0013-drums-are-a-kind-of-idea.md)).
+([0013](decisions/0013-drums-are-a-kind-of-idea.md)). (In 1.2 a Measure's
+drums were a strip of ticks in the scrollbar-hover grey along the bottom;
+since [0016](decisions/0016-a-measure-has-no-drums-paces-in-numbers.md) a
+Measure has no drums, and the strip is gone.)
 
 ## The four that carry it
 
@@ -47,7 +49,7 @@ Eighteen greys, darkest to lightest.
 | `#2A2F37` | 42 | 47 | 55 | frame active |
 | `#3A404A` | 58 | 64 | 74 | separators, roll bar lines |
 | `#585F6B` | 88 | 95 | 107 | scrollbar grab |
-| `#6D7581` | 109 | 117 | 129 | scrollbar hover, the drum strip in the roll |
+| `#6D7581` | 109 | 117 | 129 | scrollbar hover |
 | `#8A919C` | 138 | 145 | 156 | disabled and dim text |
 | `#8F96A2` | 143 | 150 | 162 | button held |
 | `#A9AFBA` | 169 | 175 | 186 | buttons, slider grabs, chords and bass in the roll |

@@ -553,6 +553,15 @@ ok(pulled, "a pulled chord is marked _ in the chord line, and the mark explained
 clickIn("chordPace", "1.5 a bar")
 eq(chosenIn("chordPace"), "1.5 a bar", "1.5 a bar can be chosen")
 
+-- 1.3: the chord paces in numbers, 0.5 to 4 a bar.
+local paces = {}
+reach("chordPace")
+frame()
+for i, b in ipairs(g.buttons) do if g.paths[i] == "chordPace" then paces[#paces + 1] = b end end
+eq(table.concat(paces, ","), "Any,0.5 a bar,1 a bar,1.5 a bar,2 a bar,4 a bar", "the chord paces read as numbers")
+clickIn("chordPace", "4 a bar")
+eq(chosenIn("chordPace"), "4 a bar", "4 a bar can be chosen")
+
 ------------------------------------------------------------------------------
 -- New Idea, back and forward, the number, Keep
 ------------------------------------------------------------------------------
@@ -641,21 +650,22 @@ for _, n in ipairs(tr.items[2].take.notes) do
 end
 ok(sawAccent, "and does accent something")
 
--- A Measure inserts four tracks: it always has drums now.
+-- A Measure inserts three tracks: it has no drums (since 1.3).
 fresh()
 clickIn("kind", "Measure")
-ok(not rowShown("drums"), "there is no drums switch any more")
+ok(not rowShown("drums"), "there is no drums switch")
 ok(rowShown("layout"), "the layout is down by the output buttons, with no step to open")
 clickIn("layout", "Tracks")
 click("Insert on new tracks")
-eq(#P.tracks, 5, "a Measure: four new tracks under the selected one")
+eq(#P.tracks, 4, "a Measure: three new tracks under the selected one")
 eq(P.tracks[2].name, "Melody", "named Melody")
-eq(P.tracks[5].name, "Drums", "to Drums")
-ok(has(g.texts, "Inserted 4 tracks"), "and says so")
+eq(P.tracks[3].name, "Chords", "Chords")
+eq(P.tracks[4].name, "Bass", "and Bass")
+ok(has(g.texts, "Inserted 3 tracks"), "and says so")
 clickIn("layout", "One item")
 eq(count("Insert at cursor"), 1, "in one item it inserts at the cursor")
 click("Insert at cursor")
-eq(#P.tracks, 5, "with no new tracks")
+eq(#P.tracks, 4, "with no new tracks")
 
 -- Export writes a file.
 click("Export .mid")

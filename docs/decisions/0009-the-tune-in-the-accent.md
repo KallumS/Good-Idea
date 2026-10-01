@@ -1,6 +1,8 @@
 # 0009. The tune takes the accent in the roll; the accompaniment takes grey
 
-Taken 2026-10-01. Stands.
+Taken 2026-10-01. Stands. The drum strip went with the Measure's drums
+([0016](0016-a-measure-has-no-drums-paces-in-numbers.md)); a drum idea is
+drawn in lanes ([0013](0013-drums-are-a-kind-of-idea.md)).
 
 ## Context
 

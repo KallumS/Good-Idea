@@ -1,6 +1,8 @@
 # 0015. Figures reach every chord style and the walking bass; 1.5 chords a bar, chosen not rolled
 
 Taken 2026-10-01. Stands. Widens [0010](0010-figures-push-and-swing.md).
+Since [0016](0016-a-measure-has-no-drums-paces-in-numbers.md) the pace
+reads in numbers (Slow is "0.5 a bar") and 4 a bar joins it.
 
 ## Context
 

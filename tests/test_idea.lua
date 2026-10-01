@@ -182,7 +182,7 @@ local function audit(idea, tag)
   else
     local got = {}
     for _, p in ipairs(b.parts) do got[#got + 1] = p.name end
-    rule("a measure is melody, chords, bass and drums", table.concat(got, " ") == "Melody Chords Bass Drums", tag)
+    rule("a measure is melody, chords and bass", table.concat(got, " ") == "Melody Chords Bass", tag)
     rule("a measure's layout is what it says",
          b.layout == (r.layout == "Tracks" and "tracks" or "one"), tag)
   end
@@ -399,7 +399,7 @@ do
 end
 
 -- Each part draws its own dice: a different chord style leaves the tune
--- alone, and so does turning the drums off.
+-- and the bass alone, and so does a different bass the tune and chords.
 do
   local bad = 0
   for seed = 1, 40 do
@@ -409,13 +409,13 @@ do
     local e = make({ kind = "Measure", chordStyle = "Pulse", groove = "Syncopated" }, seed)
     local f = make({ kind = "Measure", chordStyle = "Broken", groove = "Syncopated" }, seed)
     if fingerprint(part(e, "Bass").notes) ~= fingerprint(part(f, "Bass").notes) then bad = bad + 1 end
-    if fingerprint(part(e, "Drums").notes) ~= fingerprint(part(f, "Drums").notes) then bad = bad + 1 end
-    local c = make({ kind = "Measure", drums = "On" }, seed)
-    local d = make({ kind = "Measure", drums = "Off" }, seed)
+    if fingerprint(part(e, "Melody").notes) ~= fingerprint(part(f, "Melody").notes) then bad = bad + 1 end
+    local c = make({ kind = "Measure", bass = "Held" }, seed)
+    local d = make({ kind = "Measure", bass = "Moving" }, seed)
     if fingerprint(part(c, "Melody").notes) ~= fingerprint(part(d, "Melody").notes) then bad = bad + 1 end
-    if fingerprint(part(c, "Bass").notes) ~= fingerprint(part(d, "Bass").notes) then bad = bad + 1 end
+    if fingerprint(part(c, "Chords").notes) ~= fingerprint(part(d, "Chords").notes) then bad = bad + 1 end
   end
-  eq(bad, 0, "changing how the chords are played, or the drums, leaves the tune and bass alone")
+  eq(bad, 0, "changing how the chords are played leaves the tune and bass alone, and the bass the tune and chords")
 end
 
 -- The same idea in another key is the same tune, moved.
@@ -568,8 +568,28 @@ do
   local one = average({ kind = "Measure", form = "Loop", chordPace = "One a bar" }, chordsPerBar)
   local onehalf = average({ kind = "Measure", form = "Loop", chordPace = "1.5 a bar" }, chordsPerBar)
   local two = average({ kind = "Measure", form = "Loop", chordPace = "Two a bar" }, chordsPerBar)
-  ok(slow < one and one < onehalf and onehalf < two,
-     ("chord pace: %.2f, %.2f, %.2f, %.2f chords a bar"):format(slow, one, onehalf, two))
+  local four = average({ kind = "Measure", form = "Loop", chordPace = "4 a bar" }, chordsPerBar)
+  ok(slow < one and one < onehalf and onehalf < two and two < four,
+     ("chord pace: %.2f, %.2f, %.2f, %.2f, %.2f chords a bar"):format(slow, one, onehalf, two, four))
+  -- 4 a bar is a chord on every beat: every chord the plan lays out is one
+  -- beat long, in 4/4 and in 3/4 alike.
+  local long, slots = 0, 0
+  for seed = 1, 40 do
+    for _, m in ipairs({ M44, m34 }) do
+      for _, kind in ipairs({ "Phrase", "Measure" }) do
+        local idea = make({ kind = kind, content = "Both", chordPace = "4 a bar", push = "None" }, seed, m)
+        for _, u in ipairs(idea.plan.units) do
+          for _, sl in ipairs(u.rel) do
+            slots = slots + 1
+            if sl.e - sl.s ~= m.beat then long = long + 1 end
+          end
+        end
+      end
+    end
+  end
+  ok(slots > 0 and long == 0, ("4 a bar changes chord on every beat: %d of %d chords longer than a beat"):format(long, slots))
+  eq(I.valueName(I.BY_ID.chordPace, "Slow"), "0.5 a bar", "Slow is shown as 0.5 a bar")
+  eq(I.valueName(I.BY_ID.chordPace, "Two a bar"), "2 a bar", "and Two a bar as 2 a bar")
   -- 1.5 a bar in 4/4 is three chords to two bars, laid 3+3+2 beats.
   local shaped, all = 0, 0
   for seed = 1, 40 do
@@ -587,9 +607,10 @@ do
   ok(all > 0 and shaped == all, ("1.5 a bar lays three chords over two bars as 3+3+2 (or 3+2+3): %d of %d"):format(shaped, all))
   local rolled = false
   for seed = 1, 400 do
-    if make({ kind = "Measure" }, seed).r.chordPace == "1.5 a bar" then rolled = true end
+    local pace = make({ kind = "Measure" }, seed).r.chordPace
+    if pace == "1.5 a bar" or pace == "4 a bar" then rolled = true end
   end
-  ok(not rolled, "Any never rolls 1.5 a bar: it is there to be chosen, so 1.0's numbers keep their pace")
+  ok(not rolled, "Any never rolls 1.5 or 4 a bar: they are there to be chosen, so 1.0's numbers keep their pace")
 end
 
 do
@@ -681,50 +702,27 @@ end
 -- Bass and drums
 ------------------------------------------------------------------------------
 
+-- A Measure has no drums (since 1.3): melody, chords and bass.
 do
-  local idea = make({ kind = "Measure", measureBars = 8, pace = "Flowing", groove = "Straight", drums = "On",
-                      figures = "Plain", push = "None",
-                      form = "Period" }, 9)
-  local dr = part(idea, "Drums").notes
-  local D = I.DRUM
-  local at = {}
-  for _, n in ipairs(dr) do at[("%g:%d"):format(n.start, n.pitch)] = true end
-  ok(at["0:" .. D.crash], "a crash on the first downbeat")
-  ok(at["1:" .. D.snare] and at["3:" .. D.snare], "the snare on 2 and 4")
-  ok(at["0:" .. D.kick], "the kick on 1")
-  ok(at["0.5:" .. D.hat], "eighth-note hats when the pace flows")
-  local lastBar = (idea.r.bars - 1) * 4
-  local toms = 0
-  for _, n in ipairs(dr) do
-    if n.start >= lastBar + 3 and (n.pitch == D.tomHi or n.pitch == D.tomMid or n.pitch == D.tomLo) then toms = toms + 1 end
+  local drums = 0
+  for seed = 1, 20 do
+    local idea = make({ kind = "Measure" }, seed)
+    for _, p in ipairs(idea.block.parts) do if p.name == "Drums" or p.drums then drums = drums + 1 end end
+    for _, n in ipairs(idea.block.notes) do if n.chan == 9 then drums = drums + 1 end end
   end
-  ok(toms >= 2, "a fill in the last beat: " .. toms .. " tom hits")
-  local calm = make({ kind = "Measure", measureBars = 8, pace = "Calm", groove = "Straight" }, 9)
-  local snares = {}
-  for _, n in ipairs(part(calm, "Drums").notes) do
-    if n.pitch == D.snare and n.start < 4 then snares[#snares + 1] = ("%g"):format(n.start) end
-  end
-  eqList(snares, { 2 }, "a calm groove is half-time: the snare on 3")
+  eq(drums, 0, "a Measure has no drum part and nothing on channel 10")
 end
 
 do
   local bad = 0
   for seed = 1, 30 do
-    local idea = make({ kind = "Measure", bass = "Pulse", drums = "On", push = "None" }, seed)
+    local idea = make({ kind = "Measure", bass = "Pulse", push = "None" }, seed)
     local changes, pattern = {}, {}
     for _, sl in ipairs(idea.timeline) do changes[sl.s / 4] = true end
-    -- The kick's pattern, drawn as the idea drew it. (In the drum part the
-    -- snare takes the kick's place on the backbeat and fills replace it;
-    -- the bass keeps to the pattern.)
+    -- The kick's pattern, drawn as the idea draws it (from the stream the
+    -- Measure's drums drew from before 1.3, so the bass is unchanged).
     for _, k in ipairs(I.kickPattern(M44, idea.r, I.stream(seed, "drums"))) do pattern[k / 4] = true end
-    local kicks = 0
-    for _, n in ipairs(part(idea, "Drums").notes) do
-      if n.pitch == I.DRUM.kick then
-        kicks = kicks + 1
-        if not pattern[n.start % 4] then bad = bad + 1 end
-      end
-    end
-    if kicks == 0 then bad = bad + 1 end
+    if #part(idea, "Bass").notes == 0 then bad = bad + 1 end
     for _, n in ipairs(part(idea, "Bass").notes) do
       if not (pattern[n.start % 4] or changes[n.start]) then bad = bad + 1 end
     end
@@ -760,6 +758,8 @@ end
 -- the 1.0 idea: the new settings draw last, and draw nothing when plain. These are
 -- 1.0's own notes, hashed in sorted order (so the order notes that start
 -- together are listed in does not matter), made by the 1.0 code itself.
+-- A Measure is compared without its 1.0 drums (since 1.3 it has none):
+-- its tune, chords and bass are 1.0's, note for note.
 do
   local V10 = {
   { "Motif", 1, 646483193 },
@@ -782,16 +782,16 @@ do
   { "Phrase", 31337, 3216165730 },
   { "Phrase", 77777, 555389959 },
   { "Phrase", 99999, 1649638166 },
-  { "Measure", 1, 953415780 },
-  { "Measure", 7, 1653539637 },
-  { "Measure", 42, 2134985722 },
-  { "Measure", 300, 2844780318 },
-  { "Measure", 999, 1663616085 },
-  { "Measure", 4821, 3442784725 },
-  { "Measure", 12345, 3806974702 },
-  { "Measure", 31337, 1190043490 },
-  { "Measure", 77777, 195354917 },
-  { "Measure", 99999, 1562943930 },
+  { "Measure", 1, 3937425089 },
+  { "Measure", 7, 1342217707 },
+  { "Measure", 42, 699456568 },
+  { "Measure", 300, 508197405 },
+  { "Measure", 999, 2162486200 },
+  { "Measure", 4821, 397537260 },
+  { "Measure", 12345, 642620913 },
+  { "Measure", 31337, 419754361 },
+  { "Measure", 77777, 135430041 },
+  { "Measure", 99999, 4245207203 },
   }
   local function hash(s)
     local h = 2166136261
@@ -874,26 +874,17 @@ do
   for seed = 1, 60 do
     local none = make({ kind = "Measure", push = "None" }, seed)
     for _, sl in ipairs(none.timeline) do if sl.pushed or sl.s % 4 ~= 0 then noneP = noneP + 1 end end
-    local lots = make({ kind = "Measure", push = "Lots", drums = "On", chordStyle = "Block" }, seed)
+    local lots = make({ kind = "Measure", push = "Lots", chordStyle = "Block" }, seed)
     local any = false
-    local kickAt, chordAt, tuneAt = {}, {}, {}
-    local toms = {}
-    for _, n in ipairs(part(lots, "Drums").notes) do
-      if n.pitch == I.DRUM.kick then kickAt[n.start * 4] = true end
-      if n.pitch == I.DRUM.tomHi or n.pitch == I.DRUM.tomMid or n.pitch == I.DRUM.tomLo then toms[#toms + 1] = n.start * 4 end
-    end
-    -- (A fill playing over the push keeps the kick out.)
-    local function tomNear(x)
-      for _, t in ipairs(toms) do if t >= x - 4 and t < x + 2 then return true end end
-      return false
-    end
+    local bassAt, chordAt, tuneAt = {}, {}, {}
+    for _, n in ipairs(part(lots, "Bass").notes) do bassAt[n.start * 4] = true end
     for _, n in ipairs(part(lots, "Chords").notes) do chordAt[n.start * 4] = true end
     for _, n in ipairs(lots.melody) do tuneAt[n.step] = n end
     for _, sl in ipairs(lots.timeline) do
       if sl.pushed then
         any = true
         if (sl.s + 2) % 4 ~= 0 then early = early + 1 end
-        if not kickAt[sl.s] and not tomNear(sl.s) then kicks = kicks + 1 end
+        if not bassAt[sl.s] then kicks = kicks + 1 end
         if chordAt[sl.s + 2] then restruck = restruck + 1 end
         if tuneAt[sl.s] and tuneAt[sl.s].pushed then tuneEarly = tuneEarly + 1 end
         if tuneAt[sl.s] and tuneAt[sl.s].pushed and tuneAt[sl.s + 2] then tuneTwice = tuneTwice + 1 end
@@ -904,7 +895,7 @@ do
   eq(noneP, 0, "with no push every chord arrives on the beat")
   ok(lotsIdeas >= 50, "with Lots, most Measures push chords: " .. lotsIdeas .. " of 60")
   eq(early, 0, "a pushed chord arrives exactly an eighth before its beat")
-  eq(kicks, 0, "and the kick drum comes with it (unless a fill is playing there)")
+  eq(kicks, 0, "and the bass comes with it")
   eq(restruck, 0, "and a Block chord is not struck again on the beat it was pushed from")
   ok(tuneEarly > 20, "the tune's note on that beat often comes early too: " .. tuneEarly)
   eq(tuneTwice, 0, "and is not also played on the beat")
@@ -1070,8 +1061,7 @@ do
     local lots = make({ kind = "Measure", pull = "Lots", push = "None", chordStyle = "Block" }, seed)
     local plain = make({ kind = "Measure", pull = "None", push = "None", chordStyle = "Block" }, seed)
     if fingerprint(part(lots, "Melody").notes) ~= fingerprint(part(plain, "Melody").notes)
-       or fingerprint(part(lots, "Bass").notes) ~= fingerprint(part(plain, "Bass").notes)
-       or fingerprint(part(lots, "Drums").notes) ~= fingerprint(part(plain, "Drums").notes) then
+       or fingerprint(part(lots, "Bass").notes) ~= fingerprint(part(plain, "Bass").notes) then
       tuneMoved = tuneMoved + 1
     end
     for _, sl in ipairs(lots.timeline) do if sl.pulled then tuneMoved = tuneMoved + 1 end end
@@ -1146,15 +1136,16 @@ do
      "and walks straight when Plain")
 end
 
--- The Measure's drums switch is retired: a Measure always has drums.
+-- The Measure's drums switch is retired: in 1.2 a Measure always had drums,
+-- and since 1.3 it has none.
 do
   local st = I.newState()
-  st.drums = "Off"
+  st.drums = "On"
   I.clampState(st)
-  eq(st.drums, "On", "an old saved drums=Off comes back On")
-  local alwaysDrums = true
-  for seed = 1, 20 do if not part(make({ kind = "Measure" }, seed), "Drums") then alwaysDrums = false end end
-  ok(alwaysDrums, "and every Measure has its drums")
+  eq(st.drums, "Off", "an old saved drums=On comes back Off")
+  local noDrums = true
+  for seed = 1, 20 do if part(make({ kind = "Measure" }, seed), "Drums") then noDrums = false end end
+  ok(noDrums, "and no Measure has drums")
 end
 
 -- Drums on their own.
