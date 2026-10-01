@@ -1,0 +1,1465 @@
+--[[ Good Idea - the ideas.
+
+     Pure Lua: nothing here touches REAPER or ImGui. `M.make(st, meter, seed)`
+     takes the settings, the project's metre and an idea number, and returns
+     the idea - a block of MIDI notes in parts. Nothing else goes in, so the
+     same three always give the same idea
+     (docs/decisions/0002-an-idea-is-a-number.md).
+
+     How an idea is made, top to bottom:
+
+       1. resolve   every setting left on "Any" is rolled, each from its own
+                    draw of the dice
+       2. plan      the idea is cut into units - a basic idea, its repeat, a
+                    sequence of it, an answer, a fragment, a cadence - from a
+                    template for the kind and length (Motif, Phrase) or the
+                    form (Measure)
+       3. harmony   each unit gets its chords: a walk through the
+                    tonic-subdominant-dominant table (gi_theory) ending in
+                    the unit's cadence. A repeat reuses its source's chords,
+                    a sequence shifts them, an answer changes the ending
+       4. melody    each new unit gets a rhythm (the strongest beats, or a
+                    Euclidean spread for syncopation) and a line (a weighted
+                    walk pulled toward a contour, chord tones on the beat,
+                    leaps filled by a step back). Repeats copy, sequences
+                    shift, answers change the ending, fragments cut and fall
+       5. parts     the chords voiced and played in a pattern; for a Measure
+                    a bass line and a drum kit as well
+       6. block     notes in quarter notes, a part per instrument
+
+     Everything is worked out in sixteenth-note steps and scale positions, and
+     only turned into quarter notes and MIDI pitches at the very end.
+]]
+
+local M = {}
+local T
+
+function M.init(theory)
+  T = theory
+  M.buildSettings()
+  return M
+end
+
+M.MAX_SEED = 99999
+M.ACCENT = 115
+
+------------------------------------------------------------------------------
+-- The dice
+--
+-- Midi Variator's generator (Park and Miller's), so a seed always gives the
+-- same numbers on any Lua. Each part of the idea draws from its own stream,
+-- seeded from the idea number and the stream's name, so changing one setting
+-- changes only what depends on it: a different chord style leaves the melody
+-- alone, a different key moves the same tune into it.
+------------------------------------------------------------------------------
+
+function M.random(seed)
+  local s = math.floor(math.abs(seed or 1)) % 2147483646 + 1
+  local function nextr()
+    s = s * 48271 % 2147483647
+    return (s - 1) / 2147483646
+  end
+  -- The first few numbers from neighbouring seeds are close together; let
+  -- them go.
+  for _ = 1, 4 do nextr() end
+  return nextr
+end
+
+local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
+                  chords = 6, bass = 7, drums = 8 }
+
+function M.stream(seed, name)
+  local salt = STREAMS[name] or 0
+  return M.random((math.floor(seed or 1) * 7919 + salt * 104729 + 12345) % 2147483646)
+end
+
+local function between(rnd, lo, hi) return lo + (hi - lo) * rnd() end
+local function coin(rnd, p) return rnd() < (p or 0.5) end
+local function pickOne(rnd, list) return list[math.floor(rnd() * #list) + 1] end
+local function round(x) return math.floor(x + 0.5) end
+
+-- One of `items` in proportion to `weights` (a list, or nil for even), from
+-- one number already drawn.
+local function pickAt(x, items, weights)
+  local total = 0
+  for i = 1, #items do total = total + (weights and weights[i] or 1) end
+  local at = x * total
+  for i = 1, #items do
+    at = at - (weights and weights[i] or 1)
+    if at < 0 then return items[i] end
+  end
+  return items[#items]
+end
+
+local function weighted(rnd, items, weights) return pickAt(rnd(), items, weights) end
+
+------------------------------------------------------------------------------
+-- Metre
+--
+-- A bar is counted in sixteenths. The beat is what the time signature's
+-- bottom number says, except in 6/8, 9/8 and 12/8, where it is the dotted
+-- quarter - that is how those are felt and played.
+------------------------------------------------------------------------------
+
+function M.meter(num, den)
+  num = math.max(1, math.floor(tonumber(num) or 4))
+  den = math.max(1, math.floor(tonumber(den) or 4))
+  local bar = math.max(4, round(num * 16 / den))
+  local beat
+  if den == 8 and num % 3 == 0 and num >= 6 then beat = 6
+  else beat = math.max(1, math.floor(16 / den)) end
+  if bar % beat ~= 0 then beat = 1 end
+  local beats = bar // beat
+  -- The half-bar beat (beat 3 of 4/4) is stronger than the others.
+  local mid = (beats % 2 == 0 and beats >= 4) and bar // 2 or nil
+  return { num = num, den = den, bar = bar, beat = beat, beats = beats, mid = mid,
+           barBeats = bar / 4 }
+end
+
+-- How strong a step is: 3 the downbeat, 2.5 the half bar, 2 a beat, 1 an
+-- eighth, 0 a sixteenth.
+function M.strength(meter, step)
+  local s = step % meter.bar
+  if s == 0 then return 3 end
+  if meter.mid and s == meter.mid then return 2.5 end
+  if s % meter.beat == 0 then return 2 end
+  if s % 2 == 0 then return 1 end
+  return 0
+end
+
+local function snap(meter, x) return round(x / meter.beat) * meter.beat end
+
+------------------------------------------------------------------------------
+-- The settings
+--
+-- One list, and everything reads it: the window draws a row of buttons per
+-- setting, the state is clamped and saved from it, resolve rolls the ones
+-- left on "Any", and the UI test clicks every value of every one. A setting
+-- shows only `when` it means something for what is chosen (no dead controls).
+------------------------------------------------------------------------------
+
+M.KINDS = { "Motif", "Phrase", "Measure" }
+
+local function hasMelody(st) return st.kind ~= "Phrase" or st.content ~= "Chords" end
+local function hasChords(st)
+  return st.kind == "Measure" or (st.kind == "Phrase" and st.content ~= "Melody")
+end
+M.hasMelody, M.hasChords = hasMelody, hasChords
+
+local function barsName(v) return v .. (v == 1 and " bar" or " bars") end
+
+function M.buildSettings()
+  local rootIdx, scaleIdx = {}, {}
+  for i = 1, #T.ROOTS do rootIdx[i] = i end
+  for i = 1, #T.SCALES do scaleIdx[i] = i end
+
+  M.SETTINGS = {
+    { id = "kind", label = "Make a", step = "Idea", values = M.KINDS, default = "Motif",
+      hints = {
+        Motif = "A short melodic hook, 1 to 4 bars, built from one small cell repeated and varied.",
+        Phrase = "A 1 to 4 bar phrase: a melody, a chord pattern, or both in one clip, with a proper ending.",
+        Measure = "8 to 16 bars of music: melody, chords, bass and drums, laid out in a form.",
+      } },
+    { id = "motifBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4 }, any = true,
+      default = "Any", name = barsName, weights = { 1, 3, 1, 2 },
+      when = function(st) return st.kind == "Motif" end },
+    { id = "phraseBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4 }, any = true,
+      default = "Any", name = barsName, weights = { 1, 3, 1, 3 },
+      when = function(st) return st.kind == "Phrase" end },
+    { id = "measureBars", label = "Bars", step = "Idea", values = { 8, 12, 16 }, any = true,
+      default = "Any", name = barsName, weights = { 3, 1, 2 },
+      when = function(st) return st.kind == "Measure" end },
+    { id = "content", label = "Content", step = "Idea", values = { "Melody", "Chords", "Both" },
+      any = true, default = "Any", weights = { 1, 1, 1.3 },
+      when = function(st) return st.kind == "Phrase" end,
+      hints = {
+        Melody = "A tune on its own.",
+        Chords = "A chord pattern on its own, with the root in the bass.",
+        Both = "A tune over a chord pattern, together in one clip (tune on channel 1, chords on 2).",
+      } },
+
+    { id = "root", label = "Key", step = "Key", values = rootIdx, any = true, default = 1,
+      name = function(v) return T.ROOTS[v].name end,
+      -- Any rolls the twelve common spellings, not C# and Db both.
+      anyValues = { 1, 3, 4, 6, 7, 8, 9, 11, 13, 14, 16, 17 } },
+    { id = "scale", label = "Scale", step = "Key", values = scaleIdx, any = true, default = 1,
+      name = function(v) return T.SCALES[v].name end,
+      -- Any rolls the scales a tune is usually written in; the colour scales
+      -- (blues, whole tone, diminished) are there to be chosen.
+      anyValues = { 1, 2, 5, 8, 3, 6, 7, 10, 11 },
+      anyWeights = { 3, 3, 1.5, 1.2, 1, 0.8, 0.8, 1, 1 } },
+
+    { id = "pace", label = "Pace", step = "Feel", values = { "Calm", "Flowing", "Busy" },
+      any = true, default = "Any", weights = { 1, 1.5, 1 },
+      hints = {
+        Calm = "Few notes: halves, quarters and the odd eighth.",
+        Flowing = "Eighth notes moving.",
+        Busy = "Sixteenths.",
+      } },
+    { id = "groove", label = "Groove", step = "Feel", values = { "Straight", "Syncopated" },
+      any = true, default = "Any",
+      hints = {
+        Straight = "Notes on the strongest beats first: on the beat, then the half beat.",
+        Syncopated = "Notes spread evenly over the bar (a Euclidean rhythm) and turned so they fall off the beat - the tresillo, the cinquillo.",
+      } },
+
+    { id = "contour", label = "Contour", step = "Melody",
+      values = { "Arch", "Rise", "Fall", "Wave", "Valley" }, any = true, default = "Any",
+      weights = { 1.6, 1, 1, 1, 0.8 }, when = hasMelody,
+      hints = {
+        Arch = "Up to a high point about two thirds through (the golden section), then down.",
+        Rise = "Climbing all the way.",
+        Fall = "Starting high and coming down.",
+        Wave = "Up and down, and up and down.",
+        Valley = "Down to a low point two thirds through, then back up.",
+      } },
+    { id = "register", label = "Register", step = "Melody", values = { "Low", "Middle", "High" },
+      any = true, default = "Middle", weights = { 1, 2, 1 }, when = hasMelody,
+      hints = {
+        Low = "Around G3.",
+        Middle = "Around G4.",
+        High = "Around E5.",
+      } },
+
+    { id = "colour", label = "Colour", step = "Chords", values = T.COLOURS, any = true,
+      default = "Any", weights = { 1.5, 1, 1 }, when = hasChords,
+      hints = {
+        Triads = "Three-note chords: C, Dm, G.",
+        Sevenths = "Every chord with its seventh: Cmaj7, Dm7, G7.",
+        Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7.",
+      } },
+    { id = "chordPace", label = "Chord pace", step = "Chords",
+      values = { "Slow", "One a bar", "Two a bar" }, any = true, default = "Any",
+      weights = { 0.7, 1.6, 0.8 }, when = hasChords,
+      hints = {
+        Slow = "A chord every two bars.",
+        ["One a bar"] = "A chord a bar.",
+        ["Two a bar"] = "Two chords a bar.",
+      } },
+    { id = "chordStyle", label = "Style", step = "Chords", values = { "Block", "Pulse", "Broken" },
+      any = true, default = "Any", weights = { 1, 1.2, 1 }, when = hasChords,
+      hints = {
+        Block = "Held chords, struck again at each bar line.",
+        Pulse = "The chord struck in rhythm: on the beat, or syncopated.",
+        Broken = "One note at a time: up, up and down, Alberti, rolling.",
+      } },
+
+    { id = "form", label = "Form", step = "Arrangement",
+      values = { "Period", "Sentence", "Song", "Loop" }, any = true, default = "Any",
+      when = function(st) return st.kind == "Measure" end,
+      hints = {
+        Period = "A question and its answer: the same opening twice, ending open and then closed.",
+        Sentence = "An idea, the idea again on another chord, then breaking it up and speeding to the cadence.",
+        Song = "A A B A: a tune, the tune again, something different, the tune to finish.",
+        Loop = "One progression round and round, the tune varied over it - a groove to build on.",
+      } },
+    { id = "bass", label = "Bass", step = "Arrangement", values = { "Held", "Pulse", "Moving" },
+      any = true, default = "Any",
+      when = function(st) return st.kind == "Measure" end,
+      hints = {
+        Held = "The root, held under each chord.",
+        Pulse = "The root, in rhythm with the kick drum.",
+        Moving = "On the beat: the root, then the fifth or the octave, and a step into the next chord.",
+      } },
+    { id = "drums", label = "Drums", step = "Arrangement", values = { "On", "Off" },
+      default = "On", when = function(st) return st.kind == "Measure" end,
+      hints = {
+        On = "A drum part on MIDI channel 10 (General MIDI: kick 36, snare 38, hats 42 and 46).",
+        Off = "No drums.",
+      } },
+    { id = "layout", label = "Layout", step = "Arrangement", values = { "Tracks", "One item" },
+      default = "Tracks", when = function(st) return st.kind == "Measure" end,
+      hints = {
+        Tracks = "A new track for each part - Melody, Chords, Bass, Drums - under the selected track.",
+        ["One item"] = "Every part in one item on the selected track, each on its own MIDI channel (1, 2, 3, drums on 10).",
+      } },
+
+    { id = "velocity", label = "Velocity", step = "Out", values = { "Flat", "Accents" },
+      default = "Flat",
+      hints = {
+        Flat = "Every note at 100.",
+        Accents = "Every note at 100, and the downbeats and the start of each idea at " .. M.ACCENT .. ".",
+      } },
+  }
+  M.BY_ID = {}
+  for _, s in ipairs(M.SETTINGS) do M.BY_ID[s.id] = s end
+end
+
+function M.valueName(s, v)
+  if v == "Any" then return "Any" end
+  return s.name and s.name(v) or tostring(v)
+end
+
+function M.shows(s, st) return not s.when or s.when(st) end
+
+------------------------------------------------------------------------------
+-- State
+------------------------------------------------------------------------------
+
+function M.newState()
+  local st = {}
+  for _, s in ipairs(M.SETTINGS) do st[s.id] = s.default end
+  st.seed = 1
+  st.autoplay = 0
+  return st
+end
+
+-- Puts every field back inside what exists. Saved settings come from
+-- anywhere, so nothing in them is trusted.
+function M.clampState(st)
+  for _, s in ipairs(M.SETTINGS) do
+    local v = st[s.id]
+    local good = (v == "Any" and s.any) or false
+    for _, x in ipairs(s.values) do if x == v then good = true end end
+    if not good then st[s.id] = s.default end
+  end
+  local seed = tonumber(st.seed)
+  if seed and seed >= 1 and seed <= M.MAX_SEED then st.seed = math.floor(seed) else st.seed = 1 end
+  st.autoplay = (tonumber(st.autoplay) == 1) and 1 or 0
+  return st
+end
+
+------------------------------------------------------------------------------
+-- 1. Resolve
+------------------------------------------------------------------------------
+
+-- Every setting takes one draw from the "pick" stream whether it is on Any
+-- or not, so fixing one setting never changes what another rolls. That is
+-- what makes "Keep" (turning every Any into what this idea rolled) give
+-- exactly the same idea back.
+function M.resolve(st, seed)
+  local rnd = M.stream(seed, "pick")
+  local r = { rolled = {} }
+  for _, s in ipairs(M.SETTINGS) do
+    local x = rnd()
+    local v = st[s.id]
+    if v == "Any" and s.any then
+      v = pickAt(x, s.anyValues or s.values, s.anyWeights or (not s.anyValues and s.weights) or nil)
+      r.rolled[s.id] = true
+    end
+    r[s.id] = v
+  end
+  if r.kind == "Motif" then r.bars = r.motifBars
+  elseif r.kind == "Phrase" then r.bars = r.phraseBars
+  else r.bars = r.measureBars end
+  if r.kind == "Motif" then r.content = "Melody"
+  elseif r.kind == "Measure" then r.content = "All" end
+  r.melody = r.content ~= "Chords"
+  r.chords = r.content ~= "Melody"
+  return r
+end
+
+-- The bars setting the kind uses.
+function M.barsSetting(kind)
+  return (kind == "Motif" and "motifBars") or (kind == "Phrase" and "phraseBars") or "measureBars"
+end
+
+------------------------------------------------------------------------------
+-- 2. The plan
+--
+-- A unit is written letter:bars[:cadence]. A letter's first appearance is new
+-- material; `a` again repeats it, `a'` answers it (the same start, a new
+-- ending), `a~` sequences it (the whole unit moved up or down, chords and
+-- all). `f` fragments the basic idea - its first half, falling - and `c` is a
+-- new cadential unit. The cadence `X` is the idea's ending, drawn for the
+-- kind. These are the shapes Open Music Theory gives for the sentence and the
+-- period, and the A A B A of a song, at the size of the idea.
+------------------------------------------------------------------------------
+
+M.PLANS = {
+  Motif = {
+    [1] = { "a:0.5 a~:0.5:X", "a:0.5:open a':0.5:X", "a:1:X" },
+    [2] = { "a:1:open a':1:X", "a:1 a~:1:X", "a:1:open b:1:X" },
+    [3] = { "a:1 a~:1 c:1:X", "a:1:open b:1 a':1:X" },
+    [4] = { "a:1 a~:1 f:1 c:1:X", "a:2:open a':2:X", "a:1:open b:1 a:1:open b':1:X" },
+  },
+  Phrase = {
+    [1] = { "a:1:X" },
+    [2] = { "a:2:X", "a:1:HC a':1:X" },
+    [3] = { "a:2 c:1:X", "a:1 a~:1 c:1:X" },
+    [4] = { "a:4:X", "a:2:HC a':2:X", "a:1 a~:1 f:1 c:1:X" },
+  },
+}
+
+M.FORMS = {
+  Period   = { [8] = "a:4:HC a':4:PAC",
+               [12] = "a:4:HC a':4:IAC b:4:PAC",
+               [16] = "a:4:IAC b:4:HC a:4:IAC c:4:PAC" },
+  Sentence = { [8] = "a:2 a~:2 f:2 c:2:PAC",
+               [12] = "a:2 a~:2 f:4 c:4:PAC",
+               [16] = "a:4 a~:4 f:4 c:4:PAC" },
+  Song     = { [8] = "a:2:IAC a:2:PAC b:2:HC a:2:PAC",
+               [12] = "a:4:IAC a:4:PAC b:4:PAC",
+               [16] = "a:4:IAC a:4:PAC b:4:HC a:4:PAC" },
+  Loop     = { [8] = "a:4:open a':4:open",
+               [12] = "a:4:open a':4:open a:4:open",
+               [16] = "a:4:open a':4:open a:4:open a'':4:open" },
+}
+
+-- How an idea that is not a Measure ends. A motif is a hook, so mostly it
+-- leaves the door open and loops; a phrase mostly closes.
+local ENDINGS = {
+  Motif  = { { "open", "PAC", "IAC" }, { 3, 2, 1 } },
+  Phrase = { { "PAC", "HC", "IAC", "open" }, { 3, 1.5, 1, 1.5 } },
+}
+
+function M.parsePlan(text, meter, finalCad)
+  local units, firstOf = {}, {}
+  local cum = 0
+  for tok in text:gmatch("%S+") do
+    local name, bars, cad = tok:match("^([^:]+):([%d%.]+):?(%a*)$")
+    local letter, mark = name:match("^(%a)(.*)$")
+    bars = tonumber(bars)
+    local start = snap(meter, cum * meter.bar)
+    cum = cum + bars
+    local stop = snap(meter, cum * meter.bar)
+    local u = { letter = letter, mark = mark, bars = bars, start = start, len = stop - start,
+                cad = (cad == "" and "none") or (cad == "X" and finalCad) or cad }
+    if letter == "f" then u.kind, u.of = "frag", 1
+    elseif letter == "c" then u.kind = "cad"
+    elseif not firstOf[letter] then u.kind = "new"; firstOf[letter] = #units + 1
+    elseif mark == "~" then u.kind, u.of = "seq", firstOf[letter]
+    elseif mark:find("'") then u.kind, u.of = "answer", firstOf[letter]
+    else u.kind, u.of = "repeat", firstOf[letter] end
+    -- A repeat that ends differently from its source is an answer.
+    if u.kind == "repeat" and units[u.of].cad ~= u.cad then u.kind = "answer" end
+    if u.len > 0 then units[#units + 1] = u end
+  end
+  return units, snap(meter, cum * meter.bar)
+end
+
+function M.plan(r, meter, rnd)
+  local text, finalCad
+  if r.kind == "Measure" then
+    text = M.FORMS[r.form][r.bars]
+    finalCad = "PAC"
+  else
+    local e = ENDINGS[r.kind]
+    finalCad = weighted(rnd, e[1], e[2])
+    text = pickOne(rnd, M.PLANS[r.kind][r.bars])
+  end
+  local units, total = M.parsePlan(text, meter, finalCad)
+  -- A sequence moves by a step up, a step down, or to the dominant (up a
+  -- fifth) - the second statement of a sentence's basic idea.
+  for _, u in ipairs(units) do
+    if u.kind == "seq" then u.shift = weighted(rnd, { 1, -1, 4 }, { 2, 1.5, 2 }) end
+  end
+  local shape = {}
+  for _, u in ipairs(units) do shape[#shape + 1] = u.letter .. u.mark end
+  return { units = units, total = total, text = text, ending = units[#units].cad,
+           shape = table.concat(shape, " ") }
+end
+
+------------------------------------------------------------------------------
+-- 3. Harmony
+------------------------------------------------------------------------------
+
+local RATE = { Slow = 0.5, ["One a bar"] = 1, ["Two a bar"] = 2 }
+
+-- Where an answer stops copying its source: half way, on a beat, and
+-- always before the end (a unit one beat long copies nothing).
+function M.cutFor(meter, src, u)
+  local half = math.min(src.len, u.len) / 2
+  local cut = math.floor(half / meter.beat + 0.5) * meter.beat
+  return math.max(0, math.min(cut, u.len - meter.beat))
+end
+
+-- How many chords a stretch of `len` steps gets.
+local function countFor(meter, len, r, kind, cad, first)
+  local bars = len / meter.bar
+  local rate = RATE[r.chordPace] or 1
+  -- A continuation speeds the harmony up (Open Music Theory, the sentence).
+  if kind == "frag" then rate = math.min(2, rate * 2) end
+  local n = math.max(1, round(bars * rate))
+  local beats = len // meter.beat
+  -- An ending needs two chords: one to lead to it, and the one it lands on.
+  -- A half close is one chord, the dominant.
+  local need = (cad == "HC" and 1) or ((cad ~= "none" or kind == "cad") and 2) or 1
+  if beats >= 2 then n = math.max(n, need) end
+  -- The opening unit starts on the tonic, so it needs a chord before its
+  -- ending too - as long as the chords still fall evenly on the beats, line
+  -- up with the bars, and come no faster than two a bar.
+  if first and cad ~= "none" then
+    local tail = (cad == "PAC" or cad == "IAC") and 2 or 1
+    if n <= tail then
+      for m = tail + 1, math.max(tail + 1, round(2 * bars)) do
+        local per = beats // m
+        if beats % m == 0 and (per % meter.beats == 0 or meter.beats % per == 0) then n = m; break end
+      end
+    end
+  end
+  return math.max(1, math.min(n, beats))
+end
+
+-- `n` stretches of a span, as even as the beats allow.
+local function evenSlots(meter, from, len, n)
+  local out = {}
+  for i = 1, n do
+    local s = from + snap(meter, len * (i - 1) / n)
+    local e = (i == n) and (from + len) or (from + snap(meter, len * i / n))
+    if e > s then out[#out + 1] = { s = s, e = e } end
+  end
+  return out
+end
+
+local function withDegrees(slots, degrees)
+  for i, sl in ipairs(slots) do sl.degree = degrees[i] or degrees[#degrees] end
+  return slots
+end
+
+-- A unit's chords, as { s, e, degree } from the unit's start.
+--
+--   - a repeat, or an answer or sequence to the same ending, plays its
+--     source's chords (a sequence moved by its step);
+--   - an answer (or a repeat or sequence to a different ending) plays its
+--     source's chords for the first half, by time, then walks to its own
+--     ending - so the tune's first half fits it exactly as before;
+--   - anything new walks from the chord after the last one.
+local function unitChords(u, units, key, r, meter, rnd, prevLast)
+  local src = (u.kind == "repeat" or u.kind == "answer" or u.kind == "seq") and units[u.of] or nil
+  local shift = (u.kind == "seq") and u.shift or 0
+  local function moved(sl, e)
+    return { s = sl.s, e = math.min(e or sl.e, sl.e), degree = T.normDegree(key, sl.degree + shift) }
+  end
+  if src and src.len == u.len and src.cad == u.cad and (u.kind ~= "seq" or u.cad == "none") then
+    local out = {}
+    for _, sl in ipairs(src.rel) do out[#out + 1] = moved(sl) end
+    return out
+  end
+  local need = (u.cad == "PAC" or u.cad == "IAC") and 2 or ((u.cad ~= "none") and 1 or 0)
+  local cut = src and M.cutFor(meter, src, u)
+  -- (When the second half is too short for the ending's chords - half a bar
+  -- of 4/4 has two beats, a full close needs a chord on each, and so on -
+  -- the answer's chords are all new, and its tune is fitted to them.)
+  if src and cut > 0 and (u.len - cut) // meter.beat >= need then
+    local out = {}
+    for _, sl in ipairs(src.rel) do
+      if sl.s < cut then out[#out + 1] = moved(sl, cut) end
+    end
+    local rest = u.len - cut
+    local n = countFor(meter, rest, r, "rest", u.cad, false)
+    local degs = T.progression(key, n, { start = T.nextDegree(key, out[#out].degree, rnd),
+                                          cadence = u.cad, loopTo = 0 }, rnd)
+    for _, sl in ipairs(withDegrees(evenSlots(meter, cut, rest, n), degs)) do out[#out + 1] = sl end
+    return out
+  end
+  local n = countFor(meter, u.len, r, u.kind, u.cad, u == units[1])
+  local start = prevLast and T.nextDegree(key, prevLast, rnd) or 0
+  local degs = T.progression(key, n, { start = start, cadence = u.cad, loopTo = 0 }, rnd)
+  return withDegrees(evenSlots(meter, 0, u.len, n), degs)
+end
+
+-- Each unit's chords, and one timeline of { s, e, degree, chord } for the
+-- whole idea, in steps. The same chord twice running (where one unit ends on
+-- the chord the next begins with) is one chord, held.
+function M.harmony(plan, key, r, meter, rnd, colour)
+  local timeline = {}
+  local prevLast
+  for _, u in ipairs(plan.units) do
+    u.rel = unitChords(u, plan.units, key, r, meter, rnd, prevLast)
+    u.degrees, u.slots = {}, {}
+    for _, rs in ipairs(u.rel) do
+      u.degrees[#u.degrees + 1] = rs.degree
+      local last = timeline[#timeline]
+      local sl
+      if last and last.degree == rs.degree and last.e == u.start + rs.s then
+        last.e = u.start + rs.e
+        sl = last
+      else
+        sl = { s = u.start + rs.s, e = u.start + rs.e, degree = rs.degree,
+               chord = T.chord(key, rs.degree, colour) }
+        timeline[#timeline + 1] = sl
+      end
+      if u.slots[#u.slots] ~= sl then u.slots[#u.slots + 1] = sl end
+    end
+    prevLast = u.degrees[#u.degrees]
+  end
+  return timeline
+end
+
+function M.chordAt(timeline, step)
+  for i = #timeline, 1, -1 do
+    if timeline[i].s <= step then return timeline[i] end
+  end
+  return timeline[1]
+end
+
+------------------------------------------------------------------------------
+-- 4. Rhythm
+--
+-- Two kinds of maths, one for each groove:
+--
+--   - Straight takes the k strongest steps of the bar (the metric hierarchy:
+--     the downbeat, the half bar, the beats, then the half beats).
+--   - Syncopated spreads k notes as evenly as they will go over the bar (a
+--     Euclidean rhythm - Toussaint showed most of the world's rhythms are
+--     these: 3 in 8 is the tresillo, 5 in 8 the cinquillo) and turns it so
+--     the notes fall off the beat, keeping the first on the downbeat.
+--
+-- Pace decides the grid (eighths or sixteenths) and how full it is.
+------------------------------------------------------------------------------
+
+-- k onsets spread over n steps as evenly as they go (Bresenham's line; the
+-- same patterns as Bjorklund's algorithm, up to rotation). Starts on 0.
+function M.euclid(k, n)
+  local out = {}
+  if n <= 0 then return out end
+  k = math.max(0, math.min(n, k))
+  for i = 0, n - 1 do
+    if (i * k) % n < k then out[#out + 1] = i end
+  end
+  return out
+end
+
+local function meanStrength(meter, base, unit, slots)
+  local s = 0
+  for _, o in ipairs(slots) do s = s + M.strength(meter, base + o * unit) end
+  return s / math.max(1, #slots)
+end
+
+-- The k strongest of `slots` grid points, ties broken by the dice.
+local function strongest(meter, base, unit, slots, k, rnd)
+  local order = {}
+  for i = 0, slots - 1 do order[#order + 1] = { i = i, w = M.strength(meter, base + i * unit) + rnd() * 0.5 } end
+  table.sort(order, function(a, b) return a.w > b.w end)
+  local out = {}
+  for j = 1, math.min(k, #order) do out[j] = order[j].i end
+  table.sort(out)
+  if out[1] ~= 0 then
+    -- The downbeat always speaks.
+    out[#out] = nil
+    table.insert(out, 1, 0)
+    table.sort(out)
+  end
+  return out
+end
+
+-- A Euclidean rhythm turned to start on one of its own notes, the turn
+-- chosen to sit off the beat.
+local function syncopated(meter, base, unit, slots, k, rnd)
+  local pat = M.euclid(k, slots)
+  local turns = {}
+  for _, o in ipairs(pat) do
+    local t = {}
+    for _, x in ipairs(pat) do t[#t + 1] = (x - o) % slots end
+    table.sort(t)
+    turns[#turns + 1] = { t = t, s = meanStrength(meter, base, unit, t) }
+  end
+  table.sort(turns, function(a, b) return a.s < b.s end)
+  -- The most off-beat turn, or the one after it.
+  return turns[(#turns > 1 and coin(rnd, 0.35)) and 2 or 1].t
+end
+
+M.PACE = {
+  Calm    = { unit = 2, lo = 0.2,  hi = 0.4,  halves = false },
+  Flowing = { unit = 2, lo = 0.45, hi = 0.75, halves = true },
+  Busy    = { unit = 1, lo = 0.4,  hi = 0.65, halves = true },
+}
+
+-- The onsets of a cell `len` steps long starting at `base` in the bar, in
+-- steps from the start of the cell.
+function M.cell(meter, base, len, pace, groove, rnd)
+  local P = M.PACE[pace] or M.PACE.Flowing
+  local pieces = { { 0, len } }
+  -- Busy and straight rhythms are made a half bar at a time, for variety;
+  -- a syncopation needs the whole bar to spread over (3 in 8 is a tresillo,
+  -- 3 in 4 twice is not).
+  if P.halves and (groove ~= "Syncopated" or pace == "Busy") and len >= 2 * meter.beat then
+    local h = snap(meter, len / 2)
+    if h > 0 and h < len then pieces = { { 0, h }, { h, len } } end
+  end
+  local out = {}
+  for _, pc in ipairs(pieces) do
+    local slots = (pc[2] - pc[1]) // P.unit
+    if slots >= 1 then
+      local k = math.max(1, math.min(slots, round(slots * between(rnd, P.lo, P.hi))))
+      local pat
+      if groove == "Syncopated" and k > 1 and k < slots then
+        pat = syncopated(meter, base + pc[1], P.unit, slots, k, rnd)
+      else
+        pat = strongest(meter, base + pc[1], P.unit, slots, k, rnd)
+      end
+      for _, o in ipairs(pat) do out[#out + 1] = pc[1] + o * P.unit end
+    end
+  end
+  return out
+end
+
+-- The rhythm of a whole unit: a cell a bar, the first bar's cell often
+-- coming back, so the unit has a rhythm of its own. A unit that closes holds
+-- its last note from the half bar.
+function M.unitRhythm(u, meter, r, rnd)
+  local out = {}
+  local cellLen = math.min(meter.bar, u.len)
+  local first
+  local at = 0
+  while at < u.len do
+    local len = math.min(cellLen, u.len - at)
+    local cell
+    if first and len == cellLen and coin(rnd, r.pace == "Busy" and 0.5 or 0.6) then cell = first
+    else cell = M.cell(meter, (u.start + at) % meter.bar, len, r.pace, r.groove, rnd) end
+    first = first or cell
+    for _, o in ipairs(cell) do out[#out + 1] = at + o end
+    at = at + len
+  end
+  if u.cad ~= "none" and u.cad ~= "open" then
+    -- The last note lands half way through the last bar, or where the last
+    -- chord arrives if that is later: the tune comes home with the harmony.
+    local region = math.min(meter.bar, u.len)
+    local from = u.len - region
+    local h = from + snap(meter, region / 2)
+    if h >= u.len then h = from end
+    if u.rel and u.rel[#u.rel].s > h and u.rel[#u.rel].s < u.len then h = u.rel[#u.rel].s end
+    local kept = {}
+    for _, o in ipairs(out) do if o < h then kept[#kept + 1] = o end end
+    kept[#kept + 1] = h
+    out = kept
+  end
+  table.sort(out)
+  return out
+end
+
+------------------------------------------------------------------------------
+-- 5. Melody
+--
+-- A walk through scale positions. Each next note is drawn from the notes up
+-- to a sixth either side, weighted:
+--
+--   - by size: a step is most likely, a third about half as likely, leaps
+--     rare (the shape of real melodies: mostly steps);
+--   - toward the contour, a bell curve around where the contour is now;
+--   - on the beat, only chord tones;
+--   - after a leap of a fourth or more, only a step or a third back the
+--     other way (the gap is filled);
+--   - a note off the chord moves on by step (a passing or neighbour note);
+--   - no tritone leaps, no augmented seconds, no note three times running,
+--     and a step back to the note before last only now and then (once is a
+--     neighbour note; again and again is a trill).
+--
+-- A unit that ends on a cadence ends on its goal - the tonic for a full
+-- close, the third or fifth for an imperfect one, a note of the dominant for
+-- a half close - and the note before it is pulled to a step away.
+------------------------------------------------------------------------------
+
+local IV_WEIGHT = { [0] = 0.15, [1] = 1, [2] = 0.6, [3] = 0.22, [4] = 0.18, [5] = 0.07 }
+local PULL = 2.3   -- how far from the contour a note wanders, in scale steps
+
+local CONTOURS = {
+  Arch = function(t)
+    local g = 0.618
+    if t < g then return 0.2 + 0.8 * math.sin(math.pi / 2 * t / g) end
+    return 0.15 + 0.85 * math.cos(math.pi / 2 * (t - g) / (1 - g))
+  end,
+  Valley = function(t)
+    local g = 0.618
+    if t < g then return 0.8 - 0.8 * math.sin(math.pi / 2 * t / g) end
+    return 0.85 * math.sin(math.pi / 2 * (t - g) / (1 - g))
+  end,
+  Rise = function(t) return 0.1 + 0.8 * t end,
+  Fall = function(t) return 0.9 - 0.8 * t end,
+  Wave = function(t) return 0.5 + 0.4 * math.sin(2 * math.pi * 1.5 * t) end,
+}
+M.CONTOURS = CONTOURS
+
+local REGISTER = { Low = 55, Middle = 67, High = 76 }
+
+-- The positions a tune may use: about a ninth, centred on the fifth above
+-- the tonic nearest the register. Counted from the tonic rather than from a
+-- pitch, so the same idea in another key is the same tune, moved.
+function M.melodyRange(key, register)
+  local n = T.scaleLen(key)
+  local want = (REGISTER[register] or 67) - 7
+  local tonic = math.floor((want - T.rootPc(key)) / 12 + 0.5) * n
+  local centre = tonic + round(n * 4 / 7)
+  local span = n + 2
+  local lo = centre - span // 2
+  return lo, lo + span
+end
+
+local function nearestOn(ctx, ch, target, avoid)
+  local best
+  for p = ctx.lo, ctx.hi do
+    if T.onChord(ctx.key, ch, p) and p ~= avoid then
+      if not best or math.abs(p - target) < math.abs(best - target) then best = p end
+    end
+  end
+  return best or math.max(ctx.lo, math.min(ctx.hi, round(target)))
+end
+
+local function choose(ctx, prev, prevIv, prevNct, reps, target, ch, strong, rnd, goal, before)
+  local key = ctx.key
+  for relax = 0, 2 do
+    local cands, ws = {}, {}
+    for iv = -5, 5 do
+      local p = prev + iv
+      if p >= ctx.lo and p <= ctx.hi then
+        local w = IV_WEIGHT[math.abs(iv)]
+        local on = T.onChord(key, ch, p)
+        if strong and not on then w = 0 end
+        if relax < 2 and prevIv and math.abs(prevIv) >= 3 and (iv * prevIv >= 0 or math.abs(iv) > 2) then w = 0 end
+        if relax < 1 and prevNct and math.abs(iv) ~= 1 then w = 0 end
+        if iv == 0 and reps >= 1 then w = 0 end
+        if math.abs(iv) >= 2 and not on then w = w * 0.15 end
+        if before and p == before and math.abs(iv) <= 2 then w = w * 0.25 end
+        local semis = math.abs(T.pitch(key, p) - T.pitch(key, prev))
+        if semis == 6 then w = 0 end
+        if math.abs(iv) == 1 and semis == 3 then w = 0 end
+        local d = p - target
+        w = w * math.exp(-(d * d) / (2 * PULL * PULL))
+        if goal then
+          if math.abs(T.pitch(key, p) - T.pitch(key, goal)) == 6 then w = 0 end
+          local g = math.abs(p - goal)
+          w = w * ((g == 1 and 4) or (g == 2 and 1.5) or (g == 0 and 0.3) or 0.2)
+        end
+        if w > 0 then cands[#cands + 1] = p; ws[#ws + 1] = w end
+      end
+    end
+    if #cands > 0 then return weighted(rnd, cands, ws) end
+  end
+  return nearestOn(ctx, ch, target)
+end
+
+-- Where a closing unit lands: its last note, at `step`.
+local function goalFor(ctx, u, prev, target, step)
+  local key = ctx.key
+  local n = T.scaleLen(key)
+  local ch = M.chordAt(ctx.timeline, step).chord
+  local tonic = T.chord(key, 0, "Triads")
+  local ok
+  if u.cad == "PAC" then ok = function(p) return p % n == 0 end
+  elseif u.cad == "IAC" then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
+  elseif u.cad == "HC" then ok = function(p) return T.onChord(key, ch, p) end
+  elseif u.cad == "open" then
+    -- Back toward where the idea started, without landing on it, so it
+    -- loops.
+    target = ctx.firstPos or target
+    ok = function(p) return T.onChord(key, ch, p) and p ~= ctx.firstPos end
+  else return nil end
+  local best, bestCost
+  for p = ctx.lo - 2, ctx.hi + 2 do
+    if ok(p) then
+      local cost = math.abs(p - prev) + 0.4 * math.abs(p - target)
+      if not bestCost or cost < bestCost then best, bestCost = p, cost end
+    end
+  end
+  return best
+end
+
+-- New notes for a unit at the given onsets (steps from the unit's start).
+local function walkUnit(ctx, u, onsets, rnd, state)
+  local out = {}
+  local reps = state.reps or 0
+  local closing = u.cad ~= "none"
+  for i, o in ipairs(onsets) do
+    local step = u.start + o
+    local sl = M.chordAt(ctx.timeline, step)
+    local ch = sl.chord
+    local strong = M.strength(ctx.meter, step) >= 2 or i == 1
+    local target = ctx.target(step)
+    local p
+    if not state.prev then
+      p = nearestOn(ctx, ch, target)
+      ctx.firstPos = p
+    elseif closing and i == #onsets then
+      p = goalFor(ctx, u, state.prev, target, step) or choose(ctx, state.prev, state.iv, state.nct, reps, target, ch, true, rnd)
+    elseif closing and i == #onsets - 1 then
+      local goal = goalFor(ctx, u, state.prev, target, u.start + onsets[#onsets])
+      p = choose(ctx, state.prev, state.iv, state.nct, reps, goal or target, ch, strong, rnd, goal, state.before)
+    else
+      p = choose(ctx, state.prev, state.iv, state.nct, reps, target, ch, strong, rnd, nil, state.before)
+    end
+    state.before = state.prev
+    if state.prev then
+      state.iv = p - state.prev
+      reps = (p == state.prev) and reps + 1 or 0
+      state.reps = reps
+    end
+    state.prev = p
+    state.nct = not T.onChord(ctx.key, ch, p)
+    out[#out + 1] = { at = o, pos = p }
+  end
+  return out
+end
+
+-- Notes copied from another unit, moved to this one's start, shifted by
+-- `shift` scale steps.
+local function copyNotes(src, from, to, shift)
+  local out = {}
+  for _, nt in ipairs(src.notes) do
+    if nt.at >= from and nt.at < to then out[#out + 1] = { at = nt.at - from, pos = nt.pos + (shift or 0) } end
+  end
+  return out
+end
+
+-- A statement moved onto new chords keeps its shape: the notes on the beat
+-- that are not on the chord now go to the nearest chord tone, the rest stay.
+local function fit(ctx, u, notes)
+  for _, nt in ipairs(notes) do
+    local step = u.start + nt.at
+    if M.strength(ctx.meter, step) >= 2 then
+      local ch = M.chordAt(ctx.timeline, step).chord
+      if not T.onChord(ctx.key, ch, nt.pos) then
+        local up, down = nt.pos + 1, nt.pos - 1
+        while not T.onChord(ctx.key, ch, up) do up = up + 1 end
+        while not T.onChord(ctx.key, ch, down) do down = down - 1 end
+        nt.pos = (up - nt.pos <= nt.pos - down) and up or down
+      end
+    end
+  end
+  return notes
+end
+
+-- The shift (of `shift` or an octave either side of it) that keeps a
+-- statement in range and nearest the note before.
+local function bestShift(ctx, src, from, to, shift, prev)
+  local n = T.scaleLen(ctx.key)
+  local best, bestCost
+  for _, s in ipairs({ shift, shift - n, shift + n }) do
+    local notes = copyNotes(src, from, to, s)
+    if #notes > 0 then
+      -- Out of range costs by how far out, so if every choice is out, the
+      -- least out wins.
+      local over = 0
+      for _, nt in ipairs(notes) do
+        over = math.max(over, ctx.lo - 1 - nt.pos, nt.pos - ctx.hi - 1)
+      end
+      local cost = over * 100 + (prev and math.abs(notes[1].pos - prev) or 0)
+      if not bestCost or cost < bestCost then best, bestCost = s, cost end
+    end
+  end
+  return best or shift
+end
+
+function M.melody(plan, ctx, r, rnd)
+  local state = {}
+  local units = plan.units
+  for _, u in ipairs(units) do
+    local src = u.of and units[u.of]
+    local notes
+    local same = src and src.len == u.len and src.cad == u.cad
+    if u.kind == "repeat" and same then
+      notes = copyNotes(src, 0, u.len, 0)
+    elseif u.kind == "seq" and same and u.cad == "none" then
+      local s = bestShift(ctx, src, 0, u.len, u.shift, state.prev)
+      notes = fit(ctx, u, copyNotes(src, 0, u.len, s))
+    elseif src and u.kind ~= "frag" then
+      -- The source's first half (moved, for a sequence), then a new second
+      -- half to this unit's own ending. An answer to the same ending (a loop
+      -- going round again) keeps the chords but still answers in the tune.
+      local cut = M.cutFor(ctx.meter, src, u)
+      local s = (u.kind == "seq") and bestShift(ctx, src, 0, cut, u.shift, state.prev) or 0
+      notes = fit(ctx, u, copyNotes(src, 0, cut, s))
+      if #notes > 0 then
+        state.prev = notes[#notes].pos
+        state.iv = #notes > 1 and (notes[#notes].pos - notes[#notes - 1].pos) or nil
+        state.nct = false
+      end
+      local rh = M.unitRhythm(u, ctx.meter, r, ctx.rhythmRnd)
+      local rest = {}
+      for _, o in ipairs(rh) do if o >= cut then rest[#rest + 1] = o - cut end end
+      if #rest == 0 then rest = { 0 } end
+      local tail = { start = u.start + cut, len = u.len - cut, cad = u.cad, slots = u.slots }
+      for _, nt in ipairs(walkUnit(ctx, tail, rest, rnd, state)) do
+        notes[#notes + 1] = { at = nt.at + cut, pos = nt.pos }
+      end
+    elseif u.kind == "frag" then
+      -- The basic idea's first half, again and again, each a step lower.
+      local basic = units[1]
+      local half = snap(ctx.meter, basic.len / 2)
+      if half <= 0 then half = basic.len end
+      notes = {}
+      local at, k = 0, 0
+      while at < u.len do
+        local s = bestShift(ctx, basic, 0, half, -k, state.prev)
+        for j, nt in ipairs(copyNotes(basic, 0, math.min(half, u.len - at), s)) do
+          -- Each fragment is a statement of its own.
+          notes[#notes + 1] = { at = nt.at + at, pos = nt.pos, fresh = (j == 1) }
+        end
+        if #notes > 0 then state.prev = notes[#notes].pos end
+        at, k = at + half, k + 1
+      end
+      notes = fit(ctx, u, notes)
+    else
+      notes = walkUnit(ctx, u, M.unitRhythm(u, ctx.meter, r, ctx.rhythmRnd), rnd, state)
+    end
+    u.notes = notes
+    if #notes > 0 then
+      state.prev = notes[#notes].pos
+      state.iv = #notes > 1 and (notes[#notes].pos - notes[#notes - 1].pos) or state.iv
+      state.nct = not T.onChord(ctx.key, M.chordAt(ctx.timeline, u.start + notes[#notes].at).chord, notes[#notes].pos)
+    end
+  end
+
+  -- Into the timeline: each note lasts until the next (never longer than a
+  -- half note, unless it is the last of its unit, which is held).
+  local all = {}
+  for _, u in ipairs(units) do
+    for i, nt in ipairs(u.notes) do
+      all[#all + 1] = { step = u.start + nt.at, pos = nt.pos, last = (i == #u.notes),
+                        unitEnd = u.start + u.len, first = (i == 1) or nt.fresh or false }
+    end
+  end
+  table.sort(all, function(a, b) return a.step < b.step end)
+  -- Two notes on one step (a copied cell meeting the next unit): keep the later.
+  local notes = {}
+  for i, nt in ipairs(all) do
+    if not all[i + 1] or all[i + 1].step ~= nt.step then notes[#notes + 1] = nt end
+  end
+  M.untangle(ctx, notes)
+  for i, nt in ipairs(notes) do
+    local nextStep = notes[i + 1] and notes[i + 1].step or plan.total
+    local len = nextStep - nt.step
+    if not nt.last then len = math.min(len, 8) end
+    nt.len = math.max(1, len)
+    nt.pitch = T.pitch(ctx.key, nt.pos)
+    nt.accent = nt.first or nt.step % ctx.meter.bar == 0
+  end
+  return notes
+end
+
+-- The last pass over the whole tune. Copying a statement onto new chords
+-- can land two or three of its notes on the same chord tone, and a copy can
+-- start a tritone, or more than an octave, from where the tune was. So:
+--
+--   - a note that would be the third the same in a row moves;
+--   - a note a tritone from the one before moves - or, if it cannot (or it
+--     is the last note, which stays put), the one before it does;
+--   - a leap of more than an octave inside a statement is brought an
+--     octave closer.
+--
+-- A note on the beat moves to another chord tone, one off the beat to the
+-- note a step away - whichever is nearest, in range, and makes no tritone
+-- with either neighbour.
+function M.untangle(ctx, notes)
+  local key = ctx.key
+  local n = T.scaleLen(key)
+  local function semis(a, b) return math.abs(T.pitch(key, a) - T.pitch(key, b)) end
+  local NEAR, WIDE = { 1, -1, 2, -2, 3, -3, 4, -4 }, { 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6 }
+  -- `wide` looks further, and a little outside the range, when nothing
+  -- near will do.
+  local function move(i, strict, wide)
+    local a, b, c = notes[i - 1], notes[i], notes[i + 1]
+    if not b then return false end
+    local ch = M.chordAt(ctx.timeline, b.step).chord
+    local strong = M.strength(ctx.meter, b.step) >= 2
+    local slack = wide and 3 or 1
+    for _, d in ipairs(wide and WIDE or NEAR) do
+      local p = b.pos + d
+      local inRange = p >= ctx.lo - slack and p <= ctx.hi + slack
+      local fits = (strong and T.onChord(key, ch, p)) or (not strong and (math.abs(d) == 1 or wide))
+      local clash = strict and ((a and semis(a.pos, p) == 6) or (c and semis(p, c.pos) == 6))
+      -- A repeat is fine; three of a kind is not.
+      local z, y = notes[i - 2], notes[i + 2]
+      local triple = (a and z and a.pos == p and z.pos == p) or (a and c and a.pos == p and c.pos == p)
+                     or (c and y and c.pos == p and y.pos == p)
+      if fits and inRange and not clash and not triple and p ~= b.pos then
+        b.pos = p
+        return true
+      end
+    end
+    return false
+  end
+  local function tryMove(i, allowTritone)
+    return move(i, true, false) or move(i, true, true) or (allowTritone and move(i, false, true))
+  end
+  -- Twice over, so a note moved to mend one thing is checked again.
+  for _ = 1, 2 do
+    for i = 2, #notes do
+      local a, b, c = notes[i - 1], notes[i], notes[i + 1]
+      if c and a.pos == b.pos and b.pos == c.pos then
+        -- (In the diminished and whole-tone scales every way out may be a
+        -- tritone; a tritone is better there than a note three times.)
+        tryMove(i, true)
+      end
+      if semis(a.pos, b.pos) == 6 then
+        if i == #notes or not tryMove(i, false) then tryMove(i - 1, false) end
+      end
+      if not b.first and semis(a.pos, b.pos) > 12 then
+        local p = b.pos + ((a.pos > b.pos) and n or -n)
+        if semis(a.pos, p) ~= 6 and not (c and semis(p, c.pos) == 6)
+           and p >= ctx.lo - 3 and p <= ctx.hi + 3 then b.pos = p end
+      end
+    end
+  end
+end
+
+------------------------------------------------------------------------------
+-- 6. Chords, bass and drums
+------------------------------------------------------------------------------
+
+local ARPEGGIOS = {
+  { name = "up",          order = { 1, 2, 3, 4 } },
+  { name = "up and down", order = { 1, 2, 3, 4, 3, 2 } },
+  { name = "Alberti",     order = { 1, 3, 2, 3 } },
+  { name = "rolling",     order = { 1, 2, 3, 2 } },
+}
+
+-- Bar lines inside [s, e), and s itself.
+local function barStarts(meter, s, e)
+  local out = { s }
+  local b = (s // meter.bar + 1) * meter.bar
+  while b < e do out[#out + 1] = b; b = b + meter.bar end
+  return out
+end
+
+-- The onsets of a pulse inside [s, e).
+local function pulseOnsets(meter, s, e, pace, groove, rnd, pattern)
+  -- Straight is on the beat (eighths when busy); syncopated is spread over
+  -- the eighths.
+  local unit = (pace == "Busy" or groove == "Syncopated") and 2 or meter.beat
+  if pace == "Calm" then unit = meter.beat end
+  local out = {}
+  for _, b in ipairs(barStarts(meter, s, e)) do
+    local stop = math.min(e, (b // meter.bar + 1) * meter.bar)
+    local slots = (stop - b) // unit
+    local pat
+    if groove == "Syncopated" and slots >= 4 then
+      pattern[slots] = pattern[slots] or syncopated(meter, b % meter.bar, unit, slots,
+        math.max(2, round(slots * 3 / 8)), rnd)
+      pat = pattern[slots]
+    else
+      pat = {}
+      for i = 0, slots - 1 do pat[#pat + 1] = i end
+    end
+    for _, o in ipairs(pat) do out[#out + 1] = b + o * unit end
+  end
+  return out
+end
+
+local function addNote(list, step, len, pitch, accent)
+  if pitch and pitch >= 0 and pitch <= 127 and len > 0 then
+    list[#list + 1] = { step = step, len = len, pitch = pitch, accent = accent or false }
+  end
+end
+
+function M.chordsPart(ctx, timeline, r, rnd, win)
+  local notes = {}
+  local meter = ctx.meter
+  local prev, prevBass
+  local arp = pickOne(rnd, ARPEGGIOS)
+  local pattern = {}
+  for _, sl in ipairs(timeline) do
+    local v = T.voice(sl.chord.pcs, prev, win.lo, win.hi)
+    if #v == 0 then v = T.voice(sl.chord.pcs, nil, win.lo, win.hi + 12) end
+    prev = v
+    local onsets, perNote = {}, false
+    if r.chordStyle == "Pulse" then
+      onsets = pulseOnsets(meter, sl.s, sl.e, r.pace, r.groove, rnd, pattern)
+    elseif r.chordStyle == "Broken" then
+      local unit = (r.pace == "Calm") and meter.beat or (r.pace == "Busy" and 1 or 2)
+      for st = sl.s, sl.e - 1, unit do onsets[#onsets + 1] = st end
+      perNote = true
+    else
+      onsets = barStarts(meter, sl.s, sl.e)
+    end
+    for i, o in ipairs(onsets) do
+      local stop = onsets[i + 1] or sl.e
+      local accent = o % meter.bar == 0
+      if perNote then
+        local idx = arp.order[(i - 1) % #arp.order + 1]
+        local pitch = (idx <= #v) and v[idx] or (v[idx - #v] + 12)
+        addNote(notes, o, stop - o, pitch, accent)
+      else
+        for _, p in ipairs(v) do addNote(notes, o, stop - o, p, accent) end
+      end
+    end
+    if win.bass then
+      local b = T.bassNote(sl.chord.rootPc, prevBass, 36, 47)
+      prevBass = b
+      local bars = barStarts(meter, sl.s, sl.e)
+      for i, o in ipairs(bars) do addNote(notes, o, (bars[i + 1] or sl.e) - o, b, o % meter.bar == 0) end
+    end
+  end
+  return notes, arp.name
+end
+
+-- The kick drum's places in a bar, which the bass can follow.
+function M.kickPattern(meter, r, rnd)
+  local slots = meter.bar // 2
+  local k = ({ Calm = 1, Flowing = 2, Busy = 3 })[r.pace] or 2
+  k = math.max(1, round(k * slots / 8))
+  if r.groove == "Syncopated" then
+    local kk = math.max(2, round(slots * ({ Calm = 0.38, Flowing = 0.38, Busy = 0.62 })[r.pace]))
+    local pat = syncopated(meter, 0, 2, slots, math.min(kk, slots - 1), rnd)
+    local out = {}
+    for i, o in ipairs(pat) do out[i] = o * 2 end
+    return out
+  end
+  local pat = strongest(meter, 0, 2, slots, k, rnd)
+  local out = {}
+  for i, o in ipairs(pat) do out[i] = o * 2 end
+  return out
+end
+
+function M.bassPart(ctx, timeline, r, rnd, kick)
+  local notes = {}
+  local meter = ctx.meter
+  local key = ctx.key
+  local prev
+  for idx, sl in ipairs(timeline) do
+    local root = T.bassNote(sl.chord.rootPc, prev, 31, 50)
+    prev = root
+    local nextSl = timeline[idx + 1]
+    if r.bass == "Pulse" then
+      local on = {}
+      for _, b in ipairs(barStarts(meter, sl.s, sl.e)) do
+        local barStart = (b // meter.bar) * meter.bar
+        for _, k in ipairs(kick) do
+          local st = barStart + k
+          if st >= sl.s and st < sl.e then on[#on + 1] = st end
+        end
+      end
+      local seen, list = {}, {}
+      table.insert(on, 1, sl.s)
+      for _, st in ipairs(on) do if not seen[st] then seen[st] = true; list[#list + 1] = st end end
+      table.sort(list)
+      for i, st in ipairs(list) do
+        addNote(notes, st, math.min((list[i + 1] or sl.e) - st, 8), root, st % meter.bar == 0)
+      end
+    elseif r.bass == "Moving" then
+      local unit = meter.beat
+      if r.pace == "Calm" and (meter.bar // 2) % meter.beat == 0 and meter.beats % 2 == 0 then unit = meter.bar // 2 end
+      local beats = {}
+      for st = sl.s, sl.e - 1, unit do beats[#beats + 1] = st end
+      for i, st in ipairs(beats) do
+        local p
+        if i == 1 then p = root
+        elseif i == #beats and nextSl then
+          -- A step into the next chord's root, from the scale.
+          local nr = T.bassNote(nextSl.chord.rootPc, root, 31, 50)
+          local pos = T.nearestPos(key, nr)
+          local above, below = T.pitch(key, pos + 1), T.pitch(key, pos - 1)
+          p = (math.abs(above - root) < math.abs(below - root)) and above or below
+        else
+          local fifth = T.bassNote(sl.chord.pcs[3] or sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52)
+          local choices = { fifth, root + 12 <= 52 and root + 12 or root, T.bassNote(sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52) }
+          p = weighted(rnd, choices, { 3, 2, 1 })
+        end
+        addNote(notes, st, (beats[i + 1] or sl.e) - st, p, st % meter.bar == 0)
+      end
+    else
+      local bars = barStarts(meter, sl.s, sl.e)
+      for i, st in ipairs(bars) do addNote(notes, st, (bars[i + 1] or sl.e) - st, root, st % meter.bar == 0) end
+    end
+  end
+  return notes
+end
+
+M.DRUM = { kick = 36, snare = 38, hat = 42, open = 46, crash = 49, tomHi = 50, tomMid = 47, tomLo = 45 }
+
+-- Which beats the snare plays: the backbeat (2 and 4), or the half-time
+-- beat 3 when the pace is calm.
+local function backbeats(meter, pace)
+  local out = {}
+  if pace == "Calm" and meter.mid then return { meter.mid } end
+  if meter.beats == 1 then return { meter.bar // 2 } end
+  if meter.beats == 3 then return { 2 * meter.beat } end
+  for b = 1, meter.beats - 1, 2 do out[#out + 1] = b * meter.beat end
+  return out
+end
+
+function M.drumsPart(ctx, plan, r, rnd, kick)
+  local D = M.DRUM
+  local meter = ctx.meter
+  local notes = {}
+  local bars = plan.total // meter.bar
+  local snare = backbeats(meter, r.pace)
+  local hatUnit = ({ Calm = meter.beat, Flowing = 2, Busy = 1 })[r.pace] or 2
+  local fillUnit = (r.pace == "Calm") and 2 or 1
+
+  -- A fill goes in the last beat before a new section, and at the very end.
+  local fills, crashes = {}, { [0] = true }
+  for i, u in ipairs(plan.units) do
+    local nextU = plan.units[i + 1]
+    if not nextU or nextU.letter ~= u.letter then
+      local lastBar = (u.start + u.len - 1) // meter.bar
+      if u.len >= 2 * meter.bar or not nextU then fills[lastBar] = true end
+    end
+    if i > 1 and plan.units[i - 1].letter ~= u.letter and u.start % meter.bar == 0 then
+      crashes[u.start // meter.bar] = true
+    end
+  end
+
+  for b = 0, bars - 1 do
+    local base = b * meter.bar
+    local fillFrom = fills[b] and (meter.bar - meter.beat) or meter.bar
+    local snareAt = {}
+    for _, s in ipairs(snare) do snareAt[s] = true end
+    for _, k in ipairs(kick) do
+      if k < fillFrom and not snareAt[k] then addNote(notes, base + k, 1, D.kick, k == 0) end
+    end
+    for _, s in ipairs(snare) do
+      if s < fillFrom then addNote(notes, base + s, 1, D.snare, true) end
+    end
+    for h = 0, fillFrom - 1, hatUnit do
+      local openHat = r.groove == "Syncopated" and b % 2 == 1 and h == meter.bar - 2 and hatUnit <= 2
+      if not (crashes[b] and h == 0) then
+        addNote(notes, base + h, openHat and 2 or 1, openHat and D.open or D.hat, false)
+      end
+    end
+    if crashes[b] then addNote(notes, base, 4, D.crash, true) end
+    if fills[b] then
+      local toms = { D.snare, D.tomHi, D.tomMid, D.tomLo }
+      local i = 0
+      for f = fillFrom, meter.bar - 1, fillUnit do
+        addNote(notes, base + f, fillUnit, toms[i % #toms + 1], f == fillFrom)
+        i = i + 1
+      end
+    end
+  end
+  return notes
+end
+
+------------------------------------------------------------------------------
+-- 7. The idea
+------------------------------------------------------------------------------
+
+function M.keyName(key)
+  return T.ROOTS[key.root].name .. " " .. T.SCALES[key.scale].name
+end
+
+local function toBlockNotes(list, chan, vel)
+  local out = {}
+  for _, n in ipairs(list) do
+    out[#out + 1] = { start = n.step / 4, len = n.len / 4, pitch = n.pitch, chan = chan,
+                      accent = n.accent, vel = (vel == "Accents" and n.accent) and M.ACCENT or 100 }
+  end
+  table.sort(out, function(a, b)
+    if a.start ~= b.start then return a.start < b.start end
+    return a.pitch < b.pitch
+  end)
+  return out
+end
+
+-- The chords as a musician reads them: bar by bar, | C G | Am F |.
+function M.chordLine(timeline, meter)
+  local bars = {}
+  for _, sl in ipairs(timeline) do
+    local b = sl.s // meter.bar + 1
+    bars[b] = bars[b] or {}
+    table.insert(bars[b], sl.chord.name)
+    -- A chord held over bar lines shows in each bar it sounds in, as "-".
+    for x = b + 1, (sl.e - 1) // meter.bar + 1 do
+      bars[x] = bars[x] or {}
+      table.insert(bars[x], "-")
+    end
+  end
+  local out = {}
+  for i = 1, #bars do out[#out + 1] = table.concat(bars[i] or {}, " ") end
+  return "| " .. table.concat(out, " | ") .. " |"
+end
+
+--[[ The idea for these settings, this metre and this number.
+
+     Returns {
+       block    = { name, beats, notes, parts = { { name, notes, chan } }, layout },
+       r        = the settings with every Any rolled,
+       key, plan, timeline, melody (steps and positions, for the tests),
+       summary  = a line saying what was rolled,
+       chords   = the chord line,
+     }
+]]
+function M.make(st, meter, seed)
+  seed = math.floor(tonumber(seed) or st.seed or 1)
+  local r = M.resolve(st, seed)
+  local key = T.key(r.root, r.scale)
+  -- With no chords to play, the tune still walks over chords - plain triads,
+  -- one a bar - so its strong notes outline a harmony. The chord settings
+  -- are hidden then, and must not change it.
+  if not r.chords then r.colour, r.chordPace, r.chordStyle = "Triads", "One a bar", "Block" end
+  local plan = M.plan(r, meter, M.stream(seed, "plan"))
+  local colour = r.colour
+  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
+
+  local lo, hi = M.melodyRange(key, r.register)
+  local ctx = { key = key, meter = meter, lo = lo, hi = hi, timeline = timeline,
+                rhythmRnd = M.stream(seed, "rhythm") }
+  local contour = CONTOURS[r.contour] or CONTOURS.Arch
+  ctx.target = function(step)
+    local t = step / math.max(1, plan.total)
+    return lo + 1 + contour(t) * (hi - lo - 2)
+  end
+
+  local parts = {}
+  local melody
+  if r.melody then
+    melody = M.melody(plan, ctx, r, M.stream(seed, "melody"))
+    parts[#parts + 1] = { name = "Melody", list = melody }
+  end
+
+  local arpName
+  if r.chords then
+    -- The chords sit under the tune, so a tune in a low register pushes them
+    -- down, but never into the mud below C3.
+    local top = 69
+    if melody then
+      local low = 127
+      for _, n in ipairs(melody) do low = math.min(low, n.pitch) end
+      top = math.max(57, math.min(69, low - 1))
+    end
+    local list
+    list, arpName = M.chordsPart(ctx, timeline, r, M.stream(seed, "chords"),
+                                 { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure" })
+    parts[#parts + 1] = { name = "Chords", list = list }
+  end
+
+  if r.kind == "Measure" then
+    local kick = M.kickPattern(meter, r, M.stream(seed, "drums"))
+    parts[#parts + 1] = { name = "Bass", list = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick) }
+    if r.drums == "On" then
+      parts[#parts + 1] = { name = "Drums", list = M.drumsPart(ctx, plan, r, M.stream(seed, "drums"), kick),
+                            drums = true }
+    end
+  end
+
+  -- Channels: in one item each part has its own (drums on 10, as General
+  -- MIDI expects); on tracks of their own every part is on 1 but the drums.
+  local oneItem = r.kind ~= "Measure" or r.layout == "One item"
+  local block = { parts = {}, notes = {}, beats = plan.total / 4,
+                  layout = (oneItem and "one") or "tracks" }
+  for i, p in ipairs(parts) do
+    local chan = p.drums and 9 or (oneItem and (i - 1) or 0)
+    local notes = toBlockNotes(p.list, chan, r.velocity)
+    block.parts[#block.parts + 1] = { name = p.name, notes = notes, chan = chan, drums = p.drums }
+    for _, n in ipairs(notes) do block.notes[#block.notes + 1] = n end
+  end
+  table.sort(block.notes, function(a, b) return a.start < b.start end)
+
+  local what = r.kind
+  if r.kind == "Phrase" then what = what .. " (" .. r.content:lower() .. ")" end
+  if r.kind == "Measure" then what = what .. " (" .. r.form:lower() .. ")" end
+  block.name = ("Good Idea %d - %s, %s, %s"):format(seed, what, barsName(r.bars), M.keyName(key))
+
+  local said = { M.keyName(key), r.pace, r.groove }
+  if r.melody then said[#said + 1] = r.contour:lower() .. " contour" end
+  if r.chords then
+    said[#said + 1] = r.colour:lower()
+    said[#said + 1] = r.chordPace:lower()
+    said[#said + 1] = r.chordStyle:lower() .. ((r.chordStyle == "Broken" and arpName) and (" (" .. arpName .. ")") or "")
+  end
+  if r.kind == "Measure" then said[#said + 1] = r.bass:lower() .. " bass" end
+
+  local cadNames = { PAC = "closes on the tonic", IAC = "closes on the third or fifth",
+                     HC = "ends on the dominant (open)", open = "ends open, to loop", none = "" }
+  return {
+    seed = seed, r = r, key = key, plan = plan, timeline = timeline, melody = melody,
+    block = block,
+    summary = table.concat(said, "  /  "),
+    chords = M.chordLine(timeline, meter),
+    shape = plan.shape,
+    ending = cadNames[plan.ending] or "",
+  }
+end
+
+-- The settings that would give this idea back with nothing left to chance:
+-- every Any on screen replaced by what it rolled. A hidden setting does not
+-- change the idea, and is left alone so it is still Any when it shows again.
+function M.keep(st, idea)
+  for id in pairs(idea.r.rolled) do
+    local s = M.BY_ID[id]
+    if s and st[id] == "Any" and M.shows(s, st) then st[id] = idea.r[id] end
+  end
+  return st
+end
+
+return M
