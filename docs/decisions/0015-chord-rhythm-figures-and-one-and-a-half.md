@@ -2,7 +2,9 @@
 
 Taken 2026-10-01. Stands. Widens [0010](0010-figures-push-and-swing.md).
 Since [0016](0016-a-measure-has-no-drums-paces-in-numbers.md) the pace
-reads in numbers (Slow is "0.5 a bar") and 4 a bar joins it.
+reads in numbers (Slow is "0.5 a bar") and 4 a bar joins it. Since
+[0017](0017-the-tune-takes-figures-too.md) the tune takes figures as
+often as the chords do.
 
 ## Context
 

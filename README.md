@@ -95,8 +95,11 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    idea may borrow a chord (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
-   and triplet rhythms now and then - with Triplets the drums shuffle and
-   broken chords roll in triplets; with Dotted, held chords are struck again
+   and triplet rhythms now and then, in the tune and the chords together -
+   in the tune a quarter note can become a dotted eighth and a sixteenth or
+   a triplet, and a half note a dotted quarter and an eighth or a
+   quarter-note triplet; with Triplets the drums shuffle and broken chords
+   roll in triplets; with Dotted, held chords are struck again
    a dotted quarter in and arpeggios go long-short); the **push** (None,
    Some, Lots: chords arriving an eighth early, the tune and bass with them);
    the **pull** (None, Some, Lots: the chords played an eighth late, laid

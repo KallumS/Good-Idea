@@ -1136,6 +1136,42 @@ do
      "and walks straight when Plain")
 end
 
+-- 1.4: the tune's quarters and halves take figures too, so the tune and the
+-- chords are figured together.
+do
+  local function zero() return 0 end
+  local function show(list)
+    local o = {}
+    for i, x in ipairs(list) do o[i] = ("%.2f"):format(x) end
+    return table.concat(o, " ")
+  end
+  eq(show(I.figure(M44, 0, 16, { 0, 8 }, "Triplets", zero, true)), "0.00 2.67 5.33 8.00",
+     "in the tune a half note becomes a quarter-note triplet")
+  eq(show(I.figure(M44, 0, 16, { 0, 4, 6, 8, 12 }, "Dotted", zero, true)), "0.00 3.00 4.00 7.00 8.00 14.00",
+     "and a quarter a dotted eighth and a sixteenth")
+  eq(show(I.figure(M44, 0, 16, { 0, 4, 6, 8, 12 }, "Dotted", zero)), "0.00 4.00 7.00 8.00 14.00",
+     "but not in the chords, which play on every beat already")
+  eq(show(I.figure(M44, 0, 16, { 0, 8 }, "Plain", zero, true)), "0.00 8.00", "and never when Plain")
+  local function triBeats(notes, get)
+    local beats, n = {}, 0
+    for _, x in ipairs(notes) do
+      local s = get(x)
+      if offGrid(s) and not beats[math.floor(s + 1e-9)] then beats[math.floor(s + 1e-9)] = true; n = n + 1 end
+    end
+    return n
+  end
+  local both, tuneBeats, beats = 0, 0, 0
+  for seed = 1, 60 do
+    local idea = make({ kind = "Phrase", content = "Both", figures = "Triplets", push = "None", pull = "None" }, seed)
+    local t = triBeats(part(idea, "Melody").notes, function(n) return n.start end)
+    local c = triBeats(part(idea, "Chords").notes, function(n) return n.start end)
+    if t > 0 and c > 0 then both = both + 1 end
+    tuneBeats, beats = tuneBeats + t, beats + idea.block.beats
+  end
+  ok(both >= 34, ("with Triplets, most phrases have triplets in the tune and the chords at once: %d of 60"):format(both))
+  ok(tuneBeats / beats >= 0.2, ("and a fifth or more of the tune's beats are triplets: %.0f%%"):format(100 * tuneBeats / beats))
+end
+
 -- The Measure's drums switch is retired: in 1.2 a Measure always had drums,
 -- and since 1.3 it has none.
 do

@@ -168,7 +168,11 @@ everywhere means strength >= 2.
    **Figures** (`I.figure`, laid over a cell a beat or two beats at a time,
    only where the beat is a quarter): two eighths become dotted (0, 3), two
    quarters dotted (0, 6), a beat an eighth-note triplet (0, 4/3, 8/3), two
-   beats a quarter-note triplet (0, 8/3, 16/3). **Triplet steps are
+   beats a quarter-note triplet (0, 8/3, 16/3). **In the tune** (`tune`,
+   passed by `I.cell` only) a lone quarter becomes (0, 3) or a triplet and
+   a lone half note (0, 6) or a quarter-note triplet, at `qdot`/`qtri`
+   ([0017](docs/decisions/0017-the-tune-takes-figures-too.md)): an easy
+   tune is mostly quarters and halves, which the other shapes never touch. **Triplet steps are
    fractions**; `I.offGrid(step)` tells. The strength of a fractional step is
    0, so triplet notes are passing notes.
 5. **melody** - `walkUnit`/`choose`: a weighted walk over the notes a sixth
@@ -344,7 +348,7 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing. |
-| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 571,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass), pushes, pulls, swing, borrowed chords, the retired drums switch, and drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars). |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 571,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, and drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars). |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
 | `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
@@ -368,7 +372,8 @@ the retired setting's place, folding, the layout row, the Drums step; in
 1.3 drums back in a Measure (caught by the idea, window and placement
 tests), Any rolling 4 a bar, 4 a bar slower than every beat, the kick
 pattern drawn from another stream, the retired switch On, the labels, and
-a held bass ignoring a push - and watching it fail. Separate dice were not covered at first:
+a held bass ignoring a push; in 1.4 the 1.3 engine, whose tune hardly took
+figures - and watching it fail. Separate dice were not covered at first:
 nothing compared the bass or drums under two chord styles. A test does now,
 and chords and bass drawing from one stream fails it.
 

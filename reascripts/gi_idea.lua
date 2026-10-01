@@ -881,7 +881,13 @@ M.PACE = {
 --   - two eighths in a beat become a dotted eighth and a sixteenth;
 --     two quarters in two beats, a dotted quarter and an eighth;
 --   - a beat with two or more notes becomes an eighth-note triplet; two
---     quarters in two beats, a quarter-note triplet.
+--     quarters in two beats, a quarter-note triplet;
+--   - in the tune, a quarter note on the beat (with a note on the beat
+--     after) becomes a dotted eighth and a sixteenth, or an eighth-note
+--     triplet; a half note, a dotted quarter and an eighth, or a
+--     quarter-note triplet. A tune at an easy pace is mostly quarters and
+--     halves, which the shapes above never touch, so without this the
+--     chords took the figures and the tune hardly did (since 1.4).
 --
 -- Triplet notes fall between the sixteenths, so their steps are fractions
 -- (a third of a beat is 4/3 of a step). Only in metres whose beat is a
@@ -890,20 +896,25 @@ M.PACE = {
 ------------------------------------------------------------------------------
 
 local FIGURES = {
-  Dotted   = { dot = 0.5,  tri = 0 },
-  Triplets = { dot = 0,    tri = 0.45 },
-  Mixed    = { dot = 0.25, tri = 0.2 },
+  Dotted   = { dot = 0.5,  tri = 0,    qdot = 0.45, qtri = 0 },
+  Triplets = { dot = 0,    tri = 0.45, qdot = 0,    qtri = 0.4 },
+  Mixed    = { dot = 0.25, tri = 0.2,  qdot = 0.22, qtri = 0.18 },
 }
 
 -- `onsets` are steps from the start of a cell `len` long that begins
--- `base` steps into the bar.
-function M.figure(meter, base, len, onsets, figures, rnd)
+-- `base` steps into the bar. `tune`: a melody's rhythm, whose quarter
+-- notes take figures too.
+function M.figure(meter, base, len, onsets, figures, rnd, tune)
   local F = FIGURES[figures]
   if not F or meter.beat ~= 4 then return onsets end
   local function within(a, b)
     local o = {}
     for _, x in ipairs(onsets) do if x >= a and x < b then o[#o + 1] = x end end
     return o
+  end
+  local function has(x)
+    for _, y in ipairs(onsets) do if y == x then return true end end
+    return false
   end
   local b = (4 - base % 4) % 4
   local out = within(0, b)
@@ -915,6 +926,13 @@ function M.figure(meter, base, len, onsets, figures, rnd)
       local x = rnd()
       if x < F.tri / 2 then add(b, b + 8 / 3, b + 16 / 3); step = 8
       elseif x < F.tri / 2 + F.dot then add(b, b + 6); step = 8 end
+    elseif tune and #pair == 1 and pair[1] == b and b + 8 < len and has(b + 8) then
+      -- A half note in the tune.
+      local x = rnd()
+      if x < F.qtri then add(b, b + 8 / 3, b + 16 / 3)
+      elseif x < F.qtri + F.qdot then add(b, b + 6)
+      else add(b) end
+      step = 8
     end
     if step == 4 then
       local beat = within(b, math.min(len, b + 4))
@@ -923,6 +941,11 @@ function M.figure(meter, base, len, onsets, figures, rnd)
         if x < F.tri then add(b, b + 4 / 3, b + 8 / 3)
         elseif #beat == 2 and beat[2] == b + 2 and x < F.tri + F.dot then add(b, b + 3)
         else add(table.unpack(beat)) end
+      elseif tune and b + 4 < len and #beat == 1 and beat[1] == b and has(b + 4) then
+        local x = rnd()
+        if x < F.qtri then add(b, b + 4 / 3, b + 8 / 3)
+        elseif x < F.qtri + F.qdot then add(b, b + 3)
+        else add(b) end
       else
         add(table.unpack(beat))
       end
@@ -959,7 +982,7 @@ function M.cell(meter, base, len, pace, groove, rnd, figures)
       for _, o in ipairs(pat) do out[#out + 1] = pc[1] + o * P.unit end
     end
   end
-  return M.figure(meter, base, len, out, figures, rnd)
+  return M.figure(meter, base, len, out, figures, rnd, true)
 end
 
 -- The rhythm of a whole unit: a cell a bar, the first bar's cell often
