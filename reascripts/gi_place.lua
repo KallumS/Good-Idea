@@ -177,7 +177,10 @@ function M.previewStart(block, tempo, now)
   -- Sorted by start, so the loop only ever looks at the next one due.
   local notes = {}
   for i, n in ipairs(block.notes) do notes[i] = n end
-  table.sort(notes, function(a, b) return a.start < b.start end)
+  table.sort(notes, function(a, b)
+    if a.start ~= b.start then return a.start < b.start end
+    return a.pitch < b.pitch
+  end)
 
   preview.on, preview.notes = true, notes
   preview.idx, preview.sounding = 1, {}

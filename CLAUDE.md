@@ -41,8 +41,16 @@ is a pure function of the settings, the metre and the idea number (1 to
 `I.MAX_SEED`, 99999). The dice are Midi Variator's Park-Miller generator
 (`I.random`), and every part of an idea draws from **its own stream**
 (`I.stream(seed, name)`: pick, plan, harmony, rhythm, melody, chords, bass,
-drums), so changing how the chords are played leaves the tune alone, and
-turning the drums off leaves the bass alone. The tests hold all of that.
+drums, and in 1.1 borrow and push), so changing how the chords are played
+leaves the tune alone, and turning the drums off leaves the bass alone. The
+tests hold all of that.
+
+**1.0's ideas are kept** ([0010](docs/decisions/0010-figures-push-and-swing.md)):
+`I.SETTINGS` is also the order `resolve` draws in, so **new settings go at
+the end of the list** (the window's layout is separate), and a new feature
+**draws nothing from the dice when it is off**. With Figures Plain, Push
+None, Borrowed Off and no swing, every 1.0 idea number gives exactly the 1.0
+idea; `test_idea` holds thirty, hashed before 1.1. Keep that true.
 
 The randomness is only ever a choice among musically meaningful options
 ([0003](docs/decisions/0003-calculated-from-the-maths-of-music.md)): which
@@ -69,6 +77,10 @@ not**, so fixing one setting never changes what another rolls, and `I.keep`
 same idea back. Bars are a setting per kind (`motifBars`, `phraseBars`,
 `measureBars`; `I.barsSetting(kind)`), so switching kind keeps each one's
 length.
+
+**Swing is not in `I.SETTINGS`**: it is a slider (`st.swing`, 0-100), not a
+row of buttons, and it is never rolled. It is clamped, saved and passed in
+like `seed`, and `make` reads it from `st`.
 
 **No dead controls.** A setting whose `when` is false is not drawn, and must
 not change the idea: with no chords part, the tune walks over plain triads
@@ -106,13 +118,34 @@ everywhere means strength >= 2.
    fragment (a continuation speeds the harmony up), at least two for an
    ending, and an extra one for the opening unit so an idea starts on the
    tonic - but only if they still fall evenly on beats and bars. The
-   timeline merges the same chord twice running into one.
+   timeline merges the same chord twice running into one. Every slot
+   carries its scale, `sl.key`. Then:
+   - **borrow** ([0011](docs/decisions/0011-borrowed-chords-rarely-and-named.md)):
+     `I.borrow` - about one idea in four (`I.BORROW_CHANCE`), with Borrowed
+     on Rare, a seven-note scale and at least four chords - swaps one chord
+     (not the first, not the last two) for the same degree from another
+     seven-note scale on the same key note (`BORROW_FROM`), setting
+     `sl.key` to that scale and `sl.borrowed` to its name, its numeral
+     against the home key (bVI) and its source. Only major or minor chords
+     with a note outside the key.
+   - **push** ([0010](docs/decisions/0010-figures-push-and-swing.md)):
+     `I.push` moves a chord change on a beat back an eighth (`sl.s - 2`,
+     `sl.pushed`), cutting the chord before. Quarter-note beats or longer
+     only.
+   Borrowing and pushing touch one occurrence of the harmony, so even an
+   exact repeat's tune is `fit` to the chords under it, ending included.
 4. **rhythm** - `I.cell`: Straight takes the k strongest grid steps;
    Syncopated takes a Euclidean spread (`I.euclid`) turned off the beat,
    over the whole bar (a syncopation needs room: 3 in 8, not 3 in 4 twice).
    `I.unitRhythm` reuses the first bar's cell often, and a closing unit holds
    its last note from half way through the last bar - or from where the last
    chord arrives, if later, so the tune comes home with the harmony.
+   **Figures** (`I.figure`, laid over a cell a beat or two beats at a time,
+   only where the beat is a quarter): two eighths become dotted (0, 3), two
+   quarters dotted (0, 6), a beat an eighth-note triplet (0, 4/3, 8/3), two
+   beats a quarter-note triplet (0, 8/3, 16/3). **Triplet steps are
+   fractions**; `I.offGrid(step)` tells. The strength of a fractional step is
+   0, so triplet notes are passing notes.
 5. **melody** - `walkUnit`/`choose`: a weighted walk over the notes a sixth
    either side - steps likeliest, a Gaussian pull to the contour (`CONTOURS`;
    the Arch peaks at the golden section), chord tones only on the beat, a
@@ -125,9 +158,15 @@ everywhere means strength >= 2.
    range and nearest), answers copy half and walk the rest, fragments copy
    the basic idea's first half, falling a step each time (each fragment a
    statement of its own: `fresh`). `fit` moves a copied note on the beat onto
-   the chord now under it. **`I.untangle` is the last pass** and the
-   guarantee: it removes three-in-a-row, tritone leaps and leaps over an
-   octave inside a statement that copying and fitting can create.
+   the chord now under it. Then, in this order: `I.wholeTriplets` drops any
+   note between the sixteenths that is not part of a whole triplet (a copy
+   or a closing note can cut one); **`I.untangle`**, the guarantee, removes
+   three-in-a-row, tritone leaps and leaps over an octave inside a statement;
+   then a note on a pushed chord's beat moves onto the push with it (not if
+   it starts a triplet). **Every position becomes a pitch through the scale
+   sounding at its step, `I.keyAt(ctx, step)`, never `ctx.key`** - under a
+   borrowed chord that is the borrowed scale. `ctx.key` is only for the
+   range and the tonic.
    `I.melodyRange` centres the tune on the fifth above the tonic nearest the
    register, **counted from the tonic**, so the same idea in another key is
    the same tune moved (tested).
@@ -135,15 +174,24 @@ everywhere means strength >= 2.
    chord before; Block / Pulse / Broken with an arpeggio pattern; under a
    Phrase, the root in the bass), `bassPart` (Held / Pulse - on the kick
    drum's pattern, `I.kickPattern` - / Moving - root, fifth or octave, and a
-   scale step into the next chord), `drumsPart` (General MIDI, `I.DRUM`;
-   kick pattern, backbeat or half-time snare when Calm, hats by pace, open
-   hat on syncopated grooves, a crash at the top and at each new section, a
-   fill before each new section and at the end).
+   scale step into the next chord, from the scale sounding now), `drumsPart`
+   (General MIDI, `I.DRUM`; kick pattern, backbeat or half-time snare when
+   Calm, hats by pace - shuffled on triplets - open hat on syncopated
+   grooves, a crash at the top and at each new section, a fill before each
+   new section and at the end, the kick moved onto each push). A pushed
+   chord is played from its beat (`gridStart`) with its first stroke moved
+   onto the push (`onPush`), so it is not struck again on the beat. Pulse
+   chords take figures; Broken chords roll in triplets.
 7. **block** - `{ name, beats, notes, parts = { { name, notes, chan, drums } },
    layout = "one" | "tracks" }`. Channels
    ([0007](docs/decisions/0007-a-measure-on-tracks-a-motif-in-one-item.md)):
    in one item each part its own (melody 1, chords 2, bass 3); on tracks
-   every part on 1; **drums always on 10** (`chan = 9`).
+   every part on 1; **drums always on 10** (`chan = 9`). **Swing** is
+   applied here, last (`I.swingWarp`): each quarter note's grid stretched so
+   its off-beat eighth lands up to 2/3 of the way through; whole-step starts
+   and ends only (triplets are left alone); `I.swings(meter)` is false for
+   6/8, 12/8 and 7/8. `idea.borrowed` lists borrowed chords with `text` for
+   the window; the chord line marks a pushed chord `^` and a borrowed `*`.
 
 The weights in `IV_WEIGHT`, `PULL`, `MOVES` and the rhythm tables were set by
 reading `tools/demo.lua` output. If you change one, read the demo for every
@@ -162,6 +210,9 @@ kind before and after, then run the deep sweep (below).
   quarter as often.
 - `T.cadenceChords(key, half)`: V with a leading tone strongest; VII, v and
   the Phrygian bII where there is none; IV (plagal) for full closes only.
+- Chords are in key, but for the rare borrowed one (`I.borrow`, above),
+  which lives in `gi_idea` because it is a decision about one idea, not
+  about harmony in general.
 - `T.progression(key, n, { start, cadence, loopTo }, rnd)`: drawn forward,
   the join into the fixed ending accepted in proportion to its weight;
   after 80 failed draws, `T.likeliest` (Viterbi) finds the likeliest path,
@@ -179,7 +230,10 @@ buttons out wrapping at the window's edge. Every row's buttons sit inside
 another's.
 
 The steps are numbered as they are shown (a Motif has no Chords step, only a
-Measure has an Arrangement). The idea is remade only when something changes
+Measure has an Arrangement). Swing is a `SliderInt` in the Feel step; in a
+metre that cannot swing the window says why instead of showing it. A
+borrowed chord is flagged in the body text (not dim, not the accent, not
+the warning red) under the chord line. The idea is remade only when something changes
 (`ui.dirty`), including the project's time signature at the edit cursor,
 which `frame` compares every frame.
 
@@ -198,7 +252,7 @@ controls' grey, and the drums are ticks in `#6D7581` along the bottom.
 ## Settings that outlive the window
 
 Saved as `key=value;` in one ExtState string (`GoodIdea`/`state`): every
-setting by id, `seed` and `autoplay`. Loaded values go through
+setting by id, `seed`, `autoplay` and `swing`. Loaded values go through
 `tonumber(v) or v`, so bars, root, scale and seed come back as numbers and
 names as names; `I.clampState` then puts anything that does not exist back
 to its default.
@@ -237,10 +291,10 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing. |
-| `test_idea.lua` | 735 ideas across six metres and every scale, every note and chord checked rule by rule (about 570,000 checks); then by name: the same number is the same idea, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers, each setting does what its hint says, the four forms, bass and drums. |
+| `test_idea.lua` | 735 ideas across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it (about 570,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers, each setting does what its hint says, the four forms, bass and drums, figures (triplets whole), pushes, swing, borrowed chords (rare, placed, flagged, the tune bending). |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
-| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the time signature, saved and nonsense settings. |
+| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
 
 The sweep tallies each rule over every note it applies to and reports the
 rule once, with a count and the first idea that broke it. **Run the deep

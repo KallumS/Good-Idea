@@ -1,6 +1,7 @@
 # 0006. Chords stay in the key; scales other than seven notes are built by ear
 
-Taken 2026-10-01. Stands.
+Taken 2026-10-01. Stands, widened by [0011](0011-borrowed-chords-rarely-and-named.md): rare
+borrowed chords from scales on the same key note.
 
 ## Context
 

@@ -102,7 +102,9 @@ end
 local function audit(idea, tag)
   local b, r, key, meter = idea.block, idea.r, idea.key, nil
   meter = idea.meter
-  local inKey = scalePcs(key)
+  -- The scale sounding at a step: the key's, or a borrowed chord's.
+  local tlctx = { timeline = idea.timeline, key = key }
+  local function inKeyAt(step, pc) return scalePcs(I.keyAt(tlctx, step))[pc] == true end
   local barsWanted = r.bars
 
   rule("an idea is as long as its bars", math.abs(b.beats - barsWanted * meter.barBeats) < 1e-9, tag)
@@ -116,7 +118,7 @@ local function audit(idea, tag)
       rule("velocity is 100, or 115 when accented",
            n.vel == 100 or (r.velocity == "Accents" and n.vel == I.ACCENT), tag)
       if not p.drums then
-        rule("every pitched note is in the key", inKey[n.pitch % 12] == true,
+        rule("every pitched note is in the scale sounding under it", inKeyAt(n.start * 4, n.pitch % 12),
              tag .. " " .. p.name .. " " .. T.pitchName(n.pitch))
       end
       if p.drums then rule("the drums are on channel 10", n.chan == 9, tag) end
@@ -148,7 +150,8 @@ local function audit(idea, tag)
   for i = 2, #tl do
     rule("each chord starts where the last ended", tl[i].s == tl[i - 1].e, tag)
     rule("no chord follows itself", tl[i].degree ~= tl[i - 1].degree, tag .. " " .. idea.chords)
-    rule("chords change on a beat", tl[i].s % meter.beat == 0, tag)
+    rule("chords change on a beat, or an eighth before one when pushed",
+         tl[i].s % meter.beat == 0 or (tl[i].pushed and (tl[i].s + 2) % meter.beat == 0), tag)
   end
   -- (Unless the opening unit only has room for its ending: a one-bar phrase
   -- that closes is V-I.)
@@ -175,7 +178,7 @@ local function audit(idea, tag)
       lo, hi = math.min(lo, n.pitch), math.max(hi, n.pitch)
       if I.strength(meter, n.step) >= 2 then
         local ch = I.chordAt(tl, n.step).chord
-        rule("a note on the beat is on the chord", T.onChord(key, ch, n.pos),
+        rule("a note on the beat is on the chord", T.onChord(I.keyAt(tlctx, n.step), ch, n.pos),
              ("%s step %d %s over %s"):format(tag, n.step, T.pitchName(n.pitch, key), ch.name))
       end
       if i > 1 then
@@ -211,10 +214,10 @@ local function audit(idea, tag)
       rule("an imperfect close ends on the tonic chord's third or fifth",
            T.onChord(key, tonic, final.pos) and final.pos % T.scaleLen(key) ~= 0, tag)
     elseif ending == "HC" then
-      rule("a half close ends the tune on the dominant chord", T.onChord(key, last.chord, final.pos), tag)
+      rule("a half close ends the tune on the dominant chord", T.onChord(I.keyAt(tlctx, final.step), last.chord, final.pos), tag)
     elseif ending == "open" then
       rule("an open ending lands on the chord under it",
-           T.onChord(key, I.chordAt(tl, final.step).chord, final.pos), tag)
+           T.onChord(I.keyAt(tlctx, final.step), I.chordAt(tl, final.step).chord, final.pos), tag)
     end
   end
 
@@ -614,6 +617,7 @@ end
 
 do
   local idea = make({ kind = "Measure", measureBars = 8, pace = "Flowing", groove = "Straight", drums = "On",
+                      figures = "Plain", push = "None",
                       form = "Period" }, 9)
   local dr = part(idea, "Drums").notes
   local D = I.DRUM
@@ -640,7 +644,7 @@ end
 do
   local bad = 0
   for seed = 1, 30 do
-    local idea = make({ kind = "Measure", bass = "Pulse", drums = "On" }, seed)
+    local idea = make({ kind = "Measure", bass = "Pulse", drums = "On", push = "None" }, seed)
     local changes, pattern = {}, {}
     for _, sl in ipairs(idea.timeline) do changes[sl.s / 4] = true end
     -- The kick's pattern, drawn as the idea drew it. (In the drum part the
@@ -680,6 +684,311 @@ do
     end
   end
   eq(bad, 0, "a Moving bass steps into each new chord")
+end
+
+------------------------------------------------------------------------------
+-- 1.1: figures, push, swing and borrowed chords
+------------------------------------------------------------------------------
+
+-- With the 1.1 settings plain, every 1.0 idea number gives exactly the 1.0
+-- idea: the new settings draw last, and draw nothing when plain. These are
+-- 1.0's own notes, hashed in sorted order (so the order notes that start
+-- together are listed in does not matter), made by the 1.0 code itself.
+do
+  local V10 = {
+  { "Motif", 1, 646483193 },
+  { "Motif", 7, 966472226 },
+  { "Motif", 42, 1627035517 },
+  { "Motif", 300, 871023702 },
+  { "Motif", 999, 2564792285 },
+  { "Motif", 4821, 360913389 },
+  { "Motif", 12345, 3876152090 },
+  { "Motif", 31337, 3193821783 },
+  { "Motif", 77777, 3326774625 },
+  { "Motif", 99999, 1577570922 },
+  { "Phrase", 1, 2725931372 },
+  { "Phrase", 7, 3949182337 },
+  { "Phrase", 42, 1127454063 },
+  { "Phrase", 300, 2740318878 },
+  { "Phrase", 999, 79680367 },
+  { "Phrase", 4821, 3652951295 },
+  { "Phrase", 12345, 2973240363 },
+  { "Phrase", 31337, 3216165730 },
+  { "Phrase", 77777, 555389959 },
+  { "Phrase", 99999, 1649638166 },
+  { "Measure", 1, 953415780 },
+  { "Measure", 7, 1653539637 },
+  { "Measure", 42, 2134985722 },
+  { "Measure", 300, 2844780318 },
+  { "Measure", 999, 1663616085 },
+  { "Measure", 4821, 3442784725 },
+  { "Measure", 12345, 3806974702 },
+  { "Measure", 31337, 1190043490 },
+  { "Measure", 77777, 195354917 },
+  { "Measure", 99999, 1562943930 },
+  }
+  local function hash(s)
+    local h = 2166136261
+    for i = 1, #s do h = ((h ~ s:byte(i)) * 16777619) % 4294967296 end
+    return h
+  end
+  local bad = {}
+  for _, v in ipairs(V10) do
+    local b = make({ kind = v[1], figures = "Plain", push = "None", borrowed = "Off", swing = 0 }, v[2]).block
+    local f = {}
+    for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
+    table.sort(f)
+    if hash(table.concat(f, " ")) ~= v[3] then bad[#bad + 1] = v[1] .. " " .. v[2] end
+  end
+  eq(#bad, 0, "with figures plain, no push, no borrowing and no swing, 1.0's ideas are unchanged: " ..
+     table.concat(bad, ", "))
+end
+
+local function offGrid(x) return math.abs(x * 4 - math.floor(x * 4 + 0.5)) > 1e-6 end
+
+-- Figures.
+do
+  local plainOff, triIdeas, dotIdeas, dotOff, compoundOff, threes = 0, 0, 0, 0, 0, 0
+  for seed = 1, 60 do
+    for _, kind in ipairs(I.KINDS) do
+      local plain = make({ kind = kind, figures = "Plain", pace = "Flowing" }, seed)
+      for _, n in ipairs(plain.block.notes) do if offGrid(n.start) then plainOff = plainOff + 1 end end
+      local tri = make({ kind = kind, figures = "Triplets", pace = "Flowing" }, seed)
+      local found = false
+      for _, n in ipairs(tri.block.notes) do if offGrid(n.start) then found = true end end
+      if found then triIdeas = triIdeas + 1 end
+      -- Triplets come in threes: a note between the sixteenths belongs to a
+      -- whole eighth-note triplet (three in a beat) or quarter-note triplet
+      -- (three in two beats) starting on a beat.
+      if tri.melody then
+        local at = {}
+        local function has(x) return at[("%.4f"):format(x)] end
+        for _, n in ipairs(tri.melody) do at[("%.4f"):format(n.step)] = true end
+        for _, n in ipairs(tri.melody) do
+          if offGrid(n.step / 4) then
+            local whole = false
+            for _, span in ipairs({ 4 / 3, 8 / 3 }) do
+              for k = 1, 2 do
+                local g = n.step - k * span
+                if math.abs(g / 4 - math.floor(g / 4 + 0.5)) < 1e-6 and has(g) and has(g + span) and has(g + 2 * span) then
+                  whole = true
+                end
+              end
+            end
+            if not whole then threes = threes + 1 end
+          end
+        end
+      end
+      local dot = make({ kind = kind, figures = "Dotted", pace = "Flowing" }, seed)
+      for _, n in ipairs(dot.block.notes) do if offGrid(n.start) then dotOff = dotOff + 1 end end
+      if dot.melody then
+        for i = 2, #dot.melody do
+          local a, b = dot.melody[i - 1], dot.melody[i]
+          if (a.step % 4 == 0 and b.step == a.step + 3) or (a.step % 4 == 0 and b.step == a.step + 6) then
+            dotIdeas = dotIdeas + 1
+            break
+          end
+        end
+      end
+      local six = make({ kind = kind, figures = "Triplets" }, seed, I.meter(6, 8))
+      for _, n in ipairs(six.block.notes) do if offGrid(n.start) then compoundOff = compoundOff + 1 end end
+    end
+  end
+  eq(plainOff, 0, "Plain puts nothing between the sixteenths")
+  ok(triIdeas >= 90, "Triplets put triplets in most ideas: " .. triIdeas .. " of 180")
+  eq(threes, 0, "and a melody's triplets come in threes")
+  eq(dotOff, 0, "Dotted puts nothing between the sixteenths")
+  ok(dotIdeas >= 40, "but dotted long-shorts into many tunes: " .. dotIdeas .. " of 120")
+  eq(compoundOff, 0, "6/8 is already in threes: no triplets are laid over it")
+end
+
+-- Push.
+do
+  local noneP, lotsIdeas, early, kicks, restruck, tuneEarly, tuneTwice = 0, 0, 0, 0, 0, 0, 0
+  for seed = 1, 60 do
+    local none = make({ kind = "Measure", push = "None" }, seed)
+    for _, sl in ipairs(none.timeline) do if sl.pushed or sl.s % 4 ~= 0 then noneP = noneP + 1 end end
+    local lots = make({ kind = "Measure", push = "Lots", drums = "On", chordStyle = "Block" }, seed)
+    local any = false
+    local kickAt, chordAt, tuneAt = {}, {}, {}
+    local toms = {}
+    for _, n in ipairs(part(lots, "Drums").notes) do
+      if n.pitch == I.DRUM.kick then kickAt[n.start * 4] = true end
+      if n.pitch == I.DRUM.tomHi or n.pitch == I.DRUM.tomMid or n.pitch == I.DRUM.tomLo then toms[#toms + 1] = n.start * 4 end
+    end
+    -- (A fill playing over the push keeps the kick out.)
+    local function tomNear(x)
+      for _, t in ipairs(toms) do if t >= x - 4 and t < x + 2 then return true end end
+      return false
+    end
+    for _, n in ipairs(part(lots, "Chords").notes) do chordAt[n.start * 4] = true end
+    for _, n in ipairs(lots.melody) do tuneAt[n.step] = n end
+    for _, sl in ipairs(lots.timeline) do
+      if sl.pushed then
+        any = true
+        if (sl.s + 2) % 4 ~= 0 then early = early + 1 end
+        if not kickAt[sl.s] and not tomNear(sl.s) then kicks = kicks + 1 end
+        if chordAt[sl.s + 2] then restruck = restruck + 1 end
+        if tuneAt[sl.s] and tuneAt[sl.s].pushed then tuneEarly = tuneEarly + 1 end
+        if tuneAt[sl.s] and tuneAt[sl.s].pushed and tuneAt[sl.s + 2] then tuneTwice = tuneTwice + 1 end
+      end
+    end
+    if any then lotsIdeas = lotsIdeas + 1 end
+  end
+  eq(noneP, 0, "with no push every chord arrives on the beat")
+  ok(lotsIdeas >= 50, "with Lots, most Measures push chords: " .. lotsIdeas .. " of 60")
+  eq(early, 0, "a pushed chord arrives exactly an eighth before its beat")
+  eq(kicks, 0, "and the kick drum comes with it (unless a fill is playing there)")
+  eq(restruck, 0, "and a Block chord is not struck again on the beat it was pushed from")
+  ok(tuneEarly > 20, "the tune's note on that beat often comes early too: " .. tuneEarly)
+  eq(tuneTwice, 0, "and is not also played on the beat")
+end
+
+-- Swing.
+do
+  local moved, beats, sixteen, same, order, threes = 0, 0, 0, 0, 0, 0
+  for seed = 1, 40 do
+    local st = { kind = "Phrase", content = "Both", pace = "Busy", figures = "Mixed" }
+    local straight = make(st, seed)
+    st.swing = 100
+    local swung = make(st, seed)
+    for pi, sp in ipairs(swung.block.parts) do
+    local a, b = straight.block.parts[pi].notes, sp.notes
+    if #a ~= #b then order = order + 1 end
+    for i = 1, math.min(#a, #b) do
+      local x, y = a[i].start * 4, b[i].start * 4
+      if a[i].pitch ~= b[i].pitch then order = order + 1 end
+      local f = x % 4
+      if offGrid(a[i].start) then
+        if math.abs(x - y) > 1e-6 then threes = threes + 1 end
+      elseif f == 0 then
+        if math.abs(x - y) > 1e-6 then beats = beats + 1 end
+      elseif f == 2 then
+        if math.abs((y % 4) - 8 / 3) > 1e-6 then moved = moved + 1 end
+      elseif f == 1 then
+        if math.abs((y % 4) - 4 / 3) > 1e-6 then sixteen = sixteen + 1 end
+      end
+      if b[i].start + b[i].len > swung.block.beats + 1e-9 or b[i].len <= 0 then order = order + 1 end
+    end
+    end
+    st.swing = 0
+    if fingerprint(make(st, seed).block.notes) ~= fingerprint(straight.block.notes) then same = same + 1 end
+  end
+  eq(moved, 0, "at 100% swing every off-beat eighth lands two thirds of the way through its beat")
+  eq(sixteen, 0, "the sixteenth before it moves in proportion")
+  eq(beats, 0, "no note on a beat moves")
+  eq(threes, 0, "triplets are left alone")
+  eq(order, 0, "and nothing is reordered, lost, or pushed past the end")
+  eq(same, 0, "0% swing is no swing")
+  local six = make({ kind = "Motif", swing = 0 }, 5, I.meter(6, 8))
+  local sixSwung = make({ kind = "Motif", swing = 100 }, 5, I.meter(6, 8))
+  eq(fingerprint(sixSwung.block.notes), fingerprint(six.block.notes), "6/8 does not swing: it is in threes already")
+  ok(not I.swings(I.meter(7, 8)), "nor 7/8")
+  ok(I.swings(I.meter(2, 2)), "but 2/2 does")
+end
+
+-- Borrowed chords.
+do
+  local offAny, withOne, more, edge, inKey, sameScale, said, pent = 0, 0, 0, 0, 0, 0, 0, 0
+  local n = 400
+  for seed = 1, n do
+    local kind = I.KINDS[seed % 3 + 1]
+    local off = make({ kind = kind, borrowed = "Off", scale = "Any" }, seed)
+    if #off.borrowed > 0 then offAny = offAny + 1 end
+    for _, sl in ipairs(off.timeline) do if sl.borrowed then offAny = offAny + 1 end end
+    local idea = make({ kind = kind, borrowed = "Rare", scale = "Any" }, seed)
+    local count = 0
+    for i, sl in ipairs(idea.timeline) do
+      if sl.borrowed then
+        count = count + 1
+        if i == 1 or i >= #idea.timeline - 1 then edge = edge + 1 end
+        -- It really is from outside the key.
+        local home = scalePcs(idea.key)
+        local outside = false
+        for _, pc in ipairs(sl.chord.pcs) do if not home[pc] then outside = true end end
+        if not outside then inKey = inKey + 1 end
+        if sl.key.scale == idea.key.scale or sl.key.root ~= idea.key.root then sameScale = sameScale + 1 end
+        local b = idea.borrowed[1]
+        if not (b and b.text:find(sl.chord.name, 1, true) and b.text:find("from " .. I.keyName(sl.key), 1, true)
+                and idea.chords:find(sl.chord.name .. "*", 1, true)) then said = said + 1 end
+      end
+    end
+    if count == 1 then withOne = withOne + 1 elseif count > 1 then more = more + 1 end
+    if count ~= #idea.borrowed then said = said + 1 end
+    local p = make({ kind = kind, borrowed = "Rare", scale = 10 }, seed)
+    pent = pent + #p.borrowed
+  end
+  eq(offAny, 0, "with Borrowed off, nothing is borrowed")
+  ok(withOne >= n * 0.1 and withOne <= n * 0.35,
+     ("Rare is rare: %d of %d ideas borrow a chord"):format(withOne, n))
+  eq(more, 0, "never more than one")
+  eq(edge, 0, "never the first chord, nor the last two (the cadence stays the key's own)")
+  eq(inKey, 0, "a borrowed chord always has a note from outside the key")
+  eq(sameScale, 0, "from another scale on the same key note")
+  eq(said, 0, "and the idea says which chord, where, and from which scale, and marks it *")
+  eq(pent, 0, "a pentatonic scale borrows nothing")
+end
+
+-- Borrowing and pushing touch one pass of the harmony, so a unit that repeats
+-- exactly must still sit on the chords under it - its ending included.
+do
+  local off, ends = 0, 0
+  for seed = 1, 500 do
+    local idea = make({ kind = "Measure", form = (seed % 2 == 0) and "Loop" or "Song",
+                        borrowed = "Rare", push = "Lots" }, seed)
+    local tl = { timeline = idea.timeline, key = idea.key }
+    for _, n in ipairs(idea.melody) do
+      if I.strength(idea.meter or M44, n.step) >= 2 and not T.onChord(I.keyAt(tl, n.step), I.chordAt(idea.timeline, n.step).chord, n.pos) then
+        off = off + 1
+      end
+    end
+    local f = idea.melody[#idea.melody]
+    if not T.onChord(I.keyAt(tl, f.step), I.chordAt(idea.timeline, f.step).chord, f.pos) then ends = ends + 1 end
+  end
+  eq(off, 0, "a repeated unit's notes on the beat sit on the chords under them, borrowed or pushed")
+  eq(ends, 0, "and its last note on the chord it ends over")
+end
+
+-- What it borrows is what a player would: in C major, from C minor, the iv,
+-- bVI, bVII and bIII; in A minor, the major IV from Dorian.
+do
+  local seen = {}
+  for seed = 1, 3000 do
+    local idea = make({ kind = "Measure", borrowed = "Rare", root = 1, scale = 1, colour = "Triads" }, seed)
+    for _, b in ipairs(idea.borrowed) do seen[b.name .. " " .. b.numeral .. " " .. b.from] = true end
+  end
+  ok(seen["Fm iv C Minor"], "Fm, the iv of C minor")
+  ok(seen["Ab bVI C Minor"], "Ab, its bVI")
+  ok(seen["Bb bVII C Minor"] or seen["Bb bVII C Mixolydian"], "Bb, the bVII")
+  ok(seen["Eb bIII C Minor"], "Eb, the bIII")
+  local minor = {}
+  for seed = 1, 3000 do
+    local idea = make({ kind = "Measure", borrowed = "Rare", root = 14, scale = 2, colour = "Triads" }, seed)
+    for _, b in ipairs(idea.borrowed) do minor[b.name .. " " .. b.numeral .. " " .. b.from] = true end
+  end
+  ok(minor["D IV A Dorian"], "and D, the IV of A Dorian, in A minor")
+end
+
+-- The tune bends to a borrowed chord: under Ab in C major it plays Ab and
+-- Eb, not A and E.
+do
+  local bent, wrong = 0, 0
+  for seed = 1, 2000 do
+    local idea = make({ kind = "Phrase", content = "Both", borrowed = "Rare", root = 1, scale = 1 }, seed)
+    for _, sl in ipairs(idea.timeline) do
+      if sl.borrowed and sl.key.scale == 2 then
+        for _, nt in ipairs(idea.melody) do
+          if nt.step >= sl.s and nt.step < sl.e then
+            local pc = nt.pitch % 12
+            if pc == 8 or pc == 3 or pc == 10 then bent = bent + 1 end
+            if pc == 9 or pc == 4 or pc == 11 then wrong = wrong + 1 end
+          end
+        end
+      end
+    end
+  end
+  ok(bent > 0, "the tune plays the borrowed scale's notes under a chord borrowed from C minor: " .. bent)
+  eq(wrong, 0, "and never the key's own A, E or B against it")
 end
 
 ------------------------------------------------------------------------------

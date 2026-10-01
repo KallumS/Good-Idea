@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.0
+ * Version:        1.1
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -169,7 +169,7 @@ end
 -- Settings that outlive the window
 ------------------------------------------------------------------------------
 
-local SAVED = { "seed", "autoplay" }
+local SAVED = { "seed", "autoplay", "swing" }
 for _, s in ipairs(I.SETTINGS) do SAVED[#SAVED + 1] = s.id end
 
 local function saveState()
@@ -398,11 +398,32 @@ local function drawKey(n)
   for d = 0, T.scaleLen(key) - 1 do names[#names + 1] = T.noteName(key, d) end
   local rolled = ui.idea and (ui.idea.r.rolled.root or ui.idea.r.rolled.scale)
   dim((rolled and ("This idea: " .. I.keyName(key) .. "  -  ") or "") .. table.concat(names, "  "))
+  settingRow({ "borrowed" }, 52)
 end
 
 local function drawFeel(n)
   heading(n, "Feel")
   settingRow({ "pace", "groove" }, 60)
+  settingRow({ "figures", "push" }, 60)
+  dim("Swing")
+  ImGui.SameLine(ctx)
+  -- Swing stretches the eighths inside a quarter-note beat; a metre without
+  -- one has nothing to swing, so it says so instead of offering a slider
+  -- that would do nothing.
+  if ui.meter and I.swings(ui.meter) then
+    ImGui.SetNextItemWidth(ctx, 240)
+    local changed, v = ImGui.SliderInt(ctx, "##swing", st.swing, 0, 100, "%d%%")
+    if changed and v then
+      st.swing = math.max(0, math.min(100, math.floor(v)))
+      touched()
+    end
+    tip("0 is straight. 100 is a full triplet swing: the off-beat eighth lands two thirds of the way " ..
+        "through the beat. Every part swings, and what is inserted and exported swings too.")
+  elseif ui.meter and ui.meter.beat == 6 then
+    dim(("none in %s: it is in threes already"):format(ui.sig))
+  else
+    dim(("none in %s: there are no quarter-note beats to swing"):format(ui.sig))
+  end
 end
 
 local function drawMelody(n)
@@ -473,7 +494,18 @@ local function drawResult()
 
   if idea then
     dimWrapped(idea.summary)
-    dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords)
+    local marks = {}
+    if idea.chords:find("^", 1, true) then marks[#marks + 1] = "^ pushed an eighth early" end
+    if idea.chords:find("*", 1, true) then marks[#marks + 1] = "* borrowed" end
+    dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords ..
+               (#marks > 0 and ("   (" .. table.concat(marks, ", ") .. ")") or ""))
+    -- A borrowed chord is said in full, in the body text rather than the
+    -- dim, so it is noticed: which chord, where, and from which scale.
+    for _, b in ipairs(idea.borrowed) do
+      ImGui.TextWrapped(ctx, "Borrowed chord: " .. b.text)
+      tip("A chord from another scale on the same key note. While it sounds, the tune and the bass " ..
+          "use that scale's notes, the way a player bends to a borrowed chord.")
+    end
     local parts = {}
     for _, p in ipairs(block.parts) do parts[#parts + 1] = p.name end
     dim(("Shape  %s, %s  /  %d notes  /  %s  /  %s, %g bpm"):format(idea.plan.shape, idea.ending,

@@ -20,3 +20,5 @@ the standing rules; this holds the decisions behind them.
 | [0007](0007-a-measure-on-tracks-a-motif-in-one-item.md) | A Measure goes on a track per part; a Motif or Phrase is one item |
 | [0008](0008-velocity-100-accents-above-it.md) | Velocity is 100; accents rise above it |
 | [0009](0009-the-tune-in-the-accent.md) | The tune takes the accent in the roll; the accompaniment takes grey |
+| [0010](0010-figures-push-and-swing.md) | Rhythm: dotted and triplet figures, pushed chords, and swing - laid over, not built in |
+| [0011](0011-borrowed-chords-rarely-and-named.md) | Borrowed chords: rarely, from the same key note, and always named |

@@ -45,6 +45,15 @@ that make music sound like music:
 - **Form.** Ideas are built from parts the way composers build them: a basic
   idea, its repeat, a sequence of it (the same shape on another chord), an
   answer (the same start, a different ending), fragments of it, and a cadence.
+- **Rhythmic colour.** Now and then a pair of notes becomes long-short
+  (dotted) or a beat becomes three (a triplet); chords can be **pushed** an
+  eighth early, onto the "and" before the beat, with the tune and the kick
+  drum coming along; and the whole idea can **swing**.
+- **Borrowed chords.** Rarely - about one idea in four, at most one chord -
+  a chord is borrowed from another scale on the same key note: the minor iv
+  or the bVI in a major key, the major IV in a minor one. The tune bends to
+  it, and the window always tells you which chord it is, where, and which
+  scale it came from.
 
 So there is chance in it - **New Idea** picks which rhythm, which chords,
 which notes - but only among choices that make musical sense.
@@ -59,6 +68,9 @@ Each idea has an **idea number**. The same number with the same settings is
   busier, give it seventh chords, and it is still recognisably idea 4821. Change
   the key and you get the same tune, moved.
 
+A number written down from version 1.0 still gives the same idea with
+Figures on Plain, Push on None, Borrowed on Off and no swing.
+
 ## The settings
 
 Every setting is a row of buttons. Most have an **Any** button: leave a
@@ -69,9 +81,17 @@ see what this idea rolled). Choose a value and it stays put.
    the **content**: Melody, Chords or Both.
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
-   out underneath.
+   out underneath. **Borrowed** - Off, or Rare (the default): whether an
+   idea may borrow a chord (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
-   Syncopated). These shape every part.
+   Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
+   and triplet rhythms now and then - with Triplets the drums shuffle and
+   broken chords roll in triplets); the **push** (None, Some, Lots: chords
+   arriving an eighth early); and **Swing**, a slider from 0 (straight) to
+   100% (full triplet swing, the off-beat eighth two thirds of the way
+   through the beat). Swing is not rolled by Any - it is your groove, and it
+   is kept between sessions. In 6/8 and 12/8 there is no slider (they are in
+   threes already), nor in 7/8. These shape every part.
 4. **Melody** - the **contour** (Arch, Rise, Fall, Wave, Valley) and the
    **register** (Low, Middle, High).
 5. **Chords** - the **colour** (Triads; Sevenths; Mixed - sevenths where they
@@ -88,7 +108,10 @@ no chords to set, a chords-only Phrase has no melody.
 
 Press **New Idea**. The idea appears in the roll - the tune in yellow, chords
 and bass in grey, drums as ticks along the bottom - with its chords written
-out underneath, bar by bar.
+out underneath, bar by bar. A chord marked **^** is pushed an eighth early; a
+chord marked **\*** is borrowed, and a line underneath says which chord, in
+which bar, from which scale: "Borrowed chord: Ab (bVI) in bar 3, from C
+Minor".
 
 - **<** and **>** step back and forward through the ideas you have made.
 - **Idea number** - type a number to go straight to that idea.

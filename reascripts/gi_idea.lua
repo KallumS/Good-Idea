@@ -66,7 +66,7 @@ function M.random(seed)
 end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
-                  chords = 6, bass = 7, drums = 8 }
+                  chords = 6, bass = 7, drums = 8, borrow = 9, push = 10 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -280,6 +280,32 @@ function M.buildSettings()
         Flat = "Every note at 100.",
         Accents = "Every note at 100, and the downbeats and the start of each idea at " .. M.ACCENT .. ".",
       } },
+
+    -- Added in 1.1. They come last in this list because the list is also
+    -- the order the dice are drawn in: added anywhere else, they would have
+    -- changed what every 1.0 idea number rolled.
+    { id = "figures", label = "Figures", step = "Feel",
+      values = { "Plain", "Dotted", "Triplets", "Mixed" }, any = true, default = "Any",
+      weights = { 2, 1, 1, 1 },
+      hints = {
+        Plain = "Straight eighths and sixteenths.",
+        Dotted = "Now and then a pair of notes becomes long-short: a dotted eighth and a sixteenth, a dotted quarter and an eighth.",
+        Triplets = "Now and then a beat becomes three: eighth-note triplets, or three quarter notes across two beats. The drums shuffle.",
+        Mixed = "Now and then dotted, now and then triplets.",
+      } },
+    { id = "push", label = "Push", step = "Feel", values = { "None", "Some", "Lots" },
+      any = true, default = "Any", weights = { 1.5, 1.5, 1 },
+      hints = {
+        None = "Every chord arrives on the beat.",
+        Some = "Some chords arrive an eighth early - on the 'and' before the beat - and the tune and the kick drum come with them.",
+        Lots = "Most chords arrive an eighth early: a pushed, syncopated feel.",
+      } },
+    { id = "borrowed", label = "Borrowed", step = "Key", values = { "Off", "Rare" }, default = "Rare",
+      when = function(st) return st.scale == "Any" or #T.SCALES[st.scale].iv == 7 end,
+      hints = {
+        Off = "Every chord from the scale.",
+        Rare = "About one idea in four borrows one chord from another scale on the same key note - a minor iv or a bVI in a major key, a major IV in a minor one. The window says which chord, and where it is from. Seven-note scales only.",
+      } },
   }
   M.BY_ID = {}
   for _, s in ipairs(M.SETTINGS) do M.BY_ID[s.id] = s end
@@ -301,6 +327,7 @@ function M.newState()
   for _, s in ipairs(M.SETTINGS) do st[s.id] = s.default end
   st.seed = 1
   st.autoplay = 0
+  st.swing = 0
   return st
 end
 
@@ -316,6 +343,8 @@ function M.clampState(st)
   local seed = tonumber(st.seed)
   if seed and seed >= 1 and seed <= M.MAX_SEED then st.seed = math.floor(seed) else st.seed = 1 end
   st.autoplay = (tonumber(st.autoplay) == 1) and 1 or 0
+  local swing = tonumber(st.swing)
+  st.swing = (swing and swing >= 0 and swing <= 100) and math.floor(swing) or 0
   return st
 end
 
@@ -566,7 +595,7 @@ function M.harmony(plan, key, r, meter, rnd, colour)
         last.e = u.start + rs.e
         sl = last
       else
-        sl = { s = u.start + rs.s, e = u.start + rs.e, degree = rs.degree,
+        sl = { s = u.start + rs.s, e = u.start + rs.e, degree = rs.degree, key = key,
                chord = T.chord(key, rs.degree, colour) }
         timeline[#timeline + 1] = sl
       end
@@ -582,6 +611,102 @@ function M.chordAt(timeline, step)
     if timeline[i].s <= step then return timeline[i] end
   end
   return timeline[1]
+end
+
+-- The scale sounding at a step: the key's own, or under a borrowed chord the
+-- scale it was borrowed from.
+function M.keyAt(ctx, step)
+  return M.chordAt(ctx.timeline, step).key or ctx.key
+end
+
+------------------------------------------------------------------------------
+-- Borrowed chords (docs/decisions/0011-borrowed-chords-rarely-and-named.md)
+--
+-- Modal mixture: a chord on the same degree, taken from another scale on
+-- the same key note - Fm (iv) or Ab (bVI) in C major, from C minor; F (IV)
+-- in C minor, from C Dorian. The degree, and so the walk, is unchanged; only
+-- the chord's notes are. Under it everything - the tune, the bass's steps -
+-- reads that scale, the way a player bends to a borrowed chord.
+--
+-- Rare by design: about one idea in four, one chord, never the first or the
+-- last two (the opening tonic and the cadence stay the key's own), never a
+-- diminished or augmented chord. Seven-note scales only, borrowing from
+-- seven-note scales, so the scale positions line up note for note.
+------------------------------------------------------------------------------
+
+M.BORROW_CHANCE = 0.25
+
+-- Where to borrow from, by what the home key is: the parallel minor or major
+-- most of all (the commonest mixture), the modes a step from it next.
+local BORROW_FROM = {
+  major = { { 2, 3 }, { 8, 1.5 }, { 5, 1 }, { 3, 0.7 }, { 6, 0.4 }, { 7, 0.4 } },
+  minor = { { 1, 3 }, { 5, 2 }, { 3, 1.5 }, { 6, 0.8 }, { 8, 0.6 }, { 7, 0.3 } },
+}
+
+local function sameNotes(a, b)
+  if #a.pcs ~= #b.pcs then return false end
+  for _, pc in ipairs(a.pcs) do if not b.has[pc] then return false end end
+  return true
+end
+
+function M.borrow(timeline, key, r, rnd, colour)
+  if r.borrowed ~= "Rare" or T.scaleLen(key) ~= 7 or #timeline < 4 then return {} end
+  if rnd() >= M.BORROW_CHANCE then return {} end
+  local tonic = T.degreeQuality(key, 0)
+  local from = BORROW_FROM[(tonic == "major") and "major" or "minor"]
+  local inKey = {}
+  for d = 0, 6 do inKey[T.pc(key, d)] = true end
+  local cands, weights = {}, {}
+  for i = 2, #timeline - 2 do
+    local sl = timeline[i]
+    for _, f in ipairs(from) do
+      if T.SCALES[f[1]].iv ~= T.SCALES[key.scale].iv then
+        local other = T.key(key.root, f[1])
+        local ch = T.chord(other, sl.degree, colour)
+        local q = ch.quality
+        local outside = false
+        for _, pc in ipairs(ch.pcs) do if not inKey[pc] then outside = true end end
+        if (q == "major" or q == "minor") and outside and not sameNotes(ch, sl.chord) then
+          cands[#cands + 1] = { slot = sl, key = other, chord = ch }
+          weights[#weights + 1] = f[2]
+        end
+      end
+    end
+  end
+  if #cands == 0 then return {} end
+  local c = weighted(rnd, cands, weights)
+  c.slot.chord, c.slot.key = c.chord, c.key
+  -- Named against the home key: Ab in C major is bVI, Fm is iv.
+  local shift = (c.chord.rootPc - T.pc(key, c.slot.degree)) % 12
+  local numeral = ((shift == 11) and "b" or (shift == 1) and "#" or "") ..
+                  T.degreeNumeral(c.key, c.slot.degree)
+  c.slot.borrowed = { name = c.chord.name, numeral = numeral, from = M.keyName(c.key) }
+  return { c.slot }
+end
+
+------------------------------------------------------------------------------
+-- Push: chords that arrive an eighth early
+--
+-- A chord change on a beat moves back an eighth, onto the "and" before it
+-- (some, or most, by the Push setting). The chord before is cut short to
+-- make room, so the chords still follow each other with no gap. The tune's
+-- note on that beat comes early with it (`M.melody`), and so does the kick
+-- (`M.drumsPart`). Only where the beat is a quarter or longer, and only
+-- where the chord before is long enough to give up an eighth.
+------------------------------------------------------------------------------
+
+local PUSH = { None = 0, Some = 0.3, Lots = 0.65 }
+
+function M.push(timeline, meter, r, rnd)
+  local p = PUSH[r.push] or 0
+  if p == 0 or meter.beat < 4 then return end
+  for i = 2, #timeline do
+    local sl, prev = timeline[i], timeline[i - 1]
+    if sl.s % meter.beat == 0 and prev.e - prev.s >= meter.beat + 2 and rnd() < p then
+      sl.s, prev.e = sl.s - 2, prev.e - 2
+      sl.pushed = true
+    end
+  end
 end
 
 ------------------------------------------------------------------------------
@@ -645,6 +770,9 @@ local function syncopated(meter, base, unit, slots, k, rnd)
     table.sort(t)
     turns[#turns + 1] = { t = t, s = meanStrength(meter, base, unit, t) }
   end
+  -- Ties are left to the sort as 1.0 left them: the list is never longer
+  -- than a bar's sixteen steps, and Lua only varies its sort past a hundred
+  -- items, so the same turns always come out in the same order.
   table.sort(turns, function(a, b) return a.s < b.s end)
   -- The most off-beat turn, or the one after it.
   return turns[(#turns > 1 and coin(rnd, 0.35)) and 2 or 1].t
@@ -656,9 +784,70 @@ M.PACE = {
   Busy    = { unit = 1, lo = 0.4,  hi = 0.65, halves = true },
 }
 
+------------------------------------------------------------------------------
+-- Figures: dotted and triplet rhythms
+--
+-- Laid over a rhythm after it is made, a beat (or a pair of beats) at a
+-- time, by chance:
+--
+--   - two eighths in a beat become a dotted eighth and a sixteenth;
+--     two quarters in two beats, a dotted quarter and an eighth;
+--   - a beat with two or more notes becomes an eighth-note triplet; two
+--     quarters in two beats, a quarter-note triplet.
+--
+-- Triplet notes fall between the sixteenths, so their steps are fractions
+-- (a third of a beat is 4/3 of a step). Only in metres whose beat is a
+-- quarter note: 6/8 and 12/8 are already in threes, and 7/8 has no beats to
+-- divide. With Plain nothing is drawn, so a 1.0 idea is unchanged.
+------------------------------------------------------------------------------
+
+local FIGURES = {
+  Dotted   = { dot = 0.5,  tri = 0 },
+  Triplets = { dot = 0,    tri = 0.45 },
+  Mixed    = { dot = 0.25, tri = 0.2 },
+}
+
+-- `onsets` are steps from the start of a cell `len` long that begins
+-- `base` steps into the bar.
+function M.figure(meter, base, len, onsets, figures, rnd)
+  local F = FIGURES[figures]
+  if not F or meter.beat ~= 4 then return onsets end
+  local function within(a, b)
+    local o = {}
+    for _, x in ipairs(onsets) do if x >= a and x < b then o[#o + 1] = x end end
+    return o
+  end
+  local b = (4 - base % 4) % 4
+  local out = within(0, b)
+  local function add(...) for _, x in ipairs({ ... }) do out[#out + 1] = x end end
+  while b < len do
+    local step = 4
+    local pair = (b + 8 <= len) and within(b, b + 8) or {}
+    if #pair == 2 and pair[1] == b and pair[2] == b + 4 then
+      local x = rnd()
+      if x < F.tri / 2 then add(b, b + 8 / 3, b + 16 / 3); step = 8
+      elseif x < F.tri / 2 + F.dot then add(b, b + 6); step = 8 end
+    end
+    if step == 4 then
+      local beat = within(b, math.min(len, b + 4))
+      if b + 4 <= len and #beat >= 2 and beat[1] == b then
+        local x = rnd()
+        if x < F.tri then add(b, b + 4 / 3, b + 8 / 3)
+        elseif #beat == 2 and beat[2] == b + 2 and x < F.tri + F.dot then add(b, b + 3)
+        else add(table.unpack(beat)) end
+      else
+        add(table.unpack(beat))
+      end
+    end
+    b = b + step
+  end
+  table.sort(out)
+  return out
+end
+
 -- The onsets of a cell `len` steps long starting at `base` in the bar, in
 -- steps from the start of the cell.
-function M.cell(meter, base, len, pace, groove, rnd)
+function M.cell(meter, base, len, pace, groove, rnd, figures)
   local P = M.PACE[pace] or M.PACE.Flowing
   local pieces = { { 0, len } }
   -- Busy and straight rhythms are made a half bar at a time, for variety;
@@ -682,7 +871,7 @@ function M.cell(meter, base, len, pace, groove, rnd)
       for _, o in ipairs(pat) do out[#out + 1] = pc[1] + o * P.unit end
     end
   end
-  return out
+  return M.figure(meter, base, len, out, figures, rnd)
 end
 
 -- The rhythm of a whole unit: a cell a bar, the first bar's cell often
@@ -697,7 +886,7 @@ function M.unitRhythm(u, meter, r, rnd)
     local len = math.min(cellLen, u.len - at)
     local cell
     if first and len == cellLen and coin(rnd, r.pace == "Busy" and 0.5 or 0.6) then cell = first
-    else cell = M.cell(meter, (u.start + at) % meter.bar, len, r.pace, r.groove, rnd) end
+    else cell = M.cell(meter, (u.start + at) % meter.bar, len, r.pace, r.groove, rnd, r.figures) end
     first = first or cell
     for _, o in ipairs(cell) do out[#out + 1] = at + o end
     at = at + len
@@ -716,6 +905,11 @@ function M.unitRhythm(u, meter, r, rnd)
     out = kept
   end
   table.sort(out)
+  -- An ending is a note to land on, not the middle of a triplet: a unit
+  -- with a cadence (open ones too) ends on a step of its own.
+  if u.cad ~= "none" then
+    while #out > 1 and M.offGrid(out[#out]) do out[#out] = nil end
+  end
   return out
 end
 
@@ -776,18 +970,19 @@ function M.melodyRange(key, register)
   return lo, lo + span
 end
 
-local function nearestOn(ctx, ch, target, avoid)
+-- `key` everywhere below is the scale sounding at that moment
+-- (`M.keyAt`): the key's own, or a borrowed chord's.
+local function nearestOn(ctx, key, ch, target, avoid)
   local best
   for p = ctx.lo, ctx.hi do
-    if T.onChord(ctx.key, ch, p) and p ~= avoid then
+    if T.onChord(key, ch, p) and p ~= avoid then
       if not best or math.abs(p - target) < math.abs(best - target) then best = p end
     end
   end
   return best or math.max(ctx.lo, math.min(ctx.hi, round(target)))
 end
 
-local function choose(ctx, prev, prevIv, prevNct, reps, target, ch, strong, rnd, goal, before)
-  local key = ctx.key
+local function choose(ctx, key, prev, prevIv, prevNct, reps, target, ch, strong, rnd, goal, before)
   for relax = 0, 2 do
     local cands, ws = {}, {}
     for iv = -5, 5 do
@@ -816,15 +1011,15 @@ local function choose(ctx, prev, prevIv, prevNct, reps, target, ch, strong, rnd,
     end
     if #cands > 0 then return weighted(rnd, cands, ws) end
   end
-  return nearestOn(ctx, ch, target)
+  return nearestOn(ctx, key, ch, target)
 end
 
 -- Where a closing unit lands: its last note, at `step`.
 local function goalFor(ctx, u, prev, target, step)
-  local key = ctx.key
+  local key = M.keyAt(ctx, step)
   local n = T.scaleLen(key)
   local ch = M.chordAt(ctx.timeline, step).chord
-  local tonic = T.chord(key, 0, "Triads")
+  local tonic = T.chord(ctx.key, 0, "Triads")
   local ok
   if u.cad == "PAC" then ok = function(p) return p % n == 0 end
   elseif u.cad == "IAC" then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
@@ -854,19 +1049,20 @@ local function walkUnit(ctx, u, onsets, rnd, state)
     local step = u.start + o
     local sl = M.chordAt(ctx.timeline, step)
     local ch = sl.chord
+    local key = sl.key or ctx.key
     local strong = M.strength(ctx.meter, step) >= 2 or i == 1
     local target = ctx.target(step)
     local p
     if not state.prev then
-      p = nearestOn(ctx, ch, target)
+      p = nearestOn(ctx, key, ch, target)
       ctx.firstPos = p
     elseif closing and i == #onsets then
-      p = goalFor(ctx, u, state.prev, target, step) or choose(ctx, state.prev, state.iv, state.nct, reps, target, ch, true, rnd)
+      p = goalFor(ctx, u, state.prev, target, step) or choose(ctx, key, state.prev, state.iv, state.nct, reps, target, ch, true, rnd)
     elseif closing and i == #onsets - 1 then
       local goal = goalFor(ctx, u, state.prev, target, u.start + onsets[#onsets])
-      p = choose(ctx, state.prev, state.iv, state.nct, reps, goal or target, ch, strong, rnd, goal, state.before)
+      p = choose(ctx, key, state.prev, state.iv, state.nct, reps, goal or target, ch, strong, rnd, goal, state.before)
     else
-      p = choose(ctx, state.prev, state.iv, state.nct, reps, target, ch, strong, rnd, nil, state.before)
+      p = choose(ctx, key, state.prev, state.iv, state.nct, reps, target, ch, strong, rnd, nil, state.before)
     end
     state.before = state.prev
     if state.prev then
@@ -875,7 +1071,7 @@ local function walkUnit(ctx, u, onsets, rnd, state)
       state.reps = reps
     end
     state.prev = p
-    state.nct = not T.onChord(ctx.key, ch, p)
+    state.nct = not T.onChord(key, ch, p)
     out[#out + 1] = { at = o, pos = p }
   end
   return out
@@ -893,15 +1089,18 @@ end
 
 -- A statement moved onto new chords keeps its shape: the notes on the beat
 -- that are not on the chord now go to the nearest chord tone, the rest stay.
-local function fit(ctx, u, notes)
-  for _, nt in ipairs(notes) do
+-- With `ending`, the last note counts as on the beat too: it is the
+-- unit's ending (an exact repeat of a unit that closes).
+local function fit(ctx, u, notes, ending)
+  for i, nt in ipairs(notes) do
     local step = u.start + nt.at
-    if M.strength(ctx.meter, step) >= 2 then
+    if M.strength(ctx.meter, step) >= 2 or (ending and i == #notes and u.cad ~= "none") then
       local ch = M.chordAt(ctx.timeline, step).chord
-      if not T.onChord(ctx.key, ch, nt.pos) then
+      local key = M.keyAt(ctx, step)
+      if not T.onChord(key, ch, nt.pos) then
         local up, down = nt.pos + 1, nt.pos - 1
-        while not T.onChord(ctx.key, ch, up) do up = up + 1 end
-        while not T.onChord(ctx.key, ch, down) do down = down - 1 end
+        while not T.onChord(key, ch, up) do up = up + 1 end
+        while not T.onChord(key, ch, down) do down = down - 1 end
         nt.pos = (up - nt.pos <= nt.pos - down) and up or down
       end
     end
@@ -938,7 +1137,9 @@ function M.melody(plan, ctx, r, rnd)
     local notes
     local same = src and src.len == u.len and src.cad == u.cad
     if u.kind == "repeat" and same then
-      notes = copyNotes(src, 0, u.len, 0)
+      -- (Fitted too: the chords are the same degrees, but a borrowed chord
+      -- or a push may have come to one pass and not the other.)
+      notes = fit(ctx, u, copyNotes(src, 0, u.len, 0), true)
     elseif u.kind == "seq" and same and u.cad == "none" then
       local s = bestShift(ctx, src, 0, u.len, u.shift, state.prev)
       notes = fit(ctx, u, copyNotes(src, 0, u.len, s))
@@ -986,7 +1187,8 @@ function M.melody(plan, ctx, r, rnd)
     if #notes > 0 then
       state.prev = notes[#notes].pos
       state.iv = #notes > 1 and (notes[#notes].pos - notes[#notes - 1].pos) or state.iv
-      state.nct = not T.onChord(ctx.key, M.chordAt(ctx.timeline, u.start + notes[#notes].at).chord, notes[#notes].pos)
+      local at = u.start + notes[#notes].at
+      state.nct = not T.onChord(M.keyAt(ctx, at), M.chordAt(ctx.timeline, at).chord, notes[#notes].pos)
     end
   end
 
@@ -995,26 +1197,74 @@ function M.melody(plan, ctx, r, rnd)
   local all = {}
   for _, u in ipairs(units) do
     for i, nt in ipairs(u.notes) do
-      all[#all + 1] = { step = u.start + nt.at, pos = nt.pos, last = (i == #u.notes),
+      all[#all + 1] = { order = #all, step = u.start + nt.at, pos = nt.pos, last = (i == #u.notes),
                         unitEnd = u.start + u.len, first = (i == 1) or nt.fresh or false }
     end
   end
-  table.sort(all, function(a, b) return a.step < b.step end)
+  table.sort(all, function(a, b)
+    if a.step ~= b.step then return a.step < b.step end
+    return a.order < b.order
+  end)
   -- Two notes on one step (a copied cell meeting the next unit): keep the later.
   local notes = {}
   for i, nt in ipairs(all) do
     if not all[i + 1] or all[i + 1].step ~= nt.step then notes[#notes + 1] = nt end
   end
+  notes = M.wholeTriplets(notes)
   M.untangle(ctx, notes)
+  -- A pushed chord takes the tune's note on its beat with it, an eighth
+  -- early - as long as nothing else is sounding in that eighth, and the
+  -- note does not begin a triplet (which would leave the other two behind).
+  for _, sl in ipairs(ctx.timeline) do
+    if sl.pushed then
+      for i, nt in ipairs(notes) do
+        local before, after = notes[i - 1], notes[i + 1]
+        if nt.step == sl.s + 2 and i > 1 and before.step < sl.s and not (after and M.offGrid(after.step)) then
+          nt.step, nt.pushed = sl.s, true
+        end
+      end
+    end
+  end
   for i, nt in ipairs(notes) do
     local nextStep = notes[i + 1] and notes[i + 1].step or plan.total
     local len = nextStep - nt.step
     if not nt.last then len = math.min(len, 8) end
     nt.len = math.max(1, len)
-    nt.pitch = T.pitch(ctx.key, nt.pos)
-    nt.accent = nt.first or nt.step % ctx.meter.bar == 0
+    nt.pitch = T.pitch(M.keyAt(ctx, nt.step), nt.pos)
+    nt.accent = nt.first or nt.pushed or nt.step % ctx.meter.bar == 0
   end
   return notes
+end
+
+-- Is a step between the sixteenths (part of a triplet)?
+function M.offGrid(step) return math.abs(step - math.floor(step + 0.5)) > 1e-6 end
+
+-- Every triplet in the tune whole. Copying half a statement, holding a
+-- closing note, or cutting at a cadence can take the end off a triplet
+-- that began before it; what is left is not a triplet but a stumble. So a
+-- note between the sixteenths stays only if it is one of a whole
+-- eighth-note triplet (three in a beat) or quarter-note triplet (three in
+-- two beats) starting on a beat; otherwise it goes, and the note before it
+-- simply lasts longer.
+function M.wholeTriplets(notes)
+  local at = {}
+  local function key(x) return ("%.4f"):format(x) end
+  for _, n in ipairs(notes) do at[key(n.step)] = true end
+  local function has(x) return at[key(x)] end
+  local out = {}
+  for _, n in ipairs(notes) do
+    local keep = not M.offGrid(n.step)
+    if not keep then
+      for _, span in ipairs({ 4 / 3, 8 / 3 }) do
+        for k = 1, 2 do
+          local g = n.step - k * span
+          if not M.offGrid(g / 4) and has(g) and has(g + span) and has(g + 2 * span) then keep = true end
+        end
+      end
+    end
+    if keep then out[#out + 1] = n end
+  end
+  return out
 end
 
 -- The last pass over the whole tune. Copying a statement onto new chords
@@ -1031,9 +1281,10 @@ end
 -- note a step away - whichever is nearest, in range, and makes no tritone
 -- with either neighbour.
 function M.untangle(ctx, notes)
-  local key = ctx.key
-  local n = T.scaleLen(key)
-  local function semis(a, b) return math.abs(T.pitch(key, a) - T.pitch(key, b)) end
+  local n = T.scaleLen(ctx.key)
+  -- A note's pitch at a position, read in the scale sounding at its step.
+  local function P(note, pos) return T.pitch(M.keyAt(ctx, note.step), pos or note.pos) end
+  local function apart(x, px, y, py) return math.abs(P(x, px) - P(y, py)) end
   local NEAR, WIDE = { 1, -1, 2, -2, 3, -3, 4, -4 }, { 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6 }
   -- `wide` looks further, and a little outside the range, when nothing
   -- near will do.
@@ -1041,17 +1292,18 @@ function M.untangle(ctx, notes)
     local a, b, c = notes[i - 1], notes[i], notes[i + 1]
     if not b then return false end
     local ch = M.chordAt(ctx.timeline, b.step).chord
+    local key = M.keyAt(ctx, b.step)
     local strong = M.strength(ctx.meter, b.step) >= 2
     local slack = wide and 3 or 1
     for _, d in ipairs(wide and WIDE or NEAR) do
       local p = b.pos + d
       local inRange = p >= ctx.lo - slack and p <= ctx.hi + slack
       local fits = (strong and T.onChord(key, ch, p)) or (not strong and (math.abs(d) == 1 or wide))
-      local clash = strict and ((a and semis(a.pos, p) == 6) or (c and semis(p, c.pos) == 6))
+      local clash = strict and ((a and apart(a, nil, b, p) == 6) or (c and apart(b, p, c, nil) == 6))
       -- A repeat is fine; three of a kind is not.
       local z, y = notes[i - 2], notes[i + 2]
-      local triple = (a and z and a.pos == p and z.pos == p) or (a and c and a.pos == p and c.pos == p)
-                     or (c and y and c.pos == p and y.pos == p)
+      local same = function(x) return x and apart(x, nil, b, p) == 0 end
+      local triple = (same(a) and same(z)) or (same(a) and same(c)) or (same(c) and same(y))
       if fits and inRange and not clash and not triple and p ~= b.pos then
         b.pos = p
         return true
@@ -1066,17 +1318,17 @@ function M.untangle(ctx, notes)
   for _ = 1, 2 do
     for i = 2, #notes do
       local a, b, c = notes[i - 1], notes[i], notes[i + 1]
-      if c and a.pos == b.pos and b.pos == c.pos then
+      if c and P(a) == P(b) and P(b) == P(c) then
         -- (In the diminished and whole-tone scales every way out may be a
         -- tritone; a tritone is better there than a note three times.)
         tryMove(i, true)
       end
-      if semis(a.pos, b.pos) == 6 then
+      if apart(a, nil, b, nil) == 6 then
         if i == #notes or not tryMove(i, false) then tryMove(i - 1, false) end
       end
-      if not b.first and semis(a.pos, b.pos) > 12 then
+      if not b.first and apart(a, nil, b, nil) > 12 then
         local p = b.pos + ((a.pos > b.pos) and n or -n)
-        if semis(a.pos, p) ~= 6 and not (c and semis(p, c.pos) == 6)
+        if apart(a, nil, b, p) ~= 6 and not (c and apart(b, p, c, nil) == 6)
            and p >= ctx.lo - 3 and p <= ctx.hi + 3 then b.pos = p end
       end
     end
@@ -1102,8 +1354,19 @@ local function barStarts(meter, s, e)
   return out
 end
 
--- The onsets of a pulse inside [s, e).
-local function pulseOnsets(meter, s, e, pace, groove, rnd, pattern)
+-- A pushed chord is played as if it began on its beat, with its first
+-- stroke moved back onto the push: so it is struck on the "and", and not
+-- struck again an eighth later on the beat.
+local function gridStart(sl) return sl.pushed and sl.s + 2 or sl.s end
+local function onPush(sl, onsets)
+  if not sl.pushed then return onsets end
+  if onsets[1] == sl.s + 2 then onsets[1] = sl.s else table.insert(onsets, 1, sl.s) end
+  return onsets
+end
+
+-- The onsets of a pulse inside [s, e), with dotted and triplet figures laid
+-- over it bar by bar.
+local function pulseOnsets(meter, s, e, pace, groove, rnd, pattern, figures)
   -- Straight is on the beat (eighths when busy); syncopated is spread over
   -- the eighths.
   local unit = (pace == "Busy" or groove == "Syncopated") and 2 or meter.beat
@@ -1121,7 +1384,9 @@ local function pulseOnsets(meter, s, e, pace, groove, rnd, pattern)
       pat = {}
       for i = 0, slots - 1 do pat[#pat + 1] = i end
     end
-    for _, o in ipairs(pat) do out[#out + 1] = b + o * unit end
+    local rel = {}
+    for i, o in ipairs(pat) do rel[i] = o * unit end
+    for _, o in ipairs(M.figure(meter, b % meter.bar, stop - b, rel, figures, rnd)) do out[#out + 1] = b + o end
   end
   return out
 end
@@ -1143,14 +1408,19 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     if #v == 0 then v = T.voice(sl.chord.pcs, nil, win.lo, win.hi + 12) end
     prev = v
     local onsets, perNote = {}, false
+    local from = gridStart(sl)
     if r.chordStyle == "Pulse" then
-      onsets = pulseOnsets(meter, sl.s, sl.e, r.pace, r.groove, rnd, pattern)
+      onsets = onPush(sl, pulseOnsets(meter, from, sl.e, r.pace, r.groove, rnd, pattern, r.figures))
     elseif r.chordStyle == "Broken" then
       local unit = (r.pace == "Calm") and meter.beat or (r.pace == "Busy" and 1 or 2)
-      for st = sl.s, sl.e - 1, unit do onsets[#onsets + 1] = st end
+      -- In triplets, an arpeggio rolls in eighth-note triplets.
+      if r.pace ~= "Calm" and meter.beat == 4 and (r.figures == "Triplets" or
+         (r.figures == "Mixed" and coin(rnd, 0.4))) then unit = 4 / 3 end
+      for st = from, sl.e - 1e-6, unit do onsets[#onsets + 1] = st end
+      onsets = onPush(sl, onsets)
       perNote = true
     else
-      onsets = barStarts(meter, sl.s, sl.e)
+      onsets = onPush(sl, barStarts(meter, from, sl.e))
     end
     for i, o in ipairs(onsets) do
       local stop = onsets[i + 1] or sl.e
@@ -1166,7 +1436,7 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     if win.bass then
       local b = T.bassNote(sl.chord.rootPc, prevBass, 36, 47)
       prevBass = b
-      local bars = barStarts(meter, sl.s, sl.e)
+      local bars = onPush(sl, barStarts(meter, gridStart(sl), sl.e))
       for i, o in ipairs(bars) do addNote(notes, o, (bars[i + 1] or sl.e) - o, b, o % meter.bar == 0) end
     end
   end
@@ -1194,19 +1464,20 @@ end
 function M.bassPart(ctx, timeline, r, rnd, kick)
   local notes = {}
   local meter = ctx.meter
-  local key = ctx.key
   local prev
   for idx, sl in ipairs(timeline) do
     local root = T.bassNote(sl.chord.rootPc, prev, 31, 50)
     prev = root
     local nextSl = timeline[idx + 1]
+    local key = sl.key or ctx.key
     if r.bass == "Pulse" then
       local on = {}
       for _, b in ipairs(barStarts(meter, sl.s, sl.e)) do
         local barStart = (b // meter.bar) * meter.bar
         for _, k in ipairs(kick) do
           local st = barStart + k
-          if st >= sl.s and st < sl.e then on[#on + 1] = st end
+          -- (A pushed chord's bass comes on the push, not again on the beat.)
+          if st >= sl.s and st < sl.e and not (sl.pushed and st == sl.s + 2) then on[#on + 1] = st end
         end
       end
       local seen, list = {}, {}
@@ -1220,16 +1491,22 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
       local unit = meter.beat
       if r.pace == "Calm" and (meter.bar // 2) % meter.beat == 0 and meter.beats % 2 == 0 then unit = meter.bar // 2 end
       local beats = {}
-      for st = sl.s, sl.e - 1, unit do beats[#beats + 1] = st end
+      for st = gridStart(sl), sl.e - 1, unit do beats[#beats + 1] = st end
+      beats = onPush(sl, beats)
       for i, st in ipairs(beats) do
         local p
         if i == 1 then p = root
         elseif i == #beats and nextSl then
-          -- A step into the next chord's root, from the scale.
+          -- A step into the next chord's root, from the scale sounding now:
+          -- the scale note a semitone or a tone from it, nearer the root
+          -- being left.
           local nr = T.bassNote(nextSl.chord.rootPc, root, 31, 50)
-          local pos = T.nearestPos(key, nr)
-          local above, below = T.pitch(key, pos + 1), T.pitch(key, pos - 1)
-          p = (math.abs(above - root) < math.abs(below - root)) and above or below
+          local best
+          for q = nr - 2, nr + 2 do
+            local d = math.abs(q - nr)
+            if d >= 1 and T.posOf(key, q) and (not best or math.abs(q - root) < math.abs(best - root)) then best = q end
+          end
+          p = best or root
         else
           local fifth = T.bassNote(sl.chord.pcs[3] or sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52)
           local choices = { fifth, root + 12 <= 52 and root + 12 or root, T.bassNote(sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52) }
@@ -1238,7 +1515,7 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
         addNote(notes, st, (beats[i + 1] or sl.e) - st, p, st % meter.bar == 0)
       end
     else
-      local bars = barStarts(meter, sl.s, sl.e)
+      local bars = onPush(sl, barStarts(meter, gridStart(sl), sl.e))
       for i, st in ipairs(bars) do addNote(notes, st, (bars[i + 1] or sl.e) - st, root, st % meter.bar == 0) end
     end
   end
@@ -1258,7 +1535,7 @@ local function backbeats(meter, pace)
   return out
 end
 
-function M.drumsPart(ctx, plan, r, rnd, kick)
+function M.drumsPart(ctx, plan, r, rnd, kick, timeline)
   local D = M.DRUM
   local meter = ctx.meter
   local notes = {}
@@ -1291,7 +1568,19 @@ function M.drumsPart(ctx, plan, r, rnd, kick)
     for _, s in ipairs(snare) do
       if s < fillFrom then addNote(notes, base + s, 1, D.snare, true) end
     end
-    for h = 0, fillFrom - 1, hatUnit do
+    -- In triplets the hats shuffle: the first and last of each beat's
+    -- three (all three when busy).
+    local hats = {}
+    if r.figures == "Triplets" and r.pace ~= "Calm" and meter.beat == 4 then
+      for beat = 0, fillFrom - 1, 4 do
+        hats[#hats + 1] = beat
+        if r.pace == "Busy" then hats[#hats + 1] = beat + 4 / 3 end
+        hats[#hats + 1] = beat + 8 / 3
+      end
+    else
+      for h = 0, fillFrom - 1, hatUnit do hats[#hats + 1] = h end
+    end
+    for _, h in ipairs(hats) do
       local openHat = r.groove == "Syncopated" and b % 2 == 1 and h == meter.bar - 2 and hatUnit <= 2
       if not (crashes[b] and h == 0) then
         addNote(notes, base + h, openHat and 2 or 1, openHat and D.open or D.hat, false)
@@ -1307,6 +1596,25 @@ function M.drumsPart(ctx, plan, r, rnd, kick)
       end
     end
   end
+
+  -- A pushed chord takes the kick with it: on the push, not on the beat
+  -- after - unless a fill is playing there.
+  for _, sl in ipairs(timeline or {}) do
+    if sl.pushed then
+      local b = sl.s // meter.bar
+      local inFill = fills[b] and (sl.s - b * meter.bar) >= meter.bar - meter.beat
+      if not inFill then
+        for i = #notes, 1, -1 do
+          if notes[i].pitch == D.kick and notes[i].step == sl.s + 2 then table.remove(notes, i) end
+        end
+        addNote(notes, sl.s, 1, D.kick, true)
+      end
+    end
+  end
+  table.sort(notes, function(a, c)
+    if a.step ~= c.step then return a.step < c.step end
+    return a.pitch < c.pitch
+  end)
   return notes
 end
 
@@ -1318,26 +1626,63 @@ function M.keyName(key)
   return T.ROOTS[key.root].name .. " " .. T.SCALES[key.scale].name
 end
 
-local function toBlockNotes(list, chan, vel)
+------------------------------------------------------------------------------
+-- Swing
+--
+-- The last thing done to an idea, after every note is placed: each quarter
+-- note's grid is stretched so its off-beat eighth lands later - at 100% two
+-- thirds of the way through the beat, where a triplet would be - and the
+-- sixteenths either side move with it in proportion. Beats themselves never
+-- move. Triplet notes are already in threes and are left alone. Only in
+-- metres whose beat is a quarter or a half note: 6/8 and 12/8 swing by
+-- being in threes, and 7/8 has no quarter notes to swing.
+------------------------------------------------------------------------------
+
+function M.swings(meter) return meter.beat % 4 == 0 end
+
+function M.swingWarp(meter, amount)
+  amount = tonumber(amount) or 0
+  if amount <= 0 or not M.swings(meter) then return nil end
+  local d = math.min(amount, 100) / 100 / 6      -- of a beat: 1/6 is triplet swing
+  return function(step)
+    local q = math.floor(step / 4) * 4
+    local f = (step - q) / 4
+    if f <= 0.5 then f = f * (0.5 + d) / 0.5
+    else f = 0.5 + d + (f - 0.5) * (0.5 - d) / 0.5 end
+    return q + f * 4
+  end
+end
+
+local function whole(x) return math.abs(x - math.floor(x + 0.5)) < 1e-9 end
+
+local function toBlockNotes(list, chan, vel, warp)
   local out = {}
   for _, n in ipairs(list) do
-    out[#out + 1] = { start = n.step / 4, len = n.len / 4, pitch = n.pitch, chan = chan,
+    local s, e = n.step, n.step + n.len
+    if warp then
+      if whole(s) then s = warp(s) end
+      if whole(e) then e = warp(e) end
+    end
+    out[#out + 1] = { start = s / 4, len = (e - s) / 4, pitch = n.pitch, chan = chan,
                       accent = n.accent, vel = (vel == "Accents" and n.accent) and M.ACCENT or 100 }
   end
   table.sort(out, function(a, b)
     if a.start ~= b.start then return a.start < b.start end
-    return a.pitch < b.pitch
+    if a.pitch ~= b.pitch then return a.pitch < b.pitch end
+    return a.len < b.len
   end)
   return out
 end
 
--- The chords as a musician reads them: bar by bar, | C G | Am F |.
+-- The chords as a musician reads them: bar by bar, | C G | Am F |. A chord
+-- pushed an eighth early is shown in the bar it belongs to, marked ^; a
+-- borrowed chord is marked *.
 function M.chordLine(timeline, meter)
   local bars = {}
   for _, sl in ipairs(timeline) do
-    local b = sl.s // meter.bar + 1
+    local b = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
     bars[b] = bars[b] or {}
-    table.insert(bars[b], sl.chord.name)
+    table.insert(bars[b], (sl.pushed and "^" or "") .. sl.chord.name .. (sl.borrowed and "*" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
       bars[x] = bars[x] or {}
@@ -1370,6 +1715,8 @@ function M.make(st, meter, seed)
   local plan = M.plan(r, meter, M.stream(seed, "plan"))
   local colour = r.colour
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
+  local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
+  M.push(timeline, meter, r, M.stream(seed, "push"))
 
   local lo, hi = M.melodyRange(key, r.register)
   local ctx = { key = key, meter = meter, lo = lo, hi = hi, timeline = timeline,
@@ -1407,7 +1754,7 @@ function M.make(st, meter, seed)
     local kick = M.kickPattern(meter, r, M.stream(seed, "drums"))
     parts[#parts + 1] = { name = "Bass", list = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick) }
     if r.drums == "On" then
-      parts[#parts + 1] = { name = "Drums", list = M.drumsPart(ctx, plan, r, M.stream(seed, "drums"), kick),
+      parts[#parts + 1] = { name = "Drums", list = M.drumsPart(ctx, plan, r, M.stream(seed, "drums"), kick, timeline),
                             drums = true }
     end
   end
@@ -1415,15 +1762,23 @@ function M.make(st, meter, seed)
   -- Channels: in one item each part has its own (drums on 10, as General
   -- MIDI expects); on tracks of their own every part is on 1 but the drums.
   local oneItem = r.kind ~= "Measure" or r.layout == "One item"
+  local warp = M.swingWarp(meter, st.swing)
   local block = { parts = {}, notes = {}, beats = plan.total / 4,
                   layout = (oneItem and "one") or "tracks" }
   for i, p in ipairs(parts) do
     local chan = p.drums and 9 or (oneItem and (i - 1) or 0)
-    local notes = toBlockNotes(p.list, chan, r.velocity)
+    local notes = toBlockNotes(p.list, chan, r.velocity, warp)
     block.parts[#block.parts + 1] = { name = p.name, notes = notes, chan = chan, drums = p.drums }
     for _, n in ipairs(notes) do block.notes[#block.notes + 1] = n end
   end
-  table.sort(block.notes, function(a, b) return a.start < b.start end)
+  -- Fully ordered: Lua's sort is not stable, and may shuffle notes that
+  -- start together differently from one run to the next.
+  table.sort(block.notes, function(a, b)
+    if a.start ~= b.start then return a.start < b.start end
+    if a.chan ~= b.chan then return a.chan < b.chan end
+    if a.pitch ~= b.pitch then return a.pitch < b.pitch end
+    return a.len < b.len
+  end)
 
   local what = r.kind
   if r.kind == "Phrase" then what = what .. " (" .. r.content:lower() .. ")" end
@@ -1438,6 +1793,18 @@ function M.make(st, meter, seed)
     said[#said + 1] = r.chordStyle:lower() .. ((r.chordStyle == "Broken" and arpName) and (" (" .. arpName .. ")") or "")
   end
   if r.kind == "Measure" then said[#said + 1] = r.bass:lower() .. " bass" end
+  if r.figures ~= "Plain" then said[#said + 1] = r.figures:lower() end
+  if r.push ~= "None" then said[#said + 1] = r.push:lower() .. " push" end
+  if warp then said[#said + 1] = math.floor(st.swing) .. "% swing" end
+
+  -- Each borrowed chord, said in full for the window.
+  local notes = {}
+  for _, sl in ipairs(borrowed) do
+    local b = sl.borrowed
+    b.bar = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
+    b.text = ("%s (%s) in bar %d, from %s"):format(b.name, b.numeral, b.bar, b.from)
+    notes[#notes + 1] = b
+  end
 
   local cadNames = { PAC = "closes on the tonic", IAC = "closes on the third or fifth",
                      HC = "ends on the dominant (open)", open = "ends open, to loop", none = "" }
@@ -1448,6 +1815,7 @@ function M.make(st, meter, seed)
     chords = M.chordLine(timeline, meter),
     shape = plan.shape,
     ending = cadNames[plan.ending] or "",
+    borrowed = notes,
   }
 end
 

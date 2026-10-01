@@ -24,7 +24,7 @@ local g = {}
 local function resetFrame()
   g.idDepth, g.colDepth, g.colStack, g.idStack, g.paths = 0, 0, {}, {}, {}
   g.buttons, g.ink, g.texts, g.checkboxes, g.headings, g.tooltips = {}, {}, {}, {}, {}, {}
-  g.inputs = {}
+  g.inputs, g.sliders = {}, {}
   g.rects, g.bgAlpha, g.windowBg = {}, nil, nil
 end
 resetFrame()
@@ -112,6 +112,18 @@ function ImGui.InputInt(_, label, v, step, fast)
   if g.typeSeed then return true, g.typeSeed end
   return false, v
 end
+-- ReaImGui's SliderInt(ctx, label, v, v_min, v_max, format) returns whether
+-- it changed and the value.
+function ImGui.SliderInt(_, label, v, lo, hi, fmt)
+  if type(label) ~= "string" then error("SliderInt label is a " .. type(label)) end
+  if math.type(v) ~= "integer" or math.type(lo) ~= "integer" or math.type(hi) ~= "integer" then
+    error("SliderInt takes integers: " .. tostring(v) .. " " .. tostring(lo) .. " " .. tostring(hi))
+  end
+  if type(fmt) ~= "string" then error("SliderInt format is a " .. type(fmt)) end
+  g.sliders[#g.sliders + 1] = { label = label, v = v, lo = lo, hi = hi }
+  if g.slide then return true, g.slide end
+  return false, v
+end
 function ImGui.SetNextItemWidth(_, w)
   if type(w) ~= "number" then error("SetNextItemWidth with a " .. type(w)) end
 end
@@ -180,9 +192,9 @@ local function start()
 end
 
 -- One frame, optionally clicking the n-th button drawn in it.
-local function frame(click, toggle, typeSeed)
+local function frame(click, toggle, typeSeed, slide)
   resetFrame()
-  g.clickTarget, g.clicked, g.toggle, g.typeSeed = click, nil, toggle, typeSeed
+  g.clickTarget, g.clicked, g.toggle, g.typeSeed, g.slide = click, nil, toggle, typeSeed, slide
   local f = deferred
   deferred = nil
   if not f then error("the script stopped deferring") end
@@ -568,6 +580,106 @@ frame()
 frame()
 ok(has(g.texts, "6/8"), "6/8 too")
 ok(#g.rects > 1, "and the idea still draws")
+
+------------------------------------------------------------------------------
+-- 1.1: swing, figures, push, borrowed chords
+------------------------------------------------------------------------------
+
+-- The swing slider: in 4/4 a slider, and moving it swings the idea.
+fresh()
+clickIn("kind", "Phrase")
+clickIn("content", "Melody")
+clickIn("pace", "Flowing")
+clickIn("figures", "Plain")
+eq(#g.sliders, 1, "a swing slider in 4/4")
+eq(g.sliders[1].v, 0, "starting straight")
+eq(g.sliders[1].lo .. "-" .. g.sliders[1].hi, "0-100", "from 0 to 100")
+tr = P.selTracks[1]
+click("Insert at cursor")
+local straight = {}
+for _, n in ipairs(tr.items[1].take.notes) do straight[#straight + 1] = n.sp end
+frame(nil, nil, nil, 100)
+frame()
+eq(g.sliders[1].v, 100, "the slider moves")
+ok(has(g.texts, "100% swing"), "and the idea says it is swung")
+click("Insert at cursor")
+local later, earlier = 0, 0
+for i, n in ipairs(tr.items[2].take.notes) do
+  if straight[i] and n.sp > straight[i] + 1 then later = later + 1 end
+  if straight[i] and n.sp < straight[i] - 1 then earlier = earlier + 1 end
+end
+ok(later > 0, "inserted notes off the beat land later: " .. later)
+eq(earlier, 0, "and none earlier")
+atexitFn()
+ok(P.ext["GoodIdea:state"]:find("swing=100", 1, true), "the swing is saved")
+start()
+frame()
+eq(g.sliders[1].v, 100, "and comes back")
+
+-- In 6/8 there is nothing to swing, and the window says so.
+fresh()
+P.num, P.den = 6, 8
+frame()
+frame()
+eq(#g.sliders, 0, "no swing slider in 6/8")
+ok(has(g.texts, "in threes already"), "it says 6/8 is in threes already")
+P.num, P.den = 7, 8
+frame()
+frame()
+ok(has(g.texts, "no quarter-note beats to swing"), "and that 7/8 has no quarter-note beats to swing")
+P.num, P.den = 4, 4
+
+-- The new rows are there, and Borrowed only for scales that can borrow.
+fresh()
+for _, row in ipairs({ "figures", "push", "borrowed" }) do
+  local n = 0
+  for i in ipairs(g.buttons) do if g.paths[i] == row then n = n + 1 end end
+  ok(n > 0, "the " .. row .. " row is in the window")
+end
+eq(chosenIn("borrowed"), "Rare", "borrowing starts on Rare")
+clickIn("scale", "Maj Pent")
+local nb = 0
+for i in ipairs(g.buttons) do if g.paths[i] == "borrowed" then nb = nb + 1 end end
+eq(nb, 0, "a pentatonic scale hides the Borrowed row: it has nothing to borrow")
+clickIn("scale", "Any")
+nb = 0
+for i in ipairs(g.buttons) do if g.paths[i] == "borrowed" then nb = nb + 1 end end
+ok(nb > 0, "and Any shows it again")
+
+-- An idea with a borrowed chord flags it: which chord, where, from where.
+do
+  local found
+  for seed = 1, 400 do
+    local st = I.newState()
+    st.kind = "Phrase"
+    st.content = "Both"
+    I.clampState(st)
+    local idea = I.make(st, I.meter(4, 4), seed)
+    if #idea.borrowed > 0 then found = { seed = seed, b = idea.borrowed[1] }; break end
+  end
+  ok(found, "some idea in the first 400 borrows a chord")
+  fresh()
+  clickIn("kind", "Phrase")
+  clickIn("content", "Both")
+  frame(nil, nil, found.seed)
+  frame()
+  ok(has(g.texts, "Borrowed chord: " .. found.b.text), "the window says: Borrowed chord: " .. found.b.text)
+  ok(has(g.texts, "* borrowed"), "and the chord line marks it")
+  clickIn("borrowed", "Off")
+  ok(not has(g.texts, "Borrowed chord:"), "with Borrowed off, nothing is flagged")
+end
+
+-- Pushed chords are marked in the chord line.
+fresh()
+clickIn("kind", "Measure")
+clickIn("push", "Lots")
+local marked = false
+for s = 1, 10 do
+  frame(nil, nil, s)
+  frame()
+  if has(g.texts, "^ pushed an eighth early") then marked = true; break end
+end
+ok(marked, "a pushed chord is marked ^ in the chord line, and the mark is explained")
 
 ------------------------------------------------------------------------------
 -- Settings survive, and bad ones are put right
