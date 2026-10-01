@@ -40,6 +40,14 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.2" author="kallums" time="2026-10-01T23:59:00Z">
+        <changelog><![CDATA[A shorter window, drums on their own, and more rhythm in the chords. Every step but the first now folds to one line saying what is chosen in it - click its name to open it. Drums is a fourth kind of idea beside Motif, Phrase and Measure: 1 to 16 bars of General MIDI drums - backbeat, half-time, four on the floor or breakbeat, on hats or ride - with fills at the end, every 4 bars or every 2, and a crash where each fill lands. A Measure always has drums now. Pull: chords played an eighth late, laid back while the tune, bass and drums stay on the beat. Chord pace 1.5 a bar: three chords over two bars. Dotted and triplet figures now reach every chord style and a walking bass. Layout sits by the Insert, Export and Audition buttons. With Figures on Plain, Push and Pull on None, Borrowed on Off and no swing, every idea number from 1.0 gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
