@@ -158,8 +158,12 @@ local function audit(idea, tag)
       rule("every note is a MIDI note", n.pitch >= 0 and n.pitch <= 127, tag)
       rule("every note has length", n.len > 0, tag)
       rule("every note is inside the idea", n.start >= -1e-9 and n.start + n.len <= b.beats + 1e-9, tag)
-      rule("velocity is 100, or 115 when accented",
-           n.vel == 100 or (r.velocity == "Accents" and n.vel == I.ACCENT), tag)
+      if r.velocity == "Shaped" then
+        rule("a shaped velocity is a real one, 1 to 127", n.vel >= 1 and n.vel <= 127, tag)
+      else
+        rule("velocity is 100, or 115 when accented",
+             n.vel == 100 or (r.velocity == "Accents" and n.vel == I.ACCENT), tag)
+      end
       if not p.drums then
         rule("every pitched note is in the scale sounding under it", inKeyAt(n.start * 4, n.pitch % 12),
              tag .. " " .. p.name .. " " .. T.pitchName(n.pitch))
@@ -276,7 +280,68 @@ local function audit(idea, tag)
            ch.has[n.pitch % 12] == true or (r.voicing == "Rootless" and n.pitch % 12 == ch.nine), tag)
     end
   end
+  -- Part-writing by the book (1.7).
+  if r.partWriting == "By the book" and cp then
+    local ctl = idea.chordTimeline
+    -- An inverted chord does not double its bass note above it (but for a
+    -- diminished triad, which does); a Phrase's own bass is its lowest note.
+    if r.chordStyle ~= "Broken" then
+      for _, sl in ipairs(ctl) do
+        -- (A two-note chord - a pentatonic scale's - keeps what it has.)
+        if sl.inversion and #sl.chord.pcs >= 3 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) then
+          local v = {}
+          for _, n in ipairs(cp.notes) do if math.abs(n.start * 4 - sl.s) < 1e-6 then v[#v + 1] = n.pitch end end
+          table.sort(v)
+          if r.kind ~= "Measure" then table.remove(v, 1) end
+          local dbl = false
+          for _, p in ipairs(v) do if p % 12 == sl.bassPc then dbl = true end end
+          if #v > 0 then rule("by the book, an inverted chord does not double its bass", not dbl, tag .. " " .. idea.chords) end
+        end
+      end
+    end
+    -- A half close with Mixed stands on a plain triad.
+    if r.colour == "Mixed" then
+      for _, u in ipairs(idea.plan.units) do
+        if u.cad == "HC" then
+          local sl
+          for _, x in ipairs(idea.timeline) do if (x.beat or x.s) < u.start + u.len and x.e >= u.start + u.len - 1e-9 then sl = x end end
+          if sl and not sl.borrowed and not sl.flavour then
+            rule("by the book, a half close with Mixed is a plain triad", #sl.chord.pcs <= 3, tag .. " " .. idea.chords)
+          end
+        end
+      end
+    end
+    -- No parallel fifths or octaves between the tune and the bass each
+    -- chord stands on (the first note of the idea and a unit's last note,
+    -- which stay, excepted).
+    -- (In the whole-tone and diminished scales every way out of one can
+    -- be another, or a tritone: those are left to themselves.)
+    if mel and r.scale < 14 then
+      local tl2 = (r.kind == "Measure") and tl or ctl
+      for i = 2, #mel do
+        local a, b = mel[i - 1], mel[i]
+        local ba, bb = I.bassPcOf(I.chordAt(tl2, a.step)), I.bassPcOf(I.chordAt(tl2, b.step))
+        if ba ~= bb and a.pitch ~= b.pitch and not (i == 2 and b.last) then
+          local ia, ib = (a.pitch - ba) % 12, (b.pitch - bb) % 12
+          rule("by the book, no parallel fifths or octaves between the tune and the bass",
+               not (ia == ib and (ia == 0 or ia == 7)), tag .. " " .. idea.chords)
+        end
+      end
+    end
+  end
   local bp = part(idea, "Bass")
+  if bp and r.partWriting == "By the book" and r.chordStyle ~= "Broken" then
+    -- The bass never meets the chords or goes in among them.
+    local lowAt = {}
+    for _, n in ipairs(cp.notes) do lowAt[n.start] = math.min(lowAt[n.start] or 127, n.pitch) end
+    for t, low in pairs(lowAt) do
+      for _, n in ipairs(bp.notes) do
+        if n.start <= t + 1e-9 and n.start + n.len > t + 1e-9 then
+          rule("by the book, the bass stays under the chords", n.pitch < low, tag)
+        end
+      end
+    end
+  end
   if bp then
     for _, n in ipairs(bp.notes) do
       rule("the bass stays in the bass", n.pitch >= 28 and n.pitch <= 55, tag)
@@ -303,7 +368,8 @@ for mi, sig in ipairs(METERS) do
   for _, kind in ipairs(I.KINDS) do
     local seeds = ((mi == 1) and 120 or 25) * DEPTH
     for seed = 1, seeds do
-      local st = { kind = kind, velocity = (seed % 4 == 0) and "Accents" or "Flat",
+      local st = { kind = kind, velocity = ({ "Shaped", "Flat", "Shaped", "Accents" })[seed % 4 + 1],
+                   partWriting = (seed % 5 == 3) and "Free" or "By the book",
                    layout = (seed % 3 == 0) and "One item" or "Tracks",
                    register = (seed % 7 == 0) and "Any" or "Middle",
                    voicing = T.VOICINGS[seed % #T.VOICINGS + 1],
@@ -1560,6 +1626,158 @@ do
     if fingerprint(c.block.notes) ~= fingerprint(d.block.notes) then bad = bad + 1 end
   end
   eq(bad, 0, "the new chord settings, hidden, change nothing")
+end
+
+------------------------------------------------------------------------------
+-- 1.7: part-writing by the book, shaped velocity
+------------------------------------------------------------------------------
+
+do
+  -- What sounds at a time in a part's notes, low to high.
+  local function at(notes, t)
+    local out = {}
+    for _, n in ipairs(notes or {}) do
+      if n.start <= t + 1e-9 and n.start + n.len > t + 1e-9 then out[#out + 1] = n.pitch end
+    end
+    table.sort(out)
+    return out
+  end
+  local function tally(pw, n)
+    local c = { inv = 0, dbl = 0, sev = 0, sevOk = 0, strokes = 0, cross = 0, wide = 0, tuneN = 0, close = 0,
+                pairs = 0, par = 0, hc = 0, hc7 = 0 }
+    for seed = 1, n do
+      local idea = make({ kind = "Measure", chordStyle = "Block", colour = "Mixed", partWriting = pw,
+                          push = "None", pull = "None" }, seed)
+      local ch, bs, mel = part(idea, "Chords").notes, part(idea, "Bass").notes, part(idea, "Melody").notes
+      local prevV, prevCh
+      for _, sl in ipairs(idea.chordTimeline) do
+        local v = {}
+        for _, x in ipairs(ch) do if math.abs(x.start * 4 - sl.s) < 1e-6 then v[#v + 1] = x.pitch end end
+        table.sort(v)
+        if sl.inversion and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) and #sl.chord.pcs >= 3 then
+          c.inv = c.inv + 1
+          for _, p in ipairs(v) do if p % 12 == sl.bassPc then c.dbl = c.dbl + 1; break end end
+        end
+        if prevV then
+          local s7
+          for _, pc in ipairs(prevCh.pcs) do if T.roleOf(prevCh, pc) == "7" then s7 = pc end end
+          local p7
+          if s7 and not sl.chord.has[s7] then for _, p in ipairs(prevV) do if p % 12 == s7 then p7 = p end end end
+          if p7 and (sl.chord.has[(p7 - 1) % 12] or sl.chord.has[(p7 - 2) % 12]) then
+            c.sev = c.sev + 1
+            for _, p in ipairs(v) do if p == p7 - 1 or p == p7 - 2 then c.sevOk = c.sevOk + 1; break end end
+          end
+        end
+        prevV, prevCh = v, sl.chord
+      end
+      local times = {}
+      for _, x in ipairs(ch) do times[x.start] = true end
+      for t in pairs(times) do
+        local v, b, m = at(ch, t), at(bs, t)[1], at(mel, t)[1]
+        if v[1] and b then
+          c.strokes = c.strokes + 1
+          if b >= v[1] then c.cross = c.cross + 1 elseif v[1] - b > 19 then c.wide = c.wide + 1 end
+        end
+        if v[1] and m then
+          c.tuneN = c.tuneN + 1
+          if m - v[#v] >= -2 and m - v[#v] <= 7 then c.close = c.close + 1 end
+        end
+      end
+      local ts, seen = {}, {}
+      for _, x in ipairs(mel) do if not seen[x.start] then seen[x.start] = true; ts[#ts + 1] = x.start end end
+      for _, x in ipairs(bs) do if not seen[x.start] then seen[x.start] = true; ts[#ts + 1] = x.start end end
+      table.sort(ts)
+      local pm, pb
+      for _, t in ipairs(ts) do
+        local m, b = at(mel, t)[1], at(bs, t)[1]
+        if m and b then
+          if pm and pm ~= m and pb % 12 ~= b % 12 then
+            c.pairs = c.pairs + 1
+            local ia, ib = (pm - pb) % 12, (m - b) % 12
+            if ia == ib and (ia == 0 or ia == 7) then c.par = c.par + 1 end
+          end
+          pm, pb = m, b
+        end
+      end
+      for _, u in ipairs(idea.plan.units) do
+        if u.cad == "HC" then
+          local sl = I.chordAt(idea.timeline, u.start + u.len - 1)
+          if not sl.borrowed and not sl.flavour then
+            c.hc = c.hc + 1
+            if #sl.chord.pcs > 3 then c.hc7 = c.hc7 + 1 end
+          end
+        end
+      end
+    end
+    return c
+  end
+  local book, free = tally("By the book", 200), tally("Free", 200)
+  local function pct(a, b) return 100 * a / math.max(1, b) end
+  ok(free.dbl > free.inv * 0.5 and book.dbl == 0,
+     ("an inverted chord does not double its bass by the book: %d of %d (free %d of %d)"):format(book.dbl, book.inv, free.dbl, free.inv))
+  ok(pct(book.sevOk, book.sev) >= 90,
+     ("a seventh falls a step into the next chord: %.0f%% of %d"):format(pct(book.sevOk, book.sev), book.sev))
+  ok(book.cross == 0 and free.cross > free.strokes * 0.05,
+     ("the bass never meets the chords by the book: %d of %d (free %.0f%%)"):format(book.cross, book.strokes, pct(free.cross, free.strokes)))
+  ok(pct(book.wide, book.strokes) <= 5,
+     ("and is no more than an octave and a fifth under them: %.1f%% wider"):format(pct(book.wide, book.strokes)))
+  ok(pct(book.close, book.tuneN) >= 80 and pct(free.close, free.tuneN) <= 40,
+     ("the chords sit just under the tune, a fifth at most (a step or two over, at most): %.0f%% (free %.0f%%)"):format(
+       pct(book.close, book.tuneN), pct(free.close, free.tuneN)))
+  ok(pct(book.par, book.pairs) <= 2 and pct(free.par, free.pairs) >= 5,
+     ("parallel fifths and octaves between tune and bass: %.1f%% of moves (free %.1f%%)"):format(
+       pct(book.par, book.pairs), pct(free.par, free.pairs)))
+  ok(book.hc7 == 0 and free.hc7 > 0,
+     ("a half close with Mixed is a plain V by the book: %d sevenths in %d (free %d)"):format(book.hc7, book.hc, free.hc7))
+  -- With Sevenths, chosen for sevenths everywhere, the V7 stays.
+  local kept = 0
+  for seed = 1, 100 do
+    local idea = make({ kind = "Measure", colour = "Sevenths", partWriting = "By the book" }, seed)
+    for _, u in ipairs(idea.plan.units) do
+      if u.cad == "HC" and #I.chordAt(idea.timeline, u.start + u.len - 1).chord.pcs > 3 then kept = kept + 1 end
+    end
+  end
+  ok(kept > 0, "with Sevenths a half close keeps its V7: " .. kept)
+  -- Free is 1.6, note for note: hidden, under a Motif, it changes nothing.
+  local bad = 0
+  for seed = 1, 30 do
+    local a = make({ kind = "Motif", partWriting = "Free" }, seed)
+    local b = make({ kind = "Motif", partWriting = "By the book" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then bad = bad + 1 end
+  end
+  eq(bad, 0, "Part-writing, hidden under a Motif, changes nothing")
+end
+
+-- Shaped velocity: the downbeat loudest, the off-beats softest; the chords
+-- under the tune, a chord's inner notes under its top.
+do
+  local down, off, mel, chords, inner, top = {}, {}, {}, {}, {}, {}
+  local function mean(t) local s = 0 for _, x in ipairs(t) do s = s + x end return s / math.max(1, #t) end
+  for seed = 1, 60 do
+    local idea = make({ kind = "Measure", velocity = "Shaped", chordStyle = "Block", swing = 0 }, seed)
+    for _, p in ipairs(idea.block.parts) do
+      local byStart = {}
+      for _, n in ipairs(p.notes) do
+        local step = n.start * 4
+        if p.name == "Melody" then
+          mel[#mel + 1] = n.vel
+          if step % 16 == 0 then down[#down + 1] = n.vel elseif step % 2 ~= 0 then off[#off + 1] = n.vel end
+        elseif p.name == "Chords" then
+          chords[#chords + 1] = n.vel
+          byStart[n.start] = byStart[n.start] or {}
+          table.insert(byStart[n.start], n)
+        end
+      end
+      for _, list in pairs(byStart) do
+        table.sort(list, function(a, b) return a.pitch < b.pitch end)
+        top[#top + 1] = list[#list].vel
+        for i = 1, #list - 1 do inner[#inner + 1] = list[i].vel end
+      end
+    end
+  end
+  ok(mean(down) > mean(off) + 10, ("the downbeat louder than the sixteenths: %.0f against %.0f"):format(mean(down), mean(off)))
+  ok(mean(mel) > mean(chords) + 5, ("the tune over the chords: %.0f against %.0f"):format(mean(mel), mean(chords)))
+  ok(mean(top) > mean(inner), ("a chord's top over its inner notes: %.0f against %.0f"):format(mean(top), mean(inner)))
 end
 
 C.done()

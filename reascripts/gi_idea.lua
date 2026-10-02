@@ -1569,6 +1569,7 @@ function M.melody(plan, ctx, r, rnd)
   for _, u in ipairs(units) do
     for i, nt in ipairs(u.notes) do
       all[#all + 1] = { order = #all, step = u.start + nt.at, pos = nt.pos, last = (i == #u.notes),
+                        closes = (i == #u.notes) and u.cad ~= "none" and u.cad,
                         unitEnd = u.start + u.len, first = (i == 1) or nt.fresh or false }
     end
   end
@@ -1714,8 +1715,8 @@ end
 -- and stand a fifth (or an octave, or a unison) apart both times, contrary
 -- motion included. `bassPcAt(step)` is the bass sounding at a step.
 --
--- Of the two, the later note moves (the first note of the idea and the
--- last note of each unit - its ending - stay); failing that, the earlier one. A note on
+-- Of the two, the later note moves (the first and last notes of the idea,
+-- and the last note of each unit that closes - its cadence - stay); failing that, the earlier one. A note on
 -- the beat moves to another chord tone, one off it a step - whichever is
 -- nearest and keeps every rule `untangle` keeps.
 function M.parallel(ctx, bassPcAt, a, ap, b, bp)
@@ -1729,16 +1730,22 @@ end
 
 function M.noParallels(ctx, notes, bassPcAt)
   local function P(note, pos) return T.pitch(M.keyAt(ctx, note.step), pos or note.pos) end
-  local function try(i)
+  local function try(i, wide)
     local a, b, c = notes[i - 1], notes[i], notes[i + 1]
-    if not b or b.last or i == 1 then return false end
+    -- (A full or imperfect close's last note is its goal and stays; a half
+    -- close's or an open ending's may move to another note of its chord.)
+    local goal = b and (b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC")
+    if not b or goal or i == 1 or (i == #notes and not b.closes) then return false end
     local ch = M.chordAt(ctx.timeline, b.step).chord
     local key = M.keyAt(ctx, b.step)
-    local strong = M.strength(ctx.meter, b.step) >= 2
-    for _, d in ipairs({ 1, -1, 2, -2, 3, -3, 4, -4 }) do
+    local strong = M.strength(ctx.meter, b.step) >= 2 or b.closes
+    -- (`wide` looks further, and a little further outside the range, when
+    -- nothing near will do.)
+    local slack = wide and 3 or 1
+    for _, d in ipairs(wide and { 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6 } or { 1, -1, 2, -2, 3, -3, 4, -4 }) do
       local p = b.pos + d
-      local fits = (strong and T.onChord(key, ch, p)) or (not strong and math.abs(d) == 1)
-      local good = fits and p >= ctx.lo - 1 and p <= ctx.hi + 1
+      local fits = (strong and T.onChord(key, ch, p)) or (not strong and (math.abs(d) == 1 or wide))
+      local good = fits and p >= ctx.lo - slack and p <= ctx.hi + slack
       if good then
         local pp = P(b, p)
         for _, x in ipairs({ a, c }) do
@@ -1760,7 +1767,12 @@ function M.noParallels(ctx, notes, bassPcAt)
   for _ = 1, 2 do
     for i = 2, #notes do
       if M.parallel(ctx, bassPcAt, notes[i - 1], nil, notes[i], nil) then
-        if not try(i) then try(i - 1) end
+        if not (try(i) or try(i - 1) or try(i, true) or try(i - 1, true)) and i > 3 then
+          -- (Boxed in - the way out would be a third note the same: the
+          -- note before that moves first, then this one.)
+          local keep = notes[i - 2].pos
+          if try(i - 2) and not (try(i - 1) or try(i - 1, true)) then notes[i - 2].pos = keep end
+        end
       end
     end
   end

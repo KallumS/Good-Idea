@@ -6,9 +6,13 @@
 
 local C = { failures = 0, checks = 0 }
 
+-- GOOD_IDEA_SAY=1 prints every check, passing ones too (to read the numbers).
+local SAY = os.getenv("GOOD_IDEA_SAY")
+
 function C.ok(cond, what)
   C.checks = C.checks + 1
-  if not cond then C.failures = C.failures + 1; io.write("FAIL  ", what, "\n") end
+  if not cond then C.failures = C.failures + 1; io.write("FAIL  ", what, "\n")
+  elseif SAY then io.write("ok    ", what, "\n") end
   return cond
 end
 

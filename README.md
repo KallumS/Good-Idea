@@ -77,7 +77,7 @@ Each idea has an **idea number**. The same number with the same settings is
 
 A number written down from version 1.0 still gives the same idea with
 Figures on Plain, Push and Pull on None, Borrowed, Flavours and Inversions
-on Off, Voicing on Close and no swing.
+on Off, Voicing on Close, Part-writing on Free, Velocity on Flat and no swing.
 
 ## The settings
 
@@ -136,6 +136,14 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      one: the cadential I6/4, a passing or a pedal six-four. A diminished
      chord is usually in first inversion, as vii6. The bass plays it, and
      the chord line writes it C/E.
+   - **Part-writing** - By the book (the default) or Free. By the book does
+     what the harmony and orchestration books say: an inverted chord does
+     not double its bass note (G/B plays no second B above the bass), a
+     chord's seventh falls a step into the next chord, a half close with
+     Mixed stands on a plain V, the chords sit just under the tune (a step
+     or two into it at most), the bass sits under the chords and no more
+     than an octave and a fifth below them, and the tune and the bass make
+     no parallel fifths or octaves. Free is how Good Idea wrote before 1.7.
 6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
    new chord). A Measure has no drums: make a groove with **Drums**, the
@@ -165,8 +173,11 @@ Minor".
 - **Play new ideas** auditions each idea as soon as it is made.
 And get it out - at the bottom, with the buttons that send it:
 
-- **Velocity** - everything leaves at 100. Choose **Accents** and the downbeats
-  and the start of each part of the idea rise to 115.
+- **Velocity** - **Shaped** (the default) plays it as a player would: the
+  downbeat loudest, the off-beats softest, the chords under the tune and a
+  chord's inner notes under its top. **Flat** is everything at 100;
+  **Accents** is 100 with the downbeats and the start of each part of the idea
+  at 115.
 - **Layout** (a Measure) - **Tracks**, a new track per part, or **One item**,
   every part in one item on its own MIDI channel.
 
