@@ -2042,23 +2042,38 @@ function M.tension(ctx, notes, r, rnd, total)
       local onIt = T.onChord(key, sl.chord, b.pos)
       local goal = b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC"
       local pa, pb = P(a.step, a.pos), P(b.step, b.pos)
+      -- By the book, no parallels with the bass from the notes in their new
+      -- places: a suspension does not hide parallel octaves (C held over
+      -- into Bb and falling to it, the bass C to Bb), nor a pulled chord's
+      -- bass under a late resolution.
+      local late = { step = b.step + delay, pos = b.pos }
+      local function clear(list)
+        if not ctx.bassPcAt then return true end
+        for k = 2, #list do
+          if list[k - 1] and list[k] and M.parallel(ctx, ctx.bassPcAt, list[k - 1], nil, list[k], nil) then return false end
+        end
+        return true
+      end
       -- An anticipation: a close's goal, an eighth early.
       local antic = b.closes and b.last and pa ~= pb and not (c and P(c.step, c.pos) == pb)
                     and b.step - 2 > a.step and P(b.step - 2, b.pos) == pb
                     and not M.offGrid(b.step - 2) and M.strength(meter, b.step - 2) < 2
+                    and clear({ a, { step = b.step - 2, pos = b.pos } })
       -- A suspension: the note before, a step above, held over a change.
       local before = chordOf(a.step)
       local sus = not goal and still and onIt and before ~= sl and a.pos == b.pos + 1
                   and P(b.step, a.pos) == pa and not T.onChord(key, sl.chord, a.pos)
                   and T.onChord(M.keyAt(ctx, a.step), before.chord, a.pos)
-                  and againstBass(b.step, pa, pb)
+                  and againstBass(b.step, pa, pb) and againstBass(b.step + delay - 1e-3, pa, pb)
+                  and clear({ a, late, c })
       -- An appoggiatura: leapt up to, a step above the chord's note.
       local app = b.pos + 1
       local pApp = P(b.step, app)
       local appo = not goal and still and onIt and a.pos <= app - 2 and app <= ctx.hi + 1
                    and not T.onChord(key, sl.chord, app) and math.abs(pApp - pa) ~= 6
                    and math.abs(pApp - pa) <= 12 and againstBass(b.step, pApp, pb)
-                   and not (ctx.bassPcAt and (M.parallel(ctx, ctx.bassPcAt, a, nil, { step = b.step, pos = app })))
+                   and againstBass(b.step + delay - 1e-3, pApp, pb)
+                   and clear({ a, { step = b.step, pos = app }, late, c })
       if was ~= nil then
         kind = (was == "anticipation" and antic and was) or (was == "suspension" and sus and was)
                or (was == "appoggiatura" and appo and was) or nil
@@ -2441,7 +2456,9 @@ function M.undouble(v, ch, bassPc, style)
         local pc = want[k]
         if pc then
           for q = p - 12, p + 12 do
-            if q % 12 == pc and not used[q] and (not best or cost(q) < cost(best)) then best = q end
+            -- (Never under the chords' floor, G2, that the voicings keep:
+            -- the bass must have room under it.)
+            if q % 12 == pc and not used[q] and q >= math.min(43, p) and (not best or cost(q) < cost(best)) then best = q end
           end
         end
         if best then break end
