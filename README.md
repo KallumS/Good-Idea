@@ -112,24 +112,30 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    threes already), nor in 7/8. These shape every part.
 4. **Melody** - the **contour** (Arch, Rise, Fall, Wave, Valley) and the
    **register** (Low, Middle, High).
-5. **Chords** - the **colour** (Triads; Sevenths; Mixed - sevenths where they
-   pull, added ninths elsewhere) and, with Mixed, the **flavours** (Off;
-   Rare; or Common, on about half the chords that can: now and then a chord becomes a sus4 or sus2, an add2 or add9, a 6th,
-   a 9th, or the diminished chord on its third - G7 becomes Bm7b5 - built
-   from the scale, never at the start or the cadence), the **chord pace** (0.5 a bar - a chord
-   every two bars; 1 a bar; 1.5 a bar - three chords over two bars, 3+3+2
-   beats; 2 a bar; or 4 a bar - a chord on every beat, three a bar in 3/4.
-   Any rolls 0.5, 1 and 2; 1.5 and 4 are there to choose), the **style**
-   (Block, Pulse, Broken), the **voicing** (Close; Open - root, fifth, then
-   the third an octave up; Drop 2, Drop 3 and Drop 2 & 4 - four notes with
-   the second, third, or second and fourth from the top dropped an octave;
-   Shell - root, third and seventh; Rootless - third, fifth, seventh and
-   ninth, the bass having the root) and the **inversions** (Off; Rare; or
-   Common: now and then the third, fifth or seventh in the bass, only where
-   it makes the bass move by step - C G/B Am, V4/2 falling to I6 - and the
-   six-fours only where the textbooks allow them: the cadential I6/4, a
-   passing or a pedal six-four. A diminished chord is usually in first
-   inversion, as vii6. The bass plays it; the chord line writes it C/E).
+5. **Chords**:
+   - **Colour** - Triads; Sevenths; or Mixed: sevenths where they pull,
+     added ninths elsewhere.
+   - **Flavours** (with Mixed) - Off, Rare or Common (about half the chords
+     that can). Now and then a chord becomes a sus4 or sus2, an add2 or
+     add9, a 6th, a 9th, or the diminished chord on its third (G7 becomes
+     Bm7b5). Always built from the scale; never the first chord or the
+     cadence.
+   - **Chord pace** - 0.5 a bar (a chord every two bars), 1 a bar, 1.5 a
+     bar (three chords over two bars, 3+3+2 beats), 2 a bar, or 4 a bar (a
+     chord on every beat; three a bar in 3/4). Any rolls 0.5, 1 and 2; 1.5
+     and 4 are there to choose.
+   - **Style** - Block, Pulse, Broken.
+   - **Voicing** - Close; Open (root, fifth, then the third an octave up);
+     Drop 2, Drop 3 and Drop 2 & 4 (four notes with the second, third, or
+     second and fourth from the top dropped an octave); Shell (root, third
+     and seventh); Rootless (third, fifth, seventh and ninth - the bass has
+     the root).
+   - **Inversions** - Off, Rare or Common. Now and then the third, fifth or
+     seventh in the bass, only where it makes the bass move by step (C G/B
+     Am; V4/2 falling to I6), and a six-four only where the textbooks allow
+     one: the cadential I6/4, a passing or a pedal six-four. A diminished
+     chord is usually in first inversion, as vii6. The bass plays it, and
+     the chord line writes it C/E.
 6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
    new chord). A Measure has no drums: make a groove with **Drums**, the
@@ -244,7 +250,8 @@ kit. Put the drum idea's track through a General MIDI drum instrument.
 
 For anyone changing the code: `tools/test.sh` runs every test. The tests run
 the real engine and the real window against stand-ins for REAPER and ReaImGui
-and check over half a million things about what comes out - that every note
+and check over half a million things about what comes out (22 million in
+the deep sweep) - that every note
 is in the key, that the tune is on the chord on every beat, that phrases end
 on real cadences, that a Loop's chords really do go round, that the drums are
 on channel 10, that every button in the window can be clicked. See

@@ -21,6 +21,8 @@ in doubt, do what Midi Catalogue does.
 | `reascripts/gi_midi.lua` | The MIDI file writer (Midi Catalogue's, plus a channel per note). |
 | `reascripts/gi_place.lua` | Everything that touches REAPER. |
 | `tools/demo.lua` | Ideas printed as note names. **Read this before and after any musical change.** |
+| `tools/bite.sh` | Breaks the code on purpose in a copy and runs a suite: proves a test bites. |
+| `docs/HANDOVER.md` | The prompt to start a fresh session with. |
 | `docs/decisions/` | Why things are the way they are, one file per decision. |
 | `docs/sessions/` | What happened in a session, written at the end of it. |
 
@@ -254,7 +256,9 @@ everywhere means strength >= 2.
    its off-beat eighth lands up to 2/3 of the way through; whole-step starts
    and ends only (triplets are left alone); `I.swings(meter)` is false for
    6/8, 12/8 and 7/8. `idea.borrowed` lists borrowed chords with `text` for
-   the window; the chord line marks a pushed chord `^` and a borrowed `*`.
+   the window; the chord line (`I.chordLine`) marks a pushed chord `^`, a
+   pulled one `_`, a borrowed one `*`, and writes an inverted one over its
+   bass, C/E.
 
 8. **Drums, the kind** ([0013](docs/decisions/0013-drums-are-a-kind-of-idea.md)):
    `make` hands off to `I.makeDrums` before any harmony. `I.drumIdea` makes
@@ -381,7 +385,7 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition, and the low interval limit. |
-| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 571,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), and Common against Rare. The sweep plays every idea in one of the seven voicings, and every third on Common. |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 583,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), and Common against Rare. The sweep plays every idea in one of the seven voicings, and every third on Common. |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
 | `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (shown only with Mixed), the seven voicings, inversions, a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
@@ -427,3 +431,95 @@ A fresh container has no Lua: `apt-get install -y lua5.4` (or
 hash, so a release is: commit the code, then add a new `<version>` block
 pointing at that commit. Never edit an existing one. ReaPack keys a package by
 its name, so do not rename `Good Idea.lua`.
+
+Every change the user asks for has been a release (1.0 to 1.6 so far), in
+this order:
+
+1. Read the demo before; make the change; read the demo after.
+2. `tools/test.sh`, then `GOOD_IDEA_SWEEP=40 tools/test.sh` (four or five
+   minutes - run it in the background).
+3. Write the tests for what the hints promise; break each new thing on
+   purpose and watch a test fail (see below).
+4. Bump `Version:` in the header of `Good Idea.lua`.
+5. A decision record (or a dated section on the one it extends, with a
+   status note on any it changes), CLAUDE.md, README, and the day's session
+   log (append a `# Later - x.y: ...` section; never rewrite an old one).
+6. Commit the code; add the `<version>` block pinned to that commit, with a
+   changelog in the musician's words; commit; push.
+
+## What has been learned
+
+Hard-won, over 1.0 to 1.6. Read before changing anything.
+
+**Working with the user.** A musician, not a programmer: every reply in
+musical terms (what you will hear, which bars, which chords), with numbers
+measured, not guessed. Ask nothing that a sensible default and a sentence
+in the reply can settle - e.g. "0.5 a bar" already existed as Slow, so it
+was relabelled and the user told; "drop 4" alone is not a standard voicing,
+so Drop 2 & 4 stands for it and the user was told it can be added. Say
+plainly what changed for old idea numbers. The user values checking against
+sources: the Educational Materials zip (Open Music Theory pages - its
+"Inversion" page is the twelve-tone kind; "Harmonic syntax - prolongation"
+is the chords one) and, when asked, the web.
+
+**Keeping old ideas.** Settings are appended, never removed (retire them);
+new values of an Any-rolled setting stay outside Any; every new feature has
+its own dice stream and draws nothing when off; Common uses the same draw as
+Rare with a higher threshold, so it only adds. When a part is removed (the
+Measure's drums, 1.3) the 1.0 fingerprints are remade by the 1.0 code
+itself: `git worktree add <scratch>/old 872be29`, hash without that part.
+
+**Measure, then tune.** Every rate here (figures, flavours, inversions,
+borrowing) was set by a scratch script tallying many ideas - per idea and
+per chord or beat - and compared with the release before through a
+worktree of the old commit. A first guess was wrong more often than right:
+the tune's figures were 15% of beats, not "fine"; Common inversions are
+1.6x Rare, not 2.4x, because "never two running" caps them. Set test
+thresholds between the clean code's number and the old code's, with room.
+
+**Verify a claim before writing it.** "The chords are unchanged" was false:
+their rhythm was, but chords are voiced under the tune's lowest note, so a
+new tune moves them. Check the claim with a script, then write the narrower
+true one.
+
+**Proving a test bites** (`tools/bite.sh "what" test_x.lua "r(path, old,
+new)"`: copies the repo, applies the replace, runs one suite, prints BIT /
+MISSED / DID NOT APPLY):
+
+- A sabotage must actually change behaviour. "Close played open" first
+  edited a variable the Close path never reads, and "missed" - the test was
+  fine, the sabotage was not.
+- A MISSED can be a real gap: the low interval limit was never exercised
+  because tests voiced chords only in the middle register.
+- A test written for a sabotage must also be run on clean code: the low
+  register test then found a real muddy fallback.
+- "DID NOT APPLY" means the line changed since; re-read it.
+
+**Where bugs have hidden.** Repeats and copies: anything decided per chord
+(flavours, inversions) must follow a copied chord's original (`sl.origin`),
+or a Period's answer and a Loop drift. Tests comparing repeats must switch
+off what is meant to be one occurrence only (borrowed chords). Fallbacks
+that quietly degrade (a voicing that gives up to Close; Rootless playing
+roots under a low tune) - test the style holds in real ideas. Chains: one
+rule feeding another (a third inversion's resolution landing on a seventh).
+Lua 5.4's `table.sort` is not stable: comparators must be total, and
+fingerprints hash sorted strings.
+
+**The deep sweep and the demo.** The sweep found real bugs in every
+release; it now varies voicing and Rare/Common, so add any new setting's
+values to its rotation. `tools/demo.lua Kind count from num den id=value`
+prints ideas as note names; the chord line shows ^ _ * and C/E.
+
+**The container.** No Lua at first (`apt-get install -y lua5.4`). Textbook
+sites (pressbooks, libretexts, pugetsound) are blocked by the network
+policy; web search still quotes them. Never `cat > file` without a heredoc
+(it waits on input and hangs); foreground `sleep` is blocked - run long
+jobs in the background and wait for the notification. Scratch scripts go
+in the session's scratchpad, never the repo.
+
+**Left open** (none asked for yet): not run inside REAPER; a separate Drop
+4; out-of-key colour (a passing #iv dim7) - 0006 keeps chords in key;
+flavours for Triads or Sevenths; ghost notes and per-drum choices in drum
+ideas; a drum idea matched to a Measure's kick-and-bass; pull for the bass;
+with Mixed figures, a dotted tune can rub against triplet chords on the same
+beat; which steps are open is not remembered between sessions.
