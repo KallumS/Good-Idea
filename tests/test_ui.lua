@@ -562,6 +562,23 @@ eq(table.concat(paces, ","), "Any,0.5 a bar,1 a bar,1.5 a bar,2 a bar,4 a bar", 
 clickIn("chordPace", "4 a bar")
 eq(chosenIn("chordPace"), "4 a bar", "4 a bar can be chosen")
 
+-- 1.5: flavours, voicing and inversions, in the Chords step.
+eq(I.BY_ID.flavours.step .. I.BY_ID.voicing.step .. I.BY_ID.inversions.step, "ChordsChordsChords",
+   "flavours, voicing and inversions live in the Chords step")
+clickIn("colour", "Mixed")
+ok(rowShown("flavours"), "Flavours shows with Mixed")
+clickIn("flavours", "Off")
+eq(chosenIn("flavours"), "Off", "and can be turned off")
+clickIn("colour", "Triads")
+ok(not rowShown("flavours"), "and is hidden with Triads, where it would do nothing")
+clickIn("voicing", "Drop 2 & 4")
+eq(chosenIn("voicing"), "Drop 2 & 4", "a voicing can be chosen")
+local voicings = {}
+for i, b in ipairs(g.buttons) do if g.paths[i] == "voicing" then voicings[#voicings + 1] = b end end
+eq(table.concat(voicings, ","), "Any,Close,Open,Drop 2,Drop 3,Drop 2 & 4,Shell,Rootless", "seven voicings, and Any")
+clickIn("inversions", "Off")
+eq(chosenIn("inversions"), "Off", "inversions can be turned off")
+
 ------------------------------------------------------------------------------
 -- New Idea, back and forward, the number, Keep
 ------------------------------------------------------------------------------

@@ -67,7 +67,7 @@ end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
-                  pull = 11, kit = 12 }
+                  pull = 11, kit = 12, colour = 13, invert = 14 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -231,7 +231,7 @@ function M.buildSettings()
       hints = {
         Triads = "Three-note chords: C, Dm, G.",
         Sevenths = "Every chord with its seventh: Cmaj7, Dm7, G7.",
-        Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7.",
+        Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7 - and, with Flavours on Rare, now and then a sus, a 6th, a 9th or a diminished chord.",
       } },
     { id = "chordPace", label = "Chord pace", step = "Chords",
       values = { "Slow", "One a bar", "1.5 a bar", "Two a bar", "4 a bar" }, any = true, default = "Any",
@@ -356,6 +356,35 @@ function M.buildSettings()
       hints = {
         Hats = "Time kept on the hi-hats (42), opening (46) now and then.",
         Ride = "Time kept on the ride (51), the bell (53) on the beat, the hi-hat pedal (44) on the backbeat.",
+      } },
+
+    -- Added in 1.5, last for the same reason. Off, Close and Off are the
+    -- 1.4 sound, and draw nothing from the dice.
+    { id = "flavours", label = "Flavours", step = "Chords", values = { "Off", "Rare" }, default = "Rare",
+      when = function(st)
+        return hasChords(st) and (st.colour == "Mixed" or st.colour == "Any")
+           and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7)
+      end,
+      hints = {
+        Off = "Mixed is sevenths and added ninths only.",
+        Rare = "With Mixed, now and then a chord takes another colour: a sus4 or sus2, an added 2nd, a 6th, a 9th, or the diminished chord on its third (G7 becomes Bm7b5). Never the first chord or the cadence. Seven-note scales only.",
+      } },
+    { id = "voicing", label = "Voicing", step = "Chords", values = T.VOICINGS, any = true, default = "Close",
+      weights = { 3, 1, 1, 1, 1, 1, 1 }, when = hasChords,
+      hints = {
+        Close = "Every note once, inside an octave, each chord nearest the one before.",
+        Open = "Spread wide: the root, the fifth, then the third an octave up and the rest above it.",
+        ["Drop 2"] = "Four notes in close position with the second from the top dropped an octave - the guitarist's and arranger's favourite.",
+        ["Drop 3"] = "Four notes with the third from the top dropped an octave: a wide gap at the bottom.",
+        ["Drop 2 & 4"] = "Four notes with the second and the fourth from the top dropped an octave: wide, like a big band's saxes.",
+        Shell = "The root, the third and the seventh - the notes that say what the chord is, and nothing else.",
+        Rootless = "No root - the bass has it: the third, fifth, seventh and ninth, the jazz pianist's left hand.",
+      } },
+    { id = "inversions", label = "Inversions", step = "Chords", values = { "Off", "Rare" }, default = "Rare",
+      when = hasChords,
+      hints = {
+        Off = "Every chord with its root in the bass.",
+        Rare = "Now and then a chord's third, fifth or seventh in the bass, where it makes the bass move by step - C G/B Am, a passing chord, or the I6/4 before the cadence. The bass plays it.",
       } },
   }
   M.BY_ID = {}
@@ -602,8 +631,11 @@ end
 local function unitChords(u, units, key, r, meter, rnd, prevLast)
   local src = (u.kind == "repeat" or u.kind == "answer" or u.kind == "seq") and units[u.of] or nil
   local shift = (u.kind == "seq") and u.shift or 0
+  -- (A copied chord remembers the one it was copied from, `orig`, so a
+  -- flavour or an inversion comes round with it.)
   local function moved(sl, e)
-    return { s = sl.s, e = math.min(e or sl.e, sl.e), degree = T.normDegree(key, sl.degree + shift) }
+    return { s = sl.s, e = math.min(e or sl.e, sl.e), degree = T.normDegree(key, sl.degree + shift),
+             orig = sl.orig or sl }
   end
   if src and src.len == u.len and src.cad == u.cad and (u.kind ~= "seq" or u.cad == "none") then
     local out = {}
@@ -651,7 +683,7 @@ function M.harmony(plan, key, r, meter, rnd, colour)
         sl = last
       else
         sl = { s = u.start + rs.s, e = u.start + rs.e, beat = u.start + rs.s, degree = rs.degree, key = key,
-               chord = T.chord(key, rs.degree, colour) }
+               chord = T.chord(key, rs.degree, colour), origin = rs.orig or rs }
         timeline[#timeline + 1] = sl
       end
       if u.slots[#u.slots] ~= sl then u.slots[#u.slots + 1] = sl end
@@ -795,6 +827,165 @@ function M.pull(timeline, meter, r, rnd)
     end
   end
   return out
+end
+
+------------------------------------------------------------------------------
+-- Flavours and inversions (docs/decisions/0018-flavours-voicings-and-inversions.md)
+--
+-- Both touch single chords, never the first chord or a cadence's chords
+-- (the last chord of every unit that closes, and the chord leading to a full
+-- or imperfect close): the idea opens on the tonic and its cadences stay
+-- the textbook's. Each draws from a stream of its own, and nothing when off.
+------------------------------------------------------------------------------
+
+-- The slots that stay as they are: the first, the last, and each cadence's.
+local function cadenceSlots(plan, timeline)
+  local keep = { [timeline[1]] = true, [timeline[#timeline]] = true }
+  for _, u in ipairs(plan.units) do
+    if u.cad ~= "none" and u.slots and #u.slots > 0 then
+      keep[u.slots[#u.slots]] = true
+      if (u.cad == "PAC" or u.cad == "IAC") and #u.slots > 1 then keep[u.slots[#u.slots - 1]] = true end
+    end
+  end
+  return keep
+end
+
+-- With Mixed, now and then a chord takes another colour (`T.flavourChord`):
+-- about one chord in five that may.
+M.FLAVOUR_CHANCE = 0.2
+local FLAVOUR_WEIGHT = { sus4 = 3, sus2 = 2, add2 = 1.5, add9 = 1.5, ["9"] = 2, ["6"] = 2, dim = 1.5 }
+
+-- A chord copied from another (a repeat, an answer's first half, a Loop
+-- going round) takes the flavour its original took, where it can, and
+-- draws nothing: the music that comes round again sounds the same.
+function M.flavour(timeline, plan, key, r, rnd)
+  if r.flavours ~= "Rare" or r.colour ~= "Mixed" or T.scaleLen(key) ~= 7 then return end
+  local keep = cadenceSlots(plan, timeline)
+  local decided = {}
+  for i, sl in ipairs(timeline) do
+    local was = sl.origin and decided[sl.origin]
+    local go
+    if was ~= nil then go = was ~= false
+    else go = not keep[sl] and not sl.borrowed and rnd() < M.FLAVOUR_CHANCE end
+    if go and not keep[sl] and not sl.borrowed then
+      local seventh = false
+      for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
+      local before, after = timeline[i - 1], timeline[i + 1]
+      local cands, weights = {}, {}
+      for _, f in ipairs(T.FLAVOURS) do
+        local ch = T.flavourChord(sl.key or key, sl.degree, f, seventh)
+        -- (Not one that sounds like the chord either side of it. An add9 has
+        -- the notes and the name of Mixed's own; it changes the voicing,
+        -- putting its ninth on top.)
+        if ch and (ch.name ~= sl.chord.name or f == "add9") and not (before and before.chord.name == ch.name)
+           and not (after and after.chord.name == ch.name) and (was == nil or was == f) then
+          cands[#cands + 1] = ch
+          weights[#weights + 1] = FLAVOUR_WEIGHT[f]
+        end
+      end
+      if #cands > 0 then
+        sl.chord = (was ~= nil) and cands[1] or weighted(rnd, cands, weights)
+        sl.flavour = sl.chord.flavour
+      end
+    end
+    if sl.origin and was == nil then decided[sl.origin] = sl.flavour or false end
+  end
+end
+
+-- The note in the bass under a chord: its root, or the note it is inverted on.
+local function bassPcOf(sl) return sl.bassPc or sl.chord.rootPc end
+M.bassPcOf = bassPcOf
+
+local function byStep(a, b)
+  local d = (a - b) % 12
+  return d == 1 or d == 2 or d == 10 or d == 11
+end
+
+-- Inversions where they do a job (Open Music Theory, "Harmonic syntax -
+-- prolongation"): the bass moving by step.
+--
+--   first   the third in the bass, where the bass steps into it or out of
+--           it - C G/B Am, F C/E Dm - likeliest when it does both (a
+--           passing chord)
+--   second  the fifth in the bass only where a 6/4 belongs: over a held
+--           bass (I IV6/4 I), passing between two steps (I V6/4 I6), or
+--           the tonic's fifth before the dominant at a cadence (I6/4 V)
+--   third   the seventh in the bass, only where it can fall a step into
+--           the next chord, which then takes that note in its bass
+--           (V4/2 I6)
+--
+-- About one chord in four that could be inverted is; never two running
+-- (but for the chord a third inversion resolves to), never a flavoured one.
+M.INVERT_CHANCE = 0.25
+
+-- As with flavours, a chord copied from another is inverted as its original
+-- was, where the bass around it still allows it, and draws nothing.
+function M.invert(timeline, plan, key, r, rnd)
+  if r.inversions ~= "Rare" or #timeline < 3 then return end
+  local keep = cadenceSlots(plan, timeline)
+  local decided = {}
+  local i = 2
+  while i <= #timeline - 1 do
+    local sl, before, after = timeline[i], timeline[i - 1], timeline[i + 1]
+    local step = 1
+    local was = sl.origin and decided[sl.origin]
+    local go
+    if was ~= nil then go = was ~= false
+    else go = rnd() < M.INVERT_CHANCE end
+    if sl.inversion then go = false end
+    if go and not keep[sl] and not sl.flavour then
+      local ch = sl.chord
+      local pb, nb = bassPcOf(before), after.chord.rootPc
+      local opts, weights = {}, {}
+      for idx, pc in ipairs(ch.pcs) do
+        local role = T.roleOf(ch, pc)
+        if role == "3" and (byStep(pb, pc) or byStep(pc, nb)) then
+          opts[#opts + 1] = { idx = idx, inv = 1 }
+          weights[#weights + 1] = (byStep(pb, pc) and byStep(pc, nb)) and 3 or 1
+        elseif role == "5" then
+          local pedal = pc == pb and pc == nb
+          local passing = byStep(pb, pc) and byStep(pc, nb) and pb ~= nb
+          local cadential = sl.degree == 0 and T.rootAbove(sl.key or key, after.degree) == 7
+          if pedal or passing or cadential then
+            opts[#opts + 1] = { idx = idx, inv = 2 }
+            weights[#weights + 1] = 1
+          end
+        elseif role == "7" and not keep[after] and not after.flavour then
+          -- (Onto the next chord's root or third - V4/2 to I6 - never its
+          -- seventh, which would want resolving in turn.)
+          for _, t in ipairs(after.chord.pcs) do
+            local d = (pc - t) % 12
+            local role = T.roleOf(after.chord, t)
+            if (d == 1 or d == 2) and (role == "R" or role == "3") then
+              opts[#opts + 1] = { idx = idx, inv = 3, to = t }
+              weights[#weights + 1] = 1
+              break
+            end
+          end
+        end
+      end
+      if was ~= nil then
+        local same = {}
+        for _, o in ipairs(opts) do if o.inv == was then same[1] = o; break end end
+        opts, weights = same, { 1 }
+      end
+      if #opts > 0 then
+        local o = (was ~= nil) and opts[1] or weighted(rnd, opts, weights)
+        sl.bassPc, sl.bassPos, sl.inversion = ch.pcs[o.idx], ch.pos[o.idx], o.inv
+        if o.to then
+          for idx, t in ipairs(after.chord.pcs) do
+            if t == o.to and t ~= after.chord.rootPc then
+              after.bassPc, after.bassPos = t, after.chord.pos[idx]
+              after.inversion = ({ ["3"] = 1, ["5"] = 2, ["7"] = 3 })[T.roleOf(after.chord, t)]
+            end
+          end
+        end
+        step = 2
+      end
+    end
+    if sl.origin and was == nil then decided[sl.origin] = sl.inversion or false end
+    i = i + step
+  end
 end
 
 ------------------------------------------------------------------------------
@@ -1550,8 +1741,12 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
   local arp = pickOne(rnd, ARPEGGIOS)
   local pattern = {}
   for idx, sl in ipairs(timeline) do
-    local v = T.voice(sl.chord.pcs, prev, win.lo, win.hi)
-    if #v == 0 then v = T.voice(sl.chord.pcs, nil, win.lo, win.hi + 12) end
+    -- A spread voicing may reach down to G2 for its root.
+    -- A voicing that will not fit under the tune may reach an octave over
+    -- the top before it gives up and plays close position.
+    local v = T.voiceAs(sl.chord, r.voicing, prev, win.lo, win.hi, 43)
+    if #v == 0 then v = T.voiceAs(sl.chord, r.voicing, nil, win.lo, win.hi + 12, 43) end
+    if #v == 0 then v = T.voiceAs(sl.chord, "Close", nil, win.lo, win.hi + 12) end
     prev = v
     local onsets, perNote = {}, false
     -- The grid runs from this chord's beat to the next chord's beat (or to
@@ -1594,7 +1789,10 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
       end
     end
     if win.bass then
-      local b = T.bassNote(sl.chord.rootPc, prevBass, 36, 47)
+      local b = T.bassNote(bassPcOf(sl), prevBass, 36, 47)
+      -- (Under any voicing but Close - which is as it always was - the bass
+      -- goes under the chord's lowest note, down to E1 if it has to.)
+      if r.voicing ~= "Close" and v[1] and b >= v[1] then b = T.bassNote(bassPcOf(sl), prevBass, 28, v[1] - 1) end
       prevBass = b
       local bars = onShift(sl, barStarts(meter, gridStart(sl), to))
       for i, o in ipairs(bars) do addNote(notes, o, (bars[i + 1] or sl.e) - o, b, o % meter.bar == 0) end
@@ -1626,7 +1824,8 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
   local meter = ctx.meter
   local prev
   for idx, sl in ipairs(timeline) do
-    local root = T.bassNote(sl.chord.rootPc, prev, 31, 50)
+    -- (The root, or the note an inverted chord stands on.)
+    local root = T.bassNote(bassPcOf(sl), prev, 31, 50)
     prev = root
     local nextSl = timeline[idx + 1]
     local key = sl.key or ctx.key
@@ -1665,7 +1864,7 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
           -- A step into the next chord's root, from the scale sounding now:
           -- the scale note a semitone or a tone from it, nearer the root
           -- being left.
-          local nr = T.bassNote(nextSl.chord.rootPc, root, 31, 50)
+          local nr = T.bassNote(bassPcOf(nextSl), root, 31, 50)
           local best
           for q = nr - 2, nr + 2 do
             local d = math.abs(q - nr)
@@ -1942,7 +2141,9 @@ function M.chordLine(timeline, meter)
   for _, sl in ipairs(timeline) do
     local b = beatOf(sl) // meter.bar + 1
     bars[b] = bars[b] or {}
-    table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name ..
+    -- An inverted chord is written over its bass note: C/E.
+    local slash = sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or ""
+    table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name .. slash ..
                           (sl.borrowed and "*" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
@@ -1973,12 +2174,17 @@ function M.make(st, meter, seed)
   -- With no chords to play, the tune still walks over chords - plain triads,
   -- one a bar - so its strong notes outline a harmony. The chord settings
   -- are hidden then, and must not change it.
-  if not r.chords then r.colour, r.chordPace, r.chordStyle = "Triads", "One a bar", "Block" end
+  if not r.chords then
+    r.colour, r.chordPace, r.chordStyle = "Triads", "One a bar", "Block"
+    r.flavours, r.voicing, r.inversions = "Off", "Close", "Off"
+  end
   local plan = M.plan(r, meter, M.stream(seed, "plan"))
   local colour = r.colour
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
+  M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
   M.push(timeline, meter, r, M.stream(seed, "push"))
+  M.invert(timeline, plan, key, r, M.stream(seed, "invert"))
   -- The chords part plays from its own copy, pulled late where it is; the
   -- tune, the bass and the drums play on the beat.
   local chordTl = r.chords and M.pull(timeline, meter, r, M.stream(seed, "pull")) or timeline
@@ -2053,6 +2259,7 @@ function M.make(st, meter, seed)
   if r.melody then said[#said + 1] = r.contour:lower() .. " contour" end
   if r.chords then
     said[#said + 1] = r.colour:lower()
+    if r.voicing ~= "Close" then said[#said + 1] = r.voicing:lower() .. " voicing" end
     said[#said + 1] = M.valueName(M.BY_ID.chordPace, r.chordPace)
     said[#said + 1] = r.chordStyle:lower() .. ((r.chordStyle == "Broken" and arpName) and (" (" .. arpName .. ")") or "")
   end

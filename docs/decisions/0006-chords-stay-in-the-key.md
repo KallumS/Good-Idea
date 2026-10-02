@@ -1,7 +1,9 @@
 # 0006. Chords stay in the key; scales other than seven notes are built by ear
 
 Taken 2026-10-01. Stands, widened by [0011](0011-borrowed-chords-rarely-and-named.md): rare
-borrowed chords from scales on the same key note.
+borrowed chords from scales on the same key note. Since [0018](0018-flavours-voicings-and-inversions.md) a
+Mixed chord may take a flavour (sus, 6, 9, add2, the diminished seventh a
+third up) - every one built from the scale, so still in key.
 
 ## Context
 

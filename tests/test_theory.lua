@@ -294,4 +294,144 @@ eq(T.bassNote(7, nil, 36, 47), 43, "a G in the bass range, nearest its middle")
 eq(T.bassNote(0, 43, 36, 47), 36, "C after G goes down a fifth")
 eq(T.bassNote(9, 36, 31, 50), 33, "A after C goes down a third, not up a sixth")
 
+------------------------------------------------------------------------------
+-- 1.5: flavours
+------------------------------------------------------------------------------
+
+do
+  local offered, bad, named, wrong = {}, 0, 0, {}
+  for sc = 1, #T.SCALES do
+    if #T.SCALES[sc].iv == 7 then
+      for root = 1, #T.ROOTS do
+        local key = T.key(root, sc)
+        local inKey = {}
+        for p = 0, 6 do inKey[T.pc(key, p)] = true end
+        for d = 0, 6 do
+          for _, seventh in ipairs({ false, true }) do
+            for _, f in ipairs(T.FLAVOURS) do
+              local ch = T.flavourChord(key, d, f, seventh)
+              if ch then
+                offered[f] = (offered[f] or 0) + 1
+                for _, pc in ipairs(ch.pcs) do if not inKey[pc] then bad = bad + 1 end end
+                if ch.name:find("(", 1, true) and not ch.name:find("add", 1, true) then named = named + 1 end
+                local iv = {}
+                for _, pc in ipairs(ch.pcs) do iv[(pc - ch.rootPc) % 12] = true end
+                local good = ({
+                  sus4 = iv[5] and iv[7] and not iv[3] and not iv[4],
+                  sus2 = iv[2] and iv[7] and not iv[3] and not iv[4],
+                  add2 = iv[2] and (iv[3] or iv[4]) and iv[7] and ch.addInside,
+                  add9 = iv[2] and (iv[3] or iv[4]) and iv[7] and ch.ninthUp,
+                  ["9"] = iv[2] and (iv[10] or iv[11]) and ch.ninthUp,
+                  ["6"] = iv[9] and iv[7] and (iv[3] or iv[4]),
+                  dim = ch.quality == "diminished" and (ch.degree - d) % 7 == 2,
+                })[f]
+                if not good then wrong[#wrong + 1] = f .. " on " .. ch.name end
+                if ch.stands ~= d then bad = bad + 1 end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  eq(bad, 0, "every flavour of every chord of every seven-note scale is in key, and stands for its degree")
+  eq(named, 0, "and has a name")
+  eq(#wrong, 0, "and is what it says: a perfect fourth for sus4, a whole tone for sus2, add2 and 9, " ..
+     "a major sixth for 6, a diminished chord a third up for dim: " .. table.concat(wrong, ", "))
+  for _, f in ipairs(T.FLAVOURS) do ok((offered[f] or 0) > 0, f .. " is offered somewhere") end
+  eq(T.flavourChord(Cmaj, 3, "sus4"), nil, "no Fsus4 in C major: F to B is a tritone, not a fourth")
+  eq(T.flavourChord(Cmaj, 4, "dim", true).name, "Bm7b5", "G7 becomes Bm7b5")
+  eq(T.flavourChord(Cmaj, 1, "6", true).name, "Dm6", "Dm7 can be Dm6")
+  eq(T.flavourChord(Cmaj, 0, "add2").name, "Cadd2", "an added 2nd is named as one")
+  eq(T.flavourChord(T.key(1, 3), 4, "dim", true) and T.flavourChord(T.key(1, 3), 4, "dim", true).name or "none",
+     "Bdim7", "in harmonic minor, G7 becomes the full diminished seventh")
+end
+
+------------------------------------------------------------------------------
+-- 1.5: voicings
+------------------------------------------------------------------------------
+
+do
+  local function close(notes) return notes[#notes] - notes[1] < 12 end
+  -- (A triad doubled to four voices spans its octave: C E G C.)
+  local function closeFour(notes) return notes[#notes] - notes[1] <= 12 end
+  -- Raise the k lowest notes an octave - what a drop voicing dropped - and
+  -- say where from the top they land (counting a doubled note below its
+  -- twin, as the dropped voice was).
+  local function undrop(v, k)
+    local c = {}
+    for i, x in ipairs(v) do c[i] = { p = x, raised = false } end
+    table.sort(c, function(a, b) return a.p < b.p end)
+    for i = 1, k do c[i].p = c[i].p + 12; c[i].raised = true end
+    table.sort(c, function(a, b) if a.p ~= b.p then return a.p < b.p end return a.raised and not b.raised end)
+    local notes, at = {}, {}
+    for i, x in ipairs(c) do notes[i] = x.p; if x.raised then at[#at + 1] = #c - i + 1 end end
+    table.sort(at)
+    return notes, at
+  end
+  local bad = {}
+  local function check(good, what) if not good then bad[#bad + 1] = what end end
+  local prev = {}
+  for _, colour in ipairs({ "Triads", "Sevenths" }) do
+    for d = 0, 6 do
+      local ch = T.chord(Cmaj, d, colour)
+      local pcs = {}
+      for _, pc in ipairs(ch.pcs) do pcs[pc] = true end
+      for _, style in ipairs(T.VOICINGS) do
+        local v = T.voiceAs(ch, style, prev[style], 53, 69, 43)
+        prev[style] = v
+        local tag = style .. " " .. ch.name
+        check(#v > 0, tag .. " fits")
+        for i = 2, #v do check(not (v[i] - v[i - 1] <= 4 and v[i - 1] < 48), tag .. " has no thirds below C3") end
+        for _, p in ipairs(v) do check(pcs[p % 12] or p % 12 == ch.nine, tag .. " plays only the chord (and its ninth)") end
+        if style == "Close" then check(close(v), tag .. " is inside an octave")
+        elseif style == "Open" then
+          check(v[1] % 12 == ch.rootPc and v[#v] - v[1] > 12, tag .. " has the root at the bottom and spreads past an octave")
+        elseif style == "Drop 2" or style == "Drop 3" then
+          local c, at = undrop(v, 1)
+          check(#v == 4 and closeFour(c) and at[1] == ((style == "Drop 2") and 2 or 3),
+                tag .. " is four notes in close position with the " .. ((style == "Drop 2") and "second" or "third") .. " from the top dropped")
+        elseif style == "Drop 2 & 4" then
+          local c, at = undrop(v, 2)
+          check(#v == 4 and closeFour(c) and at[1] == 2 and at[2] == 4, tag .. " is close position with the second and fourth dropped")
+        elseif style == "Shell" then
+          local roles = {}
+          for _, p in ipairs(v) do roles[T.roleOf(ch, p % 12)] = true end
+          check(#v == 3 and v[1] % 12 == ch.rootPc and roles["3"] and (roles["7"] or colour == "Triads"),
+                tag .. " is the root, the third and the seventh")
+        elseif style == "Rootless" and ch.nine then
+          local root, nine = false, false
+          for _, p in ipairs(v) do
+            if p % 12 == ch.rootPc then root = true end
+            if p % 12 == ch.nine then nine = true end
+          end
+          check(not root and nine, tag .. " has no root and the ninth in its place")
+        end
+      end
+    end
+  end
+  eq(#bad, 0, "every voicing of every chord of C major, triads and sevenths, is what it says: " .. table.concat(bad, "; "))
+  -- Down low, where a third is mud: nothing closer than a fourth below C3.
+  local mud = 0
+  for _, colour in ipairs({ "Triads", "Sevenths" }) do
+    for d = 0, 6 do
+      local ch = T.chord(Cmaj, d, colour)
+      for _, style in ipairs(T.VOICINGS) do
+        if style ~= "Close" then
+          local v = T.voiceAs(ch, style, nil, 40, 60, 36)
+          for i = 2, #v do if v[i] - v[i - 1] <= 4 and v[i - 1] < 48 then mud = mud + 1 end end
+        end
+      end
+    end
+  end
+  eq(mud, 0, "a voicing pushed low keeps its thirds above C3")
+  eqList(T.voiceAs(T.chord(Cmaj, 4, "Sevenths"), "Shell", nil, 53, 69, 43), { 55, 59, 65 }, "G7 in a shell is G B F")
+  eqList(T.voiceAs(T.chord(Cmaj, 4, "Sevenths"), "Rootless", nil, 53, 69, 43), { 59, 62, 65, 69 }, "and rootless B D F A")
+  local cl = T.chord(Cmaj, 1, "Sevenths")
+  eqList(T.voiceAs(cl, "Close", { 55, 59, 62, 65 }, 52, 70), T.voice(cl.pcs, { 55, 59, 62, 65 }, 52, 70),
+         "Close is close position, exactly as it always was")
+  eqList(T.voiceAs(T.flavourChord(Cmaj, 0, "add9"), "Close", nil, 53, 69), { 55, 60, 64, 74 }, "an add9 has its ninth on top")
+  eqList(T.voiceAs(T.flavourChord(Cmaj, 0, "add2"), "Close", nil, 53, 69), { 60, 62, 64, 67 }, "an add2 its second inside")
+end
+
 C.done()

@@ -28,3 +28,4 @@ the standing rules; this holds the decisions behind them.
 | [0015](0015-chord-rhythm-figures-and-one-and-a-half.md) | Figures reach every chord style and the walking bass; 1.5 chords a bar, chosen not rolled |
 | [0016](0016-a-measure-has-no-drums-paces-in-numbers.md) | A Measure has no drums; chord paces in numbers, 0.5 to 4 a bar |
 | [0017](0017-the-tune-takes-figures-too.md) | The tune takes figures too: its quarters and halves, not only its eighths |
+| [0018](0018-flavours-voicings-and-inversions.md) | Flavours for Mixed, a choice of voicings, and inversions where the bass steps |
