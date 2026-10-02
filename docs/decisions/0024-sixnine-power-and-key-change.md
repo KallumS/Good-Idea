@@ -46,7 +46,12 @@ flats, lifted an octave where the key note passes B), so the tune, which is
 positions in the scale, goes up with it, and so does the bass. The truck
 driver puts the new key's V (major; from harmonic minor in a minor key; V7
 with Sevenths or Mixed) in the second half of the chord before the change,
-or in its place if that is short. Chords after the change are not borrowed
+or in its place if that is short - only where the new key's tonic arrives
+at the change, as the V is there "to prepare that tonic arrival"; so it
+takes the last such section that starts on the tonic (a look at the
+chords first: the same dice give the same chords). Where none does - a
+Sentence's continuation, a Period's new phrase: about a third of Measures
+- it is a plain step up, and the window says so. Chords after the change are not borrowed
 or made applied (those read the home key). The window says where and to
 what ("Key change: Up a whole tone to D Major at bar 9").
 

@@ -2601,7 +2601,20 @@ do
          and (V.chord.rootPc - T.pc(kc.key, 0)) % 12 == 7 then good = good + 1 end
     end
   end
-  ok(trucks >= 30 and good == trucks, ("the truck driver puts the new key's V just before the change: %d of %d"):format(good, trucks))
+  -- (Not where no section in the second half starts on the tonic.)
+  ok(trucks >= 20 and good == trucks, ("the truck driver puts the new key's V just before the change: %d of %d"):format(good, trucks))
+  -- And never a V into anything but the new key's tonic.
+  local intoTonic, vs = 0, 0
+  for seed = 1, 80 do
+    local idea = make({ kind = "Measure", keyChange = "Truck driver" }, seed)
+    local kc = idea.keyChange
+    if kc and kc.truck then
+      vs = vs + 1
+      local after = I.chordAt(idea.timeline, kc.truck.e)
+      if after.degree == 0 then intoTonic = intoTonic + 1 end
+    end
+  end
+  eq(intoTonic, vs, "the truck driver's V always leads to the new key's tonic")
   -- None, or hidden (not a Measure), changes nothing.
   local hidden = 0
   for seed = 1, 20 do

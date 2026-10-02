@@ -219,7 +219,10 @@ everywhere means strength >= 2.
      by `T.pitch` and `T.floorPos`), its chord rebuilt, `sl.moved`; the tune
      follows through `keyAt`. Truck driver: the new key's V (`sl.truck`,
      a `spec`) in the second half of the chord before. Borrow and applied
-     skip moved slots. `idea.keyChange.text` for the window.
+     skip moved slots. The truck driver only goes where the new tonic
+     arrives: `I.changeAt` takes `tonicAt` (a look at the harmony first, the
+     same dice giving the same chords) and picks the last section starting
+     on the tonic. `idea.keyChange.text` for the window.
    Flavours and inversions follow a copied chord's original (`rs.orig` ->
    `sl.origin`): a repeat or a Loop comes round the same.
    Borrowing and pushing touch one occurrence of the harmony, so even an
@@ -509,7 +512,16 @@ appoggiatura not falling, a suspension unprepared or not held, an
 anticipation on the beat, a minor ninth on the bass, a resolution onto the
 bass, repeats leaning afresh, the chords doubling a resolution or dropping
 a 9-8's root, a second voice off the chord, before the other parts, or
-moving the tune; in 1.9 a progression
+moving the tune; in 1.11 a pedal restruck, offbeat chords on the beat or
+long, fill chords on a moving note, a named rhythm ignored or played in any
+metre, Any rolling the new styles or rhythms, the tune playing the rhythm,
+a figured kick, strokes past the next chord's beat (the Offbeat version of
+that sabotage changed nothing; Fill's is caught); in 1.12 no 6/9, a 6/9
+drawn afresh round a Loop, a 6/9 over a minor sixth, a power chord with a
+third, Any rolling Power, a key change leaving the tune behind, merged
+across the change, a minor truck-driver V, a key change in a Phrase, no
+octave lift past B, a close aiming at the old tonic, borrowing after the
+change; in 1.9 a progression
 ignored, Any named ignoring the key, the blues wrong, inversions on named
 chords, a silent fallback, the named bass ignored, a sus4 over a named bass
 (missed by the quick sweep at first: a named test now covers it), a blues close

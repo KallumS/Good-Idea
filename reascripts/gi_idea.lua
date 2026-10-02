@@ -481,7 +481,7 @@ function M.buildSettings()
         None = "One key all the way.",
         ["Step up"] = "The last section a whole tone higher - the pop key change for a last chorus. Tune, chords and bass all go up.",
         ["Half step up"] = "The last section a semitone higher.",
-        ["Truck driver"] = "A whole tone up, with the new key's V7 squeezed in before it (C ... A7 | D) - the 'truck-driver' gear change. Seven-note scales; a plain step up in others.",
+        ["Truck driver"] = "A whole tone up, with the new key's V7 squeezed in before it (C ... A7 | D) - the 'truck-driver' gear change, at the last section that starts on the tonic. Where none does (a Sentence's continuation, a Period's new phrase), and in scales other than the seven-note ones, a plain step up.",
       } },
   }
   M.BY_ID = {}
@@ -1138,17 +1138,23 @@ end
 
 M.KEY_CHANGE = { ["Step up"] = 2, ["Half step up"] = 1, ["Truck driver"] = 2 }
 
-function M.changeAt(plan, meter)
-  local best
+-- `tonicAt(step)` (optional): whether the tonic sounds there. The truck
+-- driver wants a section that starts on it, so it takes the latest that
+-- does, if one does.
+function M.changeAt(plan, meter, tonicAt)
+  local best, home
   for _, u in ipairs(plan.units) do
     if u.start > 0 and u.start * 2 >= plan.total and u.start % meter.bar == 0
-       and plan.total - u.start >= 2 * meter.bar then best = u.start end
+       and plan.total - u.start >= 2 * meter.bar then
+      best = u.start
+      if tonicAt and tonicAt(u.start) then home = u.start end
+    end
   end
   if not best then
     local last = plan.units[#plan.units]
     if last.start > 0 then best = last.start end
   end
-  return best
+  return home or best
 end
 
 function M.keyChange(plan, timeline, key, r, meter, colour, at)
@@ -1177,7 +1183,11 @@ function M.keyChange(plan, timeline, key, r, meter, colour, at)
     local idx
     for i, sl in ipairs(timeline) do if sl.s < at then idx = i end end
     local sl = idx and timeline[idx]
-    if K and sl and idx > 1 then
+    -- (Only where the new key's tonic arrives at the change: the V is there
+    -- "to prepare that tonic arrival" (Open Music Theory). Elsewhere it is
+    -- a plain step up.)
+    local arrive = idx and timeline[idx + 1]
+    if K and sl and idx > 1 and arrive and arrive.degree == 0 then
       local V = { degree = 4, key = K, chord = T.chord(K, 4, (colour == "Triads") and "Triads" or "Sevenths"),
                   spec = { 4, truck = true }, truck = true }
       local cut = sl.s + snap(meter, (sl.e - sl.s) / 2)
@@ -3385,7 +3395,21 @@ function M.make(st, meter, seed)
   local sch, schemaWhy = M.schemaFor(r, key, M.stream(seed, "schema"))
   -- (1.12) Where the key changes, if it does: the timeline keeps the same
   -- chord either side apart there.
-  local changeAt = (r.kind == "Measure" and M.KEY_CHANGE[r.keyChange]) and M.changeAt(plan, meter) or nil
+  local changeAt
+  if r.kind == "Measure" and M.KEY_CHANGE[r.keyChange] then
+    -- (For the truck driver, a look at the chords first - the same dice
+    -- give the same chords - to find a section that starts on the tonic.)
+    local tonicAt
+    if r.keyChange == "Truck driver" then
+      local look = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour,
+                             sch and M.schemaFor(r, key, M.stream(seed, "schema")))
+      tonicAt = function(step)
+        local sl = M.chordAt(look, step)
+        return sl and sl.degree == 0
+      end
+    end
+    changeAt = M.changeAt(plan, meter, tonicAt)
+  end
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch, changeAt)
   local keyChange = M.keyChange(plan, timeline, key, r, meter, colour, changeAt)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
