@@ -143,7 +143,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      added ninths elsewhere.
    - **Flavours** (with Mixed) - Off, Rare or Common (about half the chords
      that can). Now and then a chord becomes a sus4 or sus2, an add2 or
-     add9, a 6th, a 9th, or the diminished chord on its third (G7 becomes
+     add9, a 6th (half the time a 6/9, with the ninth on top), a 9th, or the
+     diminished chord on its third (G7 becomes
      Bm7b5). Always built from the scale; never the first chord or the
      cadence.
    - **Chord pace** - 0.5 a bar (a chord every two bars), 1 a bar, 1.5 a
@@ -158,7 +159,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      Drop 2, Drop 3 and Drop 2 & 4 (four notes with the second, third, or
      second and fourth from the top dropped an octave); Shell (root, third
      and seventh); Rootless (third, fifth, seventh and ninth - the bass has
-     the root).
+     the root); and, to choose, Power (root, fifth, octave: the rock power
+     chord).
    - **Inversions** - Off, Rare or Common. Now and then the third, fifth or
      seventh in the bass, only where it makes the bass move by step (C G/B
      Am; V4/2 falling to I6), and a six-four only where the textbooks allow
@@ -187,7 +189,10 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      no parallel fifths or octaves. Free is how Good Idea wrote before 1.7.
 6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
-   new chord). A Measure has no drums: make a groove with **Drums**, the
+   new chord), and a **key change** for the last section: None, Step up (a
+   whole tone), Half step up, or Truck driver (a whole tone, through the
+   new key's V7 - C ... A7 | D). The window says where it changes, and to
+   what. A Measure has no drums: make a groove with **Drums**, the
    fourth kind, and put it on a track of its own.
 7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
    **beat** (Backbeat, Half-time, Four on the floor, Breakbeat), the

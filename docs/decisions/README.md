@@ -34,3 +34,4 @@ the standing rules; this holds the decisions behind them.
 | [0021](0021-named-progressions.md) | Named progressions: doo-wop, Pachelbel, the lament, the blues, the galant Meyer and Prinner, and others, with their basses |
 | [0022](0022-tension-and-a-second-voice.md) | Tension (suspensions, appoggiaturas, anticipations) and a second voice in thirds or sixths |
 | [0023](0023-chord-styles-and-named-rhythms.md) | Pedal, Offbeat and Fill chord styles, and named rhythms (tresillo, habanera, clave, 3+3+3+3+2+2) |
+| [0024](0024-sixnine-power-and-key-change.md) | The 6/9, power chords, and a key change for the last section (step up, half step, truck driver) |
