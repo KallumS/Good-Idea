@@ -815,7 +815,9 @@ local function mean(t)
   return s / math.max(1, #t)
 end
 
-function M.voice(pcs, prev, lo, hi)
+-- (`want`, a pitch the voicing should have if it can - the note a seventh
+-- falls to - weighs a voicing without it down.)
+function M.voice(pcs, prev, lo, hi, want)
   local best, bestCost
   local centre = (lo + hi) / 2
   for base = lo, hi do
@@ -842,6 +844,11 @@ function M.voice(pcs, prev, lo, hi)
           cost = 0
         end
         cost = cost + 0.15 * math.abs(mean(notes) - centre)
+        if want then
+          local has = false
+          for _, p in ipairs(notes) do if p == want then has = true end end
+          if not has then cost = cost + 8 end
+        end
         if not bestCost or cost < bestCost then best, bestCost = notes, cost end
       end
     end
@@ -1020,7 +1027,7 @@ local function closeFlavoured(ch, prev, lo, hi)
   return v
 end
 
-local function spread(list, prev, lo, hi)
+local function spread(list, prev, lo, hi, want)
   local best, bestCost
   local centre = (lo + hi) / 2
   for _, sh in ipairs(list) do
@@ -1045,6 +1052,11 @@ local function spread(list, prev, lo, hi)
             cost = 0
           end
           cost = cost + 0.15 * math.abs(mean(notes) - centre)
+          if want then
+            local has = false
+            for _, p in ipairs(notes) do if p == want then has = true end end
+            if not has then cost = cost + 8 end
+          end
           if not bestCost or cost < bestCost then best, bestCost = notes, cost end
         end
       end
@@ -1059,27 +1071,27 @@ end
 -- failing that it is {} and the caller decides. A chord the style has no
 -- shape for (a two-note chord in a drop voicing) is played in close
 -- position.
-function M.voiceAs(ch, style, prev, lo, hi, floor)
+function M.voiceAs(ch, style, prev, lo, hi, floor, want)
   if style == "Close" or not style then
     if ch.addInside or ch.ninthUp then
       local v = closeFlavoured(ch, prev, lo, hi)
       if v then return v end
     end
-    return M.voice(ch.pcs, prev, lo, hi)
+    return M.voice(ch.pcs, prev, lo, hi, want)
   end
   local list = shapes(ch, style)
   if #list > 0 then
     local down = math.max(floor or lo, lo - 12)
     for _, w in ipairs({ { lo, hi }, { down, hi }, { down, hi + 7 } }) do
-      local v = spread(list, prev, w[1], w[2])
+      local v = spread(list, prev, w[1], w[2], want)
       if v then return v end
     end
     return {}
   end
   -- (Close position, then, but above C3 where it can be: no muddy thirds.)
-  local v = M.voice(ch.pcs, prev, math.max(lo, 48), hi)
+  local v = M.voice(ch.pcs, prev, math.max(lo, 48), hi, want)
   if #v > 0 then return v end
-  return M.voice(ch.pcs, prev, lo, hi)
+  return M.voice(ch.pcs, prev, lo, hi, want)
 end
 
 -- A root in the bass: the octave of `pc` inside [lo, hi] nearest the last

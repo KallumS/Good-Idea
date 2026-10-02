@@ -808,7 +808,7 @@ do
   local bad = {}
   for _, v in ipairs(V10) do
     local b = make({ kind = v[1], figures = "Plain", push = "None", pull = "None", borrowed = "Off", swing = 0,
-                     flavours = "Off", inversions = "Off" }, v[2]).block
+                     flavours = "Off", inversions = "Off", velocity = "Flat", partWriting = "Free" }, v[2]).block
     local f = {}
     for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
     table.sort(f)
@@ -1388,13 +1388,24 @@ do
     end
   end
   eq(#bad, 0, "every voicing is laid out as it says, in real ideas: " .. table.concat(bad, "; "))
-  -- The voicing changes the chords' notes, never the tune or the bass.
+  -- The voicing changes the chords' notes, never the tune or the bass -
+  -- but for the bass's octave, by the book, which keeps it under the
+  -- chords: its rhythm and its notes stay.
   local moved = 0
+  local function pcs(notes)
+    local out = {}
+    for _, n in ipairs(notes) do out[#out + 1] = ("%g:%g:%d"):format(n.start, n.len, n.pitch % 12) end
+    return table.concat(out, " ")
+  end
   for seed = 1, 30 do
     local a = make({ kind = "Measure", voicing = "Close" }, seed)
     local b = make({ kind = "Measure", voicing = "Drop 2 & 4" }, seed)
     if fingerprint(part(a, "Melody").notes) ~= fingerprint(part(b, "Melody").notes)
-       or fingerprint(part(a, "Bass").notes) ~= fingerprint(part(b, "Bass").notes) then moved = moved + 1 end
+       or pcs(part(a, "Bass").notes) ~= pcs(part(b, "Bass").notes) then moved = moved + 1 end
+    local c = make({ kind = "Measure", voicing = "Close", partWriting = "Free" }, seed)
+    local d = make({ kind = "Measure", voicing = "Drop 2 & 4", partWriting = "Free" }, seed)
+    if fingerprint(part(c, "Melody").notes) ~= fingerprint(part(d, "Melody").notes)
+       or fingerprint(part(c, "Bass").notes) ~= fingerprint(part(d, "Bass").notes) then moved = moved + 1 end
   end
   eq(moved, 0, "the voicing leaves the tune and the bass alone")
   -- Under a Phrase, the chords' own bass note is under the voicing.
@@ -1463,7 +1474,11 @@ do
     if any then with = with + 1 end
     local o = make({ kind = "Measure", inversions = "Off" }, seed)
     for _, sl in ipairs(o.timeline) do if sl.inversion then off = off + 1 end end
-    if fingerprint(part(o, "Melody").notes) ~= fingerprint(part(idea, "Melody").notes) then tuned = tuned + 1 end
+    -- (Free: by the book, the tune keeps clear of parallels with the bass,
+    -- which an inversion moves.)
+    local fi = make({ kind = "Measure", inversions = "Rare", partWriting = "Free" }, seed)
+    local fo = make({ kind = "Measure", inversions = "Off", partWriting = "Free" }, seed)
+    if fingerprint(part(fo, "Melody").notes) ~= fingerprint(part(fi, "Melody").notes) then tuned = tuned + 1 end
   end
   ok(kinds[1] and kinds[2] and kinds[3], "Inversions on Rare brings first, second and third inversions")
   ok(with >= n * 0.15 and with <= n * 0.7, ("now and then: in %d of %d Measures"):format(with, n))
@@ -1472,7 +1487,7 @@ do
      table.concat(wrong, "; "))
   eq(slash, 0, "and written over its bass note: C/E")
   eq(off, 0, "with Inversions off, none")
-  eq(tuned, 0, "an inversion moves the bass, never the tune")
+  eq(tuned, 0, "an inversion moves the bass, never the tune (with free part-writing)")
   -- A diminished triad is most at home in first inversion: inverted far
   -- more often than other chords are.
   local dim, dimInv, other, otherInv = 0, 0, 0, 0

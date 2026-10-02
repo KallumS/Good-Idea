@@ -652,16 +652,29 @@ tr = fresh()
 click("Insert at cursor")
 eq(#tr.items, 1, "Insert at cursor makes one item")
 ok(#tr.items[1].take.notes > 0, "with notes in it")
-local allHundred = true
-for _, n in ipairs(tr.items[1].take.notes) do if n.vel ~= 100 then allHundred = false end end
-ok(allHundred, "every one at velocity 100")
+-- Shaped by default (1.7): the downbeats loudest, every velocity a real one.
+local shapes, inRange = {}, true
+for _, n in ipairs(tr.items[1].take.notes) do
+  shapes[n.vel] = true
+  if n.vel < 1 or n.vel > 127 then inRange = false end
+end
+local kinds = 0
+for _ in pairs(shapes) do kinds = kinds + 1 end
+ok(inRange and kinds >= 2, "shaped: more than one velocity, every one between 1 and 127")
 ok(has(g.texts, "Inserted at the edit cursor"), "and says so")
 
--- Accents are the only thing that moves a velocity off 100.
+-- Flat is every note at 100.
+clickIn("velocity", "Flat")
+click("Insert at cursor")
+local allHundred = true
+for _, n in ipairs(tr.items[2].take.notes) do if n.vel ~= 100 then allHundred = false end end
+ok(allHundred, "Flat: every one at velocity 100")
+
+-- Accents are 100 and 115.
 clickIn("velocity", "Accents")
 click("Insert at cursor")
 local sawAccent = false
-for _, n in ipairs(tr.items[2].take.notes) do
+for _, n in ipairs(tr.items[3].take.notes) do
   ok(n.vel == 100 or n.vel == 115, "an accented idea is 100 and 115 only")
   if n.vel == 115 then sawAccent = true end
 end

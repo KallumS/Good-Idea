@@ -288,11 +288,12 @@ function M.buildSettings()
         ["One item"] = "Every part in one item on the selected track, each on its own MIDI channel (1, 2, 3).",
       } },
 
-    { id = "velocity", label = "Velocity", step = "Out", values = { "Flat", "Accents" },
-      default = "Flat",
+    { id = "velocity", label = "Velocity", step = "Out", values = { "Flat", "Accents", "Shaped" },
+      default = "Shaped",
       hints = {
         Flat = "Every note at 100.",
         Accents = "Every note at 100, and the downbeats and the start of each idea at " .. M.ACCENT .. ".",
+        Shaped = "As a player would: the downbeat loudest, the beats a little softer, the off-beats softer still; the chords under the tune, the inner notes of a chord under its top, the bass just under the tune.",
       } },
 
     -- Added in 1.1. They come last in this list because the list is also
@@ -388,6 +389,15 @@ function M.buildSettings()
         Off = "Every chord with its root in the bass.",
         Rare = "Now and then a chord's third, fifth or seventh in the bass, where it makes the bass move by step - C G/B Am, a passing chord, or the I6/4 before the cadence. The bass plays it.",
         Common = "The same, on more than half the chords where an inversion does its job.",
+      } },
+
+    -- Added in 1.7, last for the same reason. Free is 1.6's part-writing,
+    -- note for note, and draws nothing from the dice.
+    { id = "partWriting", label = "Part-writing", step = "Chords", values = { "By the book", "Free" },
+      default = "By the book", when = hasChords,
+      hints = {
+        ["By the book"] = "As the harmony and orchestration books have it: an inverted chord does not double its bass note (G/B plays no B above the bass), a seventh falls a step into the next chord, a half close with Mixed is a plain V, the chords sit just under the tune, the bass no more than an octave and a fifth below the chords and never in among them, and no parallel fifths or octaves between the tune and the bass.",
+        Free = "As Good Idea did before 1.7: every chord note in every chord, the chords under the whole tune's lowest note, the bass where it falls.",
       } },
   }
   M.BY_ID = {}
@@ -1586,6 +1596,7 @@ function M.melody(plan, ctx, r, rnd)
       end
     end
   end
+  if ctx.bassPcAt then M.noParallels(ctx, notes, ctx.bassPcAt) end
   for i, nt in ipairs(notes) do
     local nextStep = notes[i + 1] and notes[i + 1].step or plan.total
     local len = nextStep - nt.step
@@ -1696,6 +1707,65 @@ function M.untangle(ctx, notes)
   end
 end
 
+-- By the book (1.7): no parallel fifths or octaves between the tune and
+-- the bass - the outer voices, where the books are strictest (Hutchinson,
+-- ch. 26; Open Music Theory, first-species counterpoint and basso
+-- continuo). Two notes running in which both the tune and the bass move,
+-- and stand a fifth (or an octave, or a unison) apart both times, contrary
+-- motion included. `bassPcAt(step)` is the bass sounding at a step.
+--
+-- Of the two, the later note moves (the first note of the idea and the
+-- last note of each unit - its ending - stay); failing that, the earlier one. A note on
+-- the beat moves to another chord tone, one off it a step - whichever is
+-- nearest and keeps every rule `untangle` keeps.
+function M.parallel(ctx, bassPcAt, a, ap, b, bp)
+  local ba, bb = bassPcAt(a.step), bassPcAt(b.step)
+  if not ba or not bb or ba == bb then return false end
+  local pa, pb = T.pitch(M.keyAt(ctx, a.step), ap or a.pos), T.pitch(M.keyAt(ctx, b.step), bp or b.pos)
+  if pa == pb then return false end
+  local ia, ib = (pa - ba) % 12, (pb - bb) % 12
+  return ia == ib and (ia == 0 or ia == 7)
+end
+
+function M.noParallels(ctx, notes, bassPcAt)
+  local function P(note, pos) return T.pitch(M.keyAt(ctx, note.step), pos or note.pos) end
+  local function try(i)
+    local a, b, c = notes[i - 1], notes[i], notes[i + 1]
+    if not b or b.last or i == 1 then return false end
+    local ch = M.chordAt(ctx.timeline, b.step).chord
+    local key = M.keyAt(ctx, b.step)
+    local strong = M.strength(ctx.meter, b.step) >= 2
+    for _, d in ipairs({ 1, -1, 2, -2, 3, -3, 4, -4 }) do
+      local p = b.pos + d
+      local fits = (strong and T.onChord(key, ch, p)) or (not strong and math.abs(d) == 1)
+      local good = fits and p >= ctx.lo - 1 and p <= ctx.hi + 1
+      if good then
+        local pp = P(b, p)
+        for _, x in ipairs({ a, c }) do
+          if x then
+            local gap = math.abs(P(x) - pp)
+            if gap == 6 or (gap > 12 and not (x == c and c.first) and not (x == a and b.first)) then good = false end
+          end
+        end
+        local z, y = notes[i - 2], notes[i + 2]
+        if (z and a and P(z) == P(a) and P(a) == pp) or (c and y and P(c) == pp and P(y) == pp)
+           or (a and c and P(a) == pp and P(c) == pp) then good = false end
+        if good and a and M.parallel(ctx, bassPcAt, a, nil, b, p) then good = false end
+        if good and c and M.parallel(ctx, bassPcAt, b, p, c, nil) then good = false end
+      end
+      if good then b.pos = p; return true end
+    end
+    return false
+  end
+  for _ = 1, 2 do
+    for i = 2, #notes do
+      if M.parallel(ctx, bassPcAt, notes[i - 1], nil, notes[i], nil) then
+        if not try(i) then try(i - 1) end
+      end
+    end
+  end
+end
+
 ------------------------------------------------------------------------------
 -- 6. Chords, bass and drums
 ------------------------------------------------------------------------------
@@ -1793,20 +1863,125 @@ local function blockFigures(meter, onsets, to, figures, rnd)
   return out
 end
 
+------------------------------------------------------------------------------
+-- Part-writing by the book (1.7; docs/decisions/0019-part-writing-by-the-book.md)
+------------------------------------------------------------------------------
+
+-- An inverted chord does not double its bass note above it (Hutchinson,
+-- ch. 26; Rimsky-Korsakov, ch. III). In close position a chord of four
+-- notes or more simply leaves it out; otherwise the note takes the root's
+-- place, or the fifth's - the nearest one free, so a voicing keeps its
+-- number of notes (a rootless voicing takes the fifth or the ninth, never
+-- the root). A diminished triad in first inversion doubles
+-- its bass, as the books say: it is the one exception.
+function M.undouble(v, ch, bassPc, style)
+  local others = 0
+  for _, p in ipairs(v) do if p % 12 ~= bassPc then others = others + 1 end end
+  if others == #v then return v end
+  local out, used = {}, {}
+  for _, p in ipairs(v) do if p % 12 ~= bassPc then out[#out + 1] = p; used[p] = true end end
+  if others >= 3 and (style == "Close" or not style) then return out end
+  local fifth, nine
+  for _, pc in ipairs(ch.pcs) do
+    local role = T.roleOf(ch, pc)
+    if role == "5" and pc ~= bassPc then fifth = pc end
+    if role == "9" and pc ~= bassPc then nine = pc end
+  end
+  nine = nine or ch.nine
+  local want = (style == "Rootless") and { fifth, nine } or { ch.rootPc ~= bassPc and ch.rootPc or nil, fifth }
+  local top = v[#v]
+  for _, p in ipairs(v) do
+    if p % 12 == bassPc then
+      -- (The top note's place goes to a note at or above it, so a spread
+      -- voicing keeps its span.)
+      local function cost(q) return math.abs(q - p) + ((p == top and q < p) and 12 or 0) end
+      local best
+      for k = 1, 2 do
+        local pc = want[k]
+        if pc then
+          for q = p - 12, p + 12 do
+            if q % 12 == pc and not used[q] and (not best or cost(q) < cost(best)) then best = q end
+          end
+        end
+        if best then break end
+      end
+      if best then out[#out + 1] = best; used[best] = true end
+    end
+  end
+  table.sort(out)
+  -- (A two-note chord - a pentatonic scale's - keeps what it has.)
+  if #out < 2 then return v end
+  return out
+end
+
+-- A seventh falls a step into the next chord (Hutchinson, ch. 27; Open Music
+-- Theory, "Tendency tones"): if the chord before had its seventh at `p7`,
+-- and this chord has a note a semitone or a tone below it, the voicing that
+-- puts that note there is wanted - unless this chord keeps the seventh's
+-- note, which may then be held. Returns the wanted pitch, or nil.
+function M.seventhTarget(ch, prevV, prevCh)
+  if not prevV or not prevCh then return nil end
+  local s7
+  for _, pc in ipairs(prevCh.pcs) do if T.roleOf(prevCh, pc) == "7" then s7 = pc end end
+  if not s7 or ch.has[s7] then return nil end
+  local p7
+  for _, p in ipairs(prevV) do if p % 12 == s7 then p7 = p end end
+  if not p7 then return nil end
+  for _, t in ipairs({ p7 - 1, p7 - 2 }) do
+    if ch.has[t % 12] then return t end
+  end
+end
+
+-- The lowest note of the tune sounding in [s, e), or nil.
+local function tuneLowIn(tune, s, e)
+  local low
+  for _, n in ipairs(tune) do
+    if n.step < e and n.step + n.len > s then low = math.min(low or 127, n.pitch) end
+  end
+  return low
+end
+
 function M.chordsPart(ctx, timeline, r, rnd, win)
   local notes = {}
   local meter = ctx.meter
-  local prev, prevBass
+  local prev, prevBass, prevCh
   local arp = pickOne(rnd, ARPEGGIOS)
   local pattern = {}
+  local lows = {}
+  local book = win.book
+  local lastHi = win.hi
   for idx, sl in ipairs(timeline) do
+    local lo, hi = win.lo, win.hi
+    if book and win.tune then
+      -- By the book the chords sit just under the tune notes over them -
+      -- reaching a step or two into the lowest, if they must - not under
+      -- the whole tune's lowest note.
+      -- (Over the chord's span on the beat: a pull does not move it.)
+      local span = win.beatTl and win.beatTl[idx] or sl
+      local low = tuneLowIn(win.tune, span.s, span.e)
+      hi = low and math.max(57, math.min(76, low + 2)) or lastHi
+      lastHi = hi
+      lo = math.max(43, hi - ((r.voicing == "Close") and 12 or 24))
+    end
     -- A spread voicing may reach down to G2 for its root.
     -- A voicing that will not fit under the tune may reach an octave over
     -- the top before it gives up and plays close position.
-    local v = T.voiceAs(sl.chord, r.voicing, prev, win.lo, win.hi, 43)
-    if #v == 0 then v = T.voiceAs(sl.chord, r.voicing, nil, win.lo, win.hi + 12, 43) end
-    if #v == 0 then v = T.voiceAs(sl.chord, "Close", nil, win.lo, win.hi + 12) end
-    prev = v
+    local want = book and M.seventhTarget(sl.chord, prev, prevCh) or nil
+    -- (A seventh's step down matters more than where the tune has gone:
+    -- the window stretches to take it - a little over the top, if it must.)
+    if want then
+      if want < lo and want >= 43 then lo = want end
+      if want > hi and want <= hi + 3 then hi = want end
+    end
+    local v = T.voiceAs(sl.chord, r.voicing, prev, lo, hi, 43, want)
+    if #v == 0 then v = T.voiceAs(sl.chord, r.voicing, nil, lo, hi + 12, 43, want) end
+    if #v == 0 then v = T.voiceAs(sl.chord, "Close", nil, lo, hi + 12, nil, want) end
+    if book then
+      local dimTriad = sl.chord.quality == "diminished" and #sl.chord.pcs == 3
+      if sl.inversion and not dimTriad then v = M.undouble(v, sl.chord, sl.bassPc, r.voicing) end
+    end
+    prev, prevCh = v, sl.chord
+    lows[idx] = v[1]
     local onsets, perNote = {}, false
     -- The grid runs from this chord's beat to the next chord's beat (or to
     -- where this one ends, if the next is pushed in front of it).
@@ -1841,7 +2016,7 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
       local accent = o % meter.bar == 0
       if perNote then
         local k = arp.order[(i - 1) % #arp.order + 1]
-        local pitch = (k <= #v) and v[k] or (v[k - #v] + 12)
+        local pitch = (k <= #v) and v[k] or (v[(k - 1) % #v + 1] + 12 * ((k - 1) // #v))
         addNote(notes, o, stop - o, pitch, accent)
       else
         for _, p in ipairs(v) do addNote(notes, o, stop - o, p, accent) end
@@ -1852,12 +2027,88 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
       -- (Under any voicing but Close - which is as it always was - the bass
       -- goes under the chord's lowest note, down to E1 if it has to.)
       if r.voicing ~= "Close" and v[1] and b >= v[1] then b = T.bassNote(bassPcOf(sl), prevBass, 28, v[1] - 1) end
+      -- By the book: under the chord, and no more than an octave and a fifth
+      -- under it.
+      if book and v[1] then b = T.bassNote(bassPcOf(sl), prevBass, math.max(28, v[1] - 19), v[1] - 1) end
       prevBass = b
       local bars = onShift(sl, barStarts(meter, gridStart(sl), to))
       for i, o in ipairs(bars) do addNote(notes, o, (bars[i + 1] or sl.e) - o, b, o % meter.bar == 0) end
     end
   end
-  return notes, arp.name
+  return notes, arp.name, lows
+end
+
+-- By the book, a Measure's bass is put in the octave that keeps it under
+-- the chords and no more than an octave and a fifth under them (Rimsky-
+-- Korsakov: "rarely more than an octave"; Belkin: no hole in the middle),
+-- inside the bass's range, each note the octave nearest the one before.
+-- Only octaves move: the notes are the same.
+function M.spaceBass(bass, timeline, lows)
+  local function slotOf(step)
+    local idx = 1
+    for i, sl in ipairs(timeline) do if step >= sl.s then idx = i end end
+    return idx
+  end
+  -- The octave of `n` nearest `ref` in [lo, hi], or nil.
+  local function pick(n, ref, lo, hi)
+    local best
+    for q = n.pitch - 36, n.pitch + 36, 12 do
+      if q >= lo and q <= hi and (not best or math.abs(q - ref) < math.abs(best - ref)) then best = q end
+    end
+    return best
+  end
+  local orig, starts = {}, {}
+  for i, n in ipairs(bass) do
+    orig[i] = n.pitch
+    local sl = timeline[slotOf(n.step)]
+    starts[i] = math.abs(n.step - sl.s) < 1e-9
+  end
+  -- First the note each chord stands on, the octave nearest where the
+  -- line was going (the same interval from the last one as it had)...
+  local prevI
+  for i, n in ipairs(bass) do
+    local low = lows[slotOf(n.step)]
+    if starts[i] and low then
+      local ref = prevI and (bass[prevI].pitch + orig[i] - orig[prevI]) or n.pitch
+      -- (And where the note leading into it can still step into it from
+      -- under the chord before.)
+      local before = bass[i - 1]
+      local lowBefore = before and not starts[i - 1] and lows[slotOf(before.step)]
+      local best, bestCost
+      -- (A walking bass's step into the chord matters more than the gap,
+      -- which matters more than where the line was going.)
+      for wi, w in ipairs({ { math.max(28, low - 19), math.min(55, low - 1) }, { 28, math.min(55, low - 1) } }) do
+        for q = n.pitch - 36, n.pitch + 36, 12 do
+          if q >= w[1] and q <= w[2] then
+            local cost = math.abs(q - ref) + (wi == 2 and 50 or 0)
+            if lowBefore then
+              local into = q + orig[i - 1] - orig[i]
+              if into < 28 or into > math.min(55, lowBefore - 1) then cost = cost + 100 end
+            end
+            if not bestCost or cost < bestCost then best, bestCost = q, cost end
+          end
+        end
+      end
+      n.pitch = best or n.pitch
+      prevI = i
+    end
+  end
+  -- ...then the notes between, each as far from the next chord's note as it
+  -- was (so a walking bass still steps into it), or from the note before.
+  for i, n in ipairs(bass) do
+    local low = lows[slotOf(n.step)]
+    if not starts[i] and low then
+      local nx = bass[i + 1]
+      local ref
+      if nx and starts[i + 1] then ref = nx.pitch + orig[i] - orig[i + 1]
+      elseif i > 1 then ref = bass[i - 1].pitch + orig[i] - orig[i - 1]
+      else ref = n.pitch end
+      local q = pick(n, ref, math.max(28, low - 19), math.min(55, low - 1))
+      if not q or math.abs(q - ref) > 2 then q = pick(n, ref, 28, math.min(55, low - 1)) or q end
+      n.pitch = q or n.pitch
+    end
+  end
+  return bass
 end
 
 -- The kick drum's places in a bar, which the bass can follow.
@@ -1878,10 +2129,26 @@ function M.kickPattern(meter, r, rnd)
   return out
 end
 
-function M.bassPart(ctx, timeline, r, rnd, kick)
+-- The tune's pitch sounding at a step, or nil.
+local function tuneAt(tune, step)
+  for _, n in ipairs(tune) do
+    if n.step <= step + 1e-9 and n.step + n.len > step + 1e-9 then return n.pitch end
+  end
+end
+
+function M.bassPart(ctx, timeline, r, rnd, kick, tune)
   local notes = {}
   local meter = ctx.meter
   local prev
+  local prevStep, prevP
+  -- Parallel fifths or octaves with the tune, from the bass note before to `q` at `st`.
+  local function parallelAt(st, q, fromStep, fromP)
+    if not (tune and fromStep) then return false end
+    local tA, tB = tuneAt(tune, fromStep), tuneAt(tune, st)
+    if not (tA and tB) or tA == tB or q % 12 == fromP % 12 then return false end
+    local ia, ib = (tA - fromP) % 12, (tB - q) % 12
+    return ia == ib and (ib == 0 or ib == 7)
+  end
   for idx, sl in ipairs(timeline) do
     -- (The root, or the note an inverted chord stands on.)
     local root = T.bassNote(bassPcOf(sl), prev, 31, 50)
@@ -1924,17 +2191,42 @@ function M.bassPart(ctx, timeline, r, rnd, kick)
           -- the scale note a semitone or a tone from it, nearer the root
           -- being left.
           local nr = T.bassNote(bassPcOf(nextSl), root, 31, 50)
-          local best
+          local best, bestBad
           for q = nr - 2, nr + 2 do
             local d = math.abs(q - nr)
-            if d >= 1 and T.posOf(key, q) and (not best or math.abs(q - root) < math.abs(best - root)) then best = q end
+            if d >= 1 and T.posOf(key, q) then
+              -- (By the book, one that makes no parallels with the tune,
+              -- going in or coming out, is preferred.)
+              local bad = (parallelAt(st, q, prevStep, prevP) or parallelAt(nextSl.s, nr, st, q)) and 1 or 0
+              if not best or bad < bestBad or (bad == bestBad and math.abs(q - root) < math.abs(best - root)) then
+                best, bestBad = q, bad
+              end
+            end
           end
           p = best or root
         else
           local fifth = T.bassNote(sl.chord.pcs[3] or sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52)
           local choices = { fifth, root + 12 <= 52 and root + 12 or root, T.bassNote(sl.chord.pcs[2] or sl.chord.rootPc, root, 31, 52) }
-          p = weighted(rnd, choices, { 3, 2, 1 })
+          local ws = { 3, 2, 1 }
+          -- By the book, no passing note that makes parallel fifths or
+          -- octaves with the tune (if another will do).
+          if tune and prevStep then
+            local any = false
+            local w2 = {}
+            for k, q in ipairs(choices) do
+              local par = parallelAt(st, q, prevStep, prevP)
+              w2[k] = par and 0 or ws[k]
+              if not par then any = true end
+            end
+            if any then ws = w2
+            else
+              -- (Every one would: the bass holds its note - oblique motion.)
+              choices, ws = { prevP, prevP, prevP }, ws
+            end
+          end
+          p = weighted(rnd, choices, ws)
         end
+        prevStep, prevP = st, p
         addNote(notes, st, (beats[i + 1] or sl.e) - st, p, st % meter.bar == 0)
       end
     else
@@ -2173,16 +2465,39 @@ end
 
 local function whole(x) return math.abs(x - math.floor(x + 0.5)) < 1e-9 end
 
-local function toBlockNotes(list, chan, vel, warp)
+-- Shaped velocity (1.7): by how strong the beat is - the downbeat loudest,
+-- an off-beat or a triplet note softest - and by the part: the chords under
+-- the tune (their inner notes under their top), the bass just under it. An
+-- accented note (a push, the start of a statement) leans in a little.
+M.SHAPE = { [3] = 104, [2.5] = 98, [2] = 94, [1] = 86, [0] = 80 }
+M.SHAPE_PART = { Melody = 0, Chords = -10, Bass = -4, Drums = 0 }
+M.SHAPE_INNER, M.SHAPE_ACCENT = -4, 6
+
+function M.shapedVelocity(meter, step, part, accent, inner)
+  local v = M.SHAPE[M.strength(meter, step)] or 80
+  v = v + (M.SHAPE_PART[part] or 0) + (accent and M.SHAPE_ACCENT or 0) + (inner and M.SHAPE_INNER or 0)
+  return math.max(1, math.min(127, v))
+end
+
+local function toBlockNotes(list, chan, vel, warp, meter, part)
   local out = {}
+  -- (The top note of everything struck together, for the inner notes.)
+  local top = {}
+  if vel == "Shaped" and part == "Chords" then
+    for _, n in ipairs(list) do top[n.step] = math.max(top[n.step] or 0, n.pitch) end
+  end
   for _, n in ipairs(list) do
     local s, e = n.step, n.step + n.len
     if warp then
       if whole(s) then s = warp(s) end
       if whole(e) then e = warp(e) end
     end
+    local v = (vel == "Accents" and n.accent) and M.ACCENT or 100
+    if vel == "Shaped" then
+      v = M.shapedVelocity(meter, n.step, part, n.accent, top[n.step] and n.pitch < top[n.step])
+    end
     out[#out + 1] = { start = s / 4, len = (e - s) / 4, pitch = n.pitch, chan = chan,
-                      accent = n.accent, vel = (vel == "Accents" and n.accent) and M.ACCENT or 100 }
+                      accent = n.accent, vel = v }
   end
   table.sort(out, function(a, b)
     if a.start ~= b.start then return a.start < b.start end
@@ -2236,12 +2551,29 @@ function M.make(st, meter, seed)
   if not r.chords then
     r.colour, r.chordPace, r.chordStyle = "Triads", "One a bar", "Block"
     r.flavours, r.voicing, r.inversions = "Off", "Close", "Off"
+    r.partWriting = "Free"
   end
+  local book = r.partWriting == "By the book"
   local plan = M.plan(r, meter, M.stream(seed, "plan"))
   local colour = r.colour
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
+  -- By the book, a half close with Mixed stands on a plain V: "almost
+  -- invariably a triad, rather than a seventh chord" (Open Music Theory,
+  -- "Classical cadence types"). Sevenths, chosen for sevenths everywhere,
+  -- keep theirs.
+  if book and colour == "Mixed" then
+    for _, u in ipairs(plan.units) do
+      if u.cad == "HC" then
+        local sl = M.chordAt(timeline, u.start + u.len - 1)
+        if sl and #sl.chord.pcs > 3 and not sl.flavour and not sl.borrowed then
+          sl.chord = T.chord(sl.key or key, sl.degree, "Triads")
+          sl.halfTriad = true
+        end
+      end
+    end
+  end
   M.push(timeline, meter, r, M.stream(seed, "push"))
   M.invert(timeline, plan, key, r, M.stream(seed, "invert"), meter)
   -- The chords part plays from its own copy, pulled late where it is; the
@@ -2257,6 +2589,18 @@ function M.make(st, meter, seed)
     return lo + 1 + contour(t) * (hi - lo - 2)
   end
 
+  -- By the book the tune keeps clear of parallels with the bass each chord
+  -- stands on (a Measure's bass on the beat, a Phrase's under its own
+  -- chords) - not with a moving bass's passing notes, which keep clear of
+  -- the tune themselves: so a different bass still leaves the tune alone.
+  if book and r.chords then
+    local tl = (r.kind == "Measure") and timeline or chordTl
+    ctx.bassPcAt = function(step)
+      local sl = M.chordAt(tl, step)
+      return sl and bassPcOf(sl)
+    end
+  end
+
   local parts = {}
   local melody
   if r.melody then
@@ -2264,7 +2608,7 @@ function M.make(st, meter, seed)
     parts[#parts + 1] = { name = "Melody", list = melody }
   end
 
-  local arpName
+  local arpName, lows
   if r.chords then
     -- The chords sit under the tune, so a tune in a low register pushes them
     -- down, but never into the mud below C3.
@@ -2275,8 +2619,9 @@ function M.make(st, meter, seed)
       top = math.max(57, math.min(69, low - 1))
     end
     local list
-    list, arpName = M.chordsPart(ctx, chordTl, r, M.stream(seed, "chords"),
-                                 { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure" })
+    list, arpName, lows = M.chordsPart(ctx, chordTl, r, M.stream(seed, "chords"),
+                                 { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure",
+                                   book = book, tune = melody, beatTl = timeline })
     parts[#parts + 1] = { name = "Chords", list = list }
   end
 
@@ -2285,7 +2630,9 @@ function M.make(st, meter, seed)
     -- pulsing bass still plays the pattern a kick drum would, drawn as it
     -- always was so the bass is unchanged.
     local kick = M.kickPattern(meter, r, M.stream(seed, "drums"))
-    parts[#parts + 1] = { name = "Bass", list = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick) }
+    local bassList = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick, book and melody)
+    if book then M.spaceBass(bassList, timeline, lows) end
+    parts[#parts + 1] = { name = "Bass", list = bassList }
   end
 
   -- Channels: in one item each part has its own; on tracks of their own
@@ -2296,7 +2643,7 @@ function M.make(st, meter, seed)
                   layout = (oneItem and "one") or "tracks" }
   for i, p in ipairs(parts) do
     local chan = oneItem and (i - 1) or 0
-    local notes = toBlockNotes(p.list, chan, r.velocity, warp)
+    local notes = toBlockNotes(p.list, chan, r.velocity, warp, meter, p.name)
     block.parts[#block.parts + 1] = { name = p.name, notes = notes, chan = chan }
     for _, n in ipairs(notes) do block.notes[#block.notes + 1] = n end
   end
@@ -2355,7 +2702,7 @@ end
 function M.makeDrums(st, meter, seed, r)
   local total = r.bars * meter.bar
   local list, info = M.drumIdea(meter, r, M.stream(seed, "kit"))
-  local notes = toBlockNotes(list, 9, r.velocity, M.swingWarp(meter, st.swing))
+  local notes = toBlockNotes(list, 9, r.velocity, M.swingWarp(meter, st.swing), meter, "Drums")
   local block = { parts = { { name = "Drums", notes = notes, chan = 9, drums = true } },
                   notes = {}, beats = total / 4, layout = "one" }
   for i, n in ipairs(notes) do block.notes[i] = n end
