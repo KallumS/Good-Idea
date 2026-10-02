@@ -88,6 +88,17 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.8" author="kallums" time="2026-10-02T23:00:00Z">
+        <changelog><![CDATA[Applied chords (Key step, Rare by default): now and then the chord before a major or minor chord becomes its own V or V7 (D7 before G in C), or its leading-tone diminished chord - the commonest chromatic chord in every style. Marked > in the chord line and named under it. A Loop and a Period's answer play it again.
+The deceptive cadence: V to vi where the tonic was due, the tune holding the tonic note over vi.
+Six more forms (chosen only - Any still rolls the original four): Hybrid 1 to 4 (Caplin's antecedent + continuation, antecedent + cadential, compound basic idea + continuation, compound basic idea + consequent), Ternary (A B A), and Extended, a sentence stretched by a deceptive cadence.
+With Applied off, every 1.0 idea number is still the 1.0 idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
