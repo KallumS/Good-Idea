@@ -21,11 +21,13 @@ change, or throw away and roll again.
   line, laid out in a form - a **Period** (a question and its
   answer), a **Sentence** (an idea, the idea again, broken up and driven to a
   close), a **Song** (A A B A) or a **Loop** (one progression round and round
-  with the tune varied over it) - and, to choose, Caplin's four **hybrid**
-  themes, the small **Ternary** (A B A) and an **Extended** sentence, which
-  reaches a deceptive cadence (V to vi) and plays its ending again to close.
+  with the tune varied over it), Caplin's four **hybrid** themes, the small
+  **Ternary** (A B A) or an **Extended** sentence, which reaches a deceptive
+  cadence (V to vi) or an evaded one (V to I6, the tune leaping away) and
+  plays its ending again to close. Good Idea picks the form for each idea,
+  each about one time in ten; the summary line says which.
 - **Drums** - **1 to 16 bars** of drums on General MIDI notes: a groove - a
-  backbeat, half-time, four on the floor or a breakbeat, on the hi-hats or
+  backbeat, half-time, four on the floor, a breakbeat or reggaeton's dembow, on the hi-hats or
   the ride - whose every second bar answers the first, with fills at the end,
   every four bars or every two, and a crash where each fill lands.
 
@@ -46,7 +48,8 @@ that make music sound like music:
   every phrase ends on a real cadence: V-I to close, a pause on V to ask a
   question.
 - **Melody.** A tune moves mostly by step, lands on a note of the chord on the
-  beat, fills in after a leap by stepping back, and follows a shape - an arch
+  beat, fills in after a leap by stepping back, makes two leaps the same way
+  only where they outline a chord (C E G), and follows a shape - an arch
   that peaks two thirds of the way through (the golden section), a rise, a
   fall, a wave.
 - **Form.** Ideas are built from parts the way composers build them: a basic
@@ -70,10 +73,14 @@ that make music sound like music:
 - **Tension.** Now and then the tune leans on a beat with a note that is
   not in the chord and falls a step into it - a suspension, an
   appoggiatura - or arrives at a close an eighth early.
-- **Named progressions.** Instead of the walk, the chords can play a
-  progression you know: doo-wop, Pachelbel, the lament, the blues, the
-  circle of fifths, and others - with their basses as written (Pachelbel's
-  G/B, the galant Prinner's C/E).
+- **Named progressions.** Half the time, instead of the walk, the chords
+  play a progression you know that suits the key: doo-wop, Pachelbel, the
+  lament, the blues, the circle of fifths, the galant Meyer and Prinner,
+  Do-Re-Mi, Romanesca, Fonte and Monte, and others - with their basses as
+  written (Pachelbel's G/B, the Prinner's C/E). The summary line says which.
+- **Minor keys** close on a major V, its third the raised leading note
+  (G B D in C minor), and the tune takes the B natural with it; the modes
+  keep their own minor v.
 
 So there is chance in it - **New Idea** picks which rhythm, which chords,
 which notes - but only among choices that make musical sense.
@@ -88,14 +95,8 @@ Each idea has an **idea number**. The same number with the same settings is
   busier, give it seventh chords, and it is still recognisably idea 4821. Change
   the key and you get the same tune, moved.
 
-A number written down from version 1.0 still gives the same idea with
-Figures on Plain, Push and Pull on None, Borrowed, Flavours and Inversions
-on Off, Voicing on Close, Part-writing on Free, Velocity on Flat, Applied on
-Off, Tension on Off and no swing. (Between versions, fixes to the
-part-writing can still move a note: from 1.9 to 1.12, with Tension and
-Flavours off, about 2 Measures in 100 have a tune note moved to keep clear
-of parallels with the bass, the chords under it following; their chords
-are the same.)
+(The same number gives the same idea within a version; from one version
+to the next an idea may change, as the rules it is calculated from grow.)
 
 ## The settings
 
@@ -171,27 +172,15 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      one: the cadential I6/4, a passing or a pedal six-four. A diminished
      chord is usually in first inversion, as vii6. The bass plays it, and
      the chord line writes it C/E.
-   - **Progression** - Walk (the default: each chord drawn from the one
-     before, as always), Any named, or one of the progressions everyone
-     knows by ear: Doo-wop (I vi IV V), Singer-songwriter (vi IV I V),
-     Puff (I iii IV I), Pachelbel (the canon's bass stepping down), Lament
-     (i VII VI V, the Andalusian cadence), Circle (round the circle of
-     fifths), Double plagal (I bVII IV I), Galant (two 18th-century stock
-     phrases: the Meyer, then the Prinner) and Blues (8, 12 or 16 bars, a
-     chord a bar, Measures only). The chords play it in order, going
-     round, and a passage that closes still ends on its cadence; a Loop
-     shows it best. One that does not suit the key (a lament in a major
-     key) is not played, and the summary line says why. Any named picks
-     one that suits.
-   - **Part-writing** - By the book (the default) or Free. By the book does
-     what the harmony and orchestration books say: an inverted chord does
-     not double its bass note (G/B plays no second B above the bass), a
-     chord's seventh falls a step into the next chord, a half close with
-     Mixed stands on a plain V, the chords sit just under the tune (a step
-     or two into it at most), the bass sits under the chords and no more
-     than an octave and a fifth below them, and the tune and the bass make
-     no parallel fifths or octaves. Free is how Good Idea wrote before 1.7.
-6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
+   - The **progression** (walked, or a named one) and the **part-writing**
+     are not settings: Good Idea always writes by the book - an inverted
+     chord does not double its bass note (a six-four does, as Hutchinson
+     has it), a chord's seventh falls a step into the next chord, a half
+     close with Mixed stands on a plain V, the chords sit just under the
+     tune, the bass under the chords and no more than an octave and a fifth
+     below them, and the tune and the bass make no parallel fifths or
+     octaves.
+6. **Arrangement** (Measure only) - the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
    new chord), and a **key change** for the last section: None, Step up (a
    whole tone), Half step up, or Truck driver (a whole tone, through the
@@ -199,7 +188,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    what. A Measure has no drums: make a groove with **Drums**, the
    fourth kind, and put it on a track of its own.
 7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
-   **beat** (Backbeat, Half-time, Four on the floor, Breakbeat), the
+   **beat** (Backbeat, Half-time, Four on the floor, Breakbeat, Reggaeton -
+   the kick on every beat under the snare's 3+3+2), the
    **fills** (None, At the end, Every 4 bars, Every 2 bars) and the
    **cymbal** (Hats, or Ride).
 
