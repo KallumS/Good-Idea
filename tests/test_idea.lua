@@ -2572,6 +2572,24 @@ do
     end
   end
   ok(seen >= 50 and wrong == 0, ("the last section's chords are the same degrees, moved up (%d of %d ideas wrong)"):format(wrong, seen))
+  -- The chord at the change is in the new key - even where the section
+  -- before ended on the tonic and the new one starts on it (never one
+  -- chord held across).
+  local stuck, closes = 0, 0
+  for seed = 1, 60 do
+    -- (Puff - I iii IV I - ends each time round on the I it starts on.)
+    local idea = make({ kind = "Measure", form = "Loop", keyChange = "Step up", scale = 1,
+                        progression = (seed % 2 == 0) and "Puff" or "Walk" }, seed)
+    local kc = idea.keyChange
+    if kc then
+      local sl = I.chordAt(idea.timeline, kc.at)
+      if sl.degree == 0 then closes = closes + 1 end
+      -- (Pushed in an eighth early, it comes just before.)
+      local starts = sl.s == kc.at or (sl.pushed and sl.s == kc.at - 2)
+      if not starts or (sl.chord.rootPc - T.pc(kc.key, sl.degree)) % 12 ~= 0 then stuck = stuck + 1 end
+    end
+  end
+  ok(closes > 10 and stuck == 0, ("the new key starts at the change (%d held over from the old key; %d start on the tonic)"):format(stuck, closes))
   ok(moved <= seen, ("and the tune moves with them: %d notes not moved, in %d ideas"):format(moved, seen))
   -- From B the new key note wraps round to C#: still a tone higher, not
   -- a seventh lower.
