@@ -99,6 +99,15 @@ With Applied off, every 1.0 idea number is still the 1.0 idea.]]></changelog>
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.9" author="kallums" time="2026-10-03T02:00:00Z">
+        <changelog><![CDATA[Named progressions (Chords step): besides Walk - each chord drawn from the one before, as always - the chords can play a progression everyone knows by ear: Doo-wop (I vi IV V), Singer-songwriter (vi IV I V), Puff (I iii IV I), Pachelbel (the canon, its bass stepping down), Lament (i VII VI V, the Andalusian cadence), Circle (round the circle of fifths), Double plagal (I bVII IV I), Galant (the 18th-century Meyer and Prinner) and Blues (8, 12 or 16 bars, a chord a bar, Measures only) - or Any named, which picks one that suits the key. Inverted chords keep their basses as written (Pachelbel's G/B). The progression plays in order, a repeated passage carries it on, and a passage that closes still ends on its cadence; a Loop plays nothing else. One that does not suit the key (a lament in a major key) is not played, and the summary line says why.
+Walk is the default, so every idea number is as it was in 1.8.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
