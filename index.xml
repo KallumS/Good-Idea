@@ -72,6 +72,14 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.6" author="kallums" time="2026-10-02T15:00:00Z">
+        <changelog><![CDATA[Inversions checked against the textbooks: a second inversion (six-four) now only where they allow one - the cadential I6/4 at a cadence on a strong beat, or a passing or pedal six-four on a weak beat between chords of the same function - and a diminished chord is usually played in first inversion (vii6), as it is in practice. Borrowed, Flavours and Inversions each gain Common beside Rare: borrowed chords in most ideas (two in a longer one, now and then), flavours on half the chords that can take one, inversions on more than half the chords where one does its job.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
