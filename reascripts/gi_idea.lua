@@ -67,7 +67,7 @@ end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
-                  pull = 11, kit = 12, colour = 13, invert = 14, applied = 15 }
+                  pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -418,6 +418,25 @@ function M.buildSettings()
         Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. The window says which, and where. Seven-note scales only.",
         Common = "The same, on more of the chords that can take one, and in most ideas.",
       } },
+
+    -- Added in 1.9, last for the same reason. Walk draws nothing new.
+    { id = "progression", label = "Progression", step = "Chords",
+      values = { "Walk", "Any named", "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament",
+                 "Circle", "Double plagal", "Galant", "Blues" },
+      default = "Walk", when = hasChords,
+      hints = {
+        Walk = "Each chord drawn from the one before, by how strongly it leads there (tonic, subdominant, dominant) - the way Good Idea has always worked. A named progression fills the chords in order, going round, and a passage that closes still ends on its cadence, and a repeated passage carries the progression on. It is heard best in a Loop, which plays nothing else.",
+        ["Any named"] = "One of the named progressions that suits the key, chosen by the idea number.",
+        ["Doo-wop"] = "I vi IV V - the '50s doo-wop progression (Open Music Theory). Major keys.",
+        ["Singer-songwriter"] = "vi IV I V in a major key, i VI III VII in a minor one - never quite sure which is home.",
+        Puff = "I iii IV I - the 'Puff' opening, the bass climbing do mi fa. Major keys.",
+        Pachelbel = "I V6 vi iii6 IV I6 IV V - Pachelbel's canon, the bass stepping down do ti la sol fa mi. Major keys.",
+        Lament = "i VII VI V - the lament (the Andalusian cadence), the bass falling do te le sol. Minor keys.",
+        Circle = "Round the circle of fifths: I IV vii iii vi ii V I, or in minor i iv VII III VI ii V i ('I Will Survive').",
+        ["Double plagal"] = "I bVII IV I - two plagal steps home (the coda of 'Hey Jude'). Major keys.",
+        Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. Major keys.",
+        Blues = "The 12-bar blues - I I I I IV IV I I V IV I I - and its 8- and 16-bar cousins, a chord a bar. Measures only.",
+      } },
   }
   M.BY_ID = {}
   for _, s in ipairs(M.SETTINGS) do M.BY_ID[s.id] = s end
@@ -657,6 +676,85 @@ local function countFor(meter, len, r, kind, cad, first)
   return math.max(1, math.min(n, beats))
 end
 
+------------------------------------------------------------------------------
+-- Named progressions (1.9; docs/decisions/0021-named-progressions.md)
+--
+-- The stock progressions of Open Music Theory's pop/rock pages, and two of
+-- Gjerdingen's galant schemata. Each chord is a degree of the key, with the
+-- scale it comes from when not the key's own (`from`, an index of
+-- T.SCALES on the same key note) and the scale degree in its bass when it
+-- is inverted (`bass`). They fill the chords a unit walks to, in order and
+-- going round; a unit that closes still ends on its cadence.
+------------------------------------------------------------------------------
+
+M.PROGRESSIONS = {
+  ["Doo-wop"] = { major = { { 0 }, { 5 }, { 3 }, { 4 } } },
+  ["Singer-songwriter"] = { major = { { 5 }, { 3 }, { 0 }, { 4 } },
+                            minor = { { 0 }, { 5, from = 2 }, { 2, from = 2 }, { 6, from = 2 } } },
+  Puff = { major = { { 0 }, { 2 }, { 3 }, { 0 } } },
+  Pachelbel = { major = { { 0 }, { 4, bass = 6 }, { 5 }, { 2, bass = 4 }, { 3 }, { 0, bass = 2 }, { 3 }, { 4 } } },
+  Lament = { minor = { { 0 }, { 6, from = 2 }, { 5, from = 2 }, { 4, from = 3 } } },
+  Circle = { major = { { 0 }, { 3 }, { 6 }, { 2 }, { 5 }, { 1 }, { 4 }, { 0 } },
+             minor = { { 0 }, { 3 }, { 6, from = 2 }, { 2, from = 2 }, { 5, from = 2 }, { 1 }, { 4, from = 3 }, { 0 } } },
+  ["Double plagal"] = { major = { { 0 }, { 6, from = 8 }, { 3 }, { 0 } } },
+  Galant = { major = { { 0 }, { 4, bass = 1 }, { 4, bass = 6 }, { 0 }, { 3 }, { 0, bass = 2 }, { 6, bass = 1 }, { 0 } } },
+  -- (A chord a bar, by the bar: not filled in order like the rest.)
+  Blues = { blues = { [8] = { 0, 4, 3, 3, 0, 4, 0, 0 },
+                      [12] = { 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 },
+                      [16] = { 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 } } },
+}
+M.PROGRESSION_ORDER = { "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament", "Circle",
+                        "Double plagal", "Galant", "Blues" }
+
+-- The progression an idea plays - its chords for this key's mode - or nil
+-- (Walk, or one that does not suit the key, the kind or the length; `why`
+-- says which).
+function M.schemaFor(r, key, rnd)
+  local name = r.progression
+  if not name or name == "Walk" then return nil end
+  local seven = T.scaleLen(key) == 7
+  local q = T.degreeQuality(key, 0)
+  local mode = (q == "major" and "major") or (q == "minor" and "minor") or nil
+  local function fits(n)
+    local p = M.PROGRESSIONS[n]
+    if not seven then return false end
+    if p.blues then return r.kind == "Measure" and p.blues[r.bars] ~= nil end
+    return mode ~= nil and p[mode] ~= nil
+  end
+  if name == "Any named" then
+    local ok = {}
+    for _, n in ipairs(M.PROGRESSION_ORDER) do if fits(n) then ok[#ok + 1] = n end end
+    local x = rnd()
+    if #ok == 0 then return nil, "no named progression suits this key" end
+    name = ok[math.floor(x * #ok) + 1]
+  elseif not fits(name) then
+    local p = M.PROGRESSIONS[name]
+    if not seven then return nil, name .. " needs a seven-note scale" end
+    if p.blues then return nil, "the blues needs a Measure" end
+    return nil, name .. " needs a " .. (p.major and "major" or "minor") .. " key"
+  end
+  local p = M.PROGRESSIONS[name]
+  return { name = name, chords = p[mode], blues = p.blues and p.blues[r.bars], at = 0 }
+end
+
+-- `n` chords from the progression, going on from where it got to, the last
+-- of them its cadence's (as `T.progression` would end).
+local function schemaDegrees(sch, key, n, cad, rnd)
+  local tail = {}
+  if cad ~= "none" and cad ~= "open" then
+    local need = (cad == "HC") and 1 or 2
+    tail = T.progression(key, math.min(need, n), { cadence = cad }, rnd)
+  end
+  local degs, specs = {}, {}
+  for i = 1, n - #tail do
+    local c = sch.chords[sch.at % #sch.chords + 1]
+    sch.at = sch.at + 1
+    degs[i], specs[i] = c[1], c
+  end
+  for _, d in ipairs(tail) do degs[#degs + 1] = d end
+  return degs, specs
+end
+
 -- `n` stretches of a span, as even as the beats allow.
 local function evenSlots(meter, from, len, n)
   local out = {}
@@ -668,8 +766,11 @@ local function evenSlots(meter, from, len, n)
   return out
 end
 
-local function withDegrees(slots, degrees)
-  for i, sl in ipairs(slots) do sl.degree = degrees[i] or degrees[#degrees] end
+local function withDegrees(slots, degrees, specs)
+  for i, sl in ipairs(slots) do
+    sl.degree = degrees[i] or degrees[#degrees]
+    sl.spec = specs and specs[i] or nil
+  end
   return slots
 end
 
@@ -681,18 +782,42 @@ end
 --     source's chords for the first half, by time, then walks to its own
 --     ending - so the tune's first half fits it exactly as before;
 --   - anything new walks from the chord after the last one.
-local function unitChords(u, units, key, r, meter, rnd, prevLast)
+local function unitChords(u, units, key, r, meter, rnd, prevLast, sch)
+  -- The blues: a chord a bar, by where the bar is in the idea.
+  if sch and sch.blues then
+    local out = {}
+    local bars = math.max(1, u.len // meter.bar)
+    for i, sl in ipairs(evenSlots(meter, 0, u.len, bars)) do
+      local bar = (u.start + sl.s) // meter.bar
+      sl.degree = sch.blues[bar % #sch.blues + 1]
+      sl.spec = { sl.degree, blues = true }
+      out[i] = sl
+    end
+    return out
+  end
   local src = (u.kind == "repeat" or u.kind == "answer" or u.kind == "seq") and units[u.of] or nil
   local shift = (u.kind == "seq") and u.shift or 0
   -- (A copied chord remembers the one it was copied from, `orig`, so a
   -- flavour or an inversion comes round with it.)
   local function moved(sl, e)
     return { s = sl.s, e = math.min(e or sl.e, sl.e), degree = T.normDegree(key, sl.degree + shift),
-             orig = sl.orig or sl }
+             orig = sl.orig or sl, spec = (shift == 0) and sl.spec or nil }
+  end
+  -- A named progression goes on under a repeat (the tune copied, fitted to
+  -- the chords now under it) until it has come round to where the repeat's
+  -- source began - then the repeat copies it: Pachelbel's eight chords over
+  -- two four-bar statements of a Loop, then round again.
+  if sch and not sch.blues and src and shift == 0 and src.schemaAt
+     and sch.at % #sch.chords ~= src.schemaAt % #sch.chords then
+    src = nil
   end
   if src and src.len == u.len and src.cad == u.cad and (u.kind ~= "seq" or u.cad == "none") then
     local out = {}
     for _, sl in ipairs(src.rel) do out[#out + 1] = moved(sl) end
+    if sch and src.schemaAt and shift == 0 then
+      u.schemaAt, u.schemaUsed = sch.at, src.schemaUsed
+      sch.at = sch.at + src.schemaUsed
+    end
     return out
   end
   local need = (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC") and 2 or ((u.cad ~= "none") and 1 or 0)
@@ -707,12 +832,22 @@ local function unitChords(u, units, key, r, meter, rnd, prevLast)
     end
     local rest = u.len - cut
     local n = countFor(meter, rest, r, "rest", u.cad, false)
-    local degs = T.progression(key, n, { start = T.nextDegree(key, out[#out].degree, rnd),
-                                          cadence = u.cad, loopTo = 0 }, rnd)
-    for _, sl in ipairs(withDegrees(evenSlots(meter, cut, rest, n), degs)) do out[#out + 1] = sl end
+    local degs, specs
+    if sch then degs, specs = schemaDegrees(sch, key, n, u.cad, rnd)
+    else
+      degs = T.progression(key, n, { start = T.nextDegree(key, out[#out].degree, rnd),
+                                     cadence = u.cad, loopTo = 0 }, rnd)
+    end
+    for _, sl in ipairs(withDegrees(evenSlots(meter, cut, rest, n), degs, specs)) do out[#out + 1] = sl end
     return out
   end
   local n = countFor(meter, u.len, r, u.kind, u.cad, u == units[1])
+  if sch then
+    u.schemaAt = sch.at
+    local degs, specs = schemaDegrees(sch, key, n, u.cad, rnd)
+    u.schemaUsed = sch.at - u.schemaAt
+    return withDegrees(evenSlots(meter, 0, u.len, n), degs, specs)
+  end
   local start = prevLast and T.nextDegree(key, prevLast, rnd) or 0
   local degs = T.progression(key, n, { start = start, cadence = u.cad, loopTo = 0 }, rnd)
   return withDegrees(evenSlots(meter, 0, u.len, n), degs)
@@ -721,22 +856,38 @@ end
 -- Each unit's chords, and one timeline of { s, e, degree, chord } for the
 -- whole idea, in steps. The same chord twice running (where one unit ends on
 -- the chord the next begins with) is one chord, held.
-function M.harmony(plan, key, r, meter, rnd, colour)
+function M.harmony(plan, key, r, meter, rnd, colour, sch)
   local timeline = {}
   local prevLast
   for _, u in ipairs(plan.units) do
-    u.rel = unitChords(u, plan.units, key, r, meter, rnd, prevLast)
+    u.rel = unitChords(u, plan.units, key, r, meter, rnd, prevLast, sch)
     u.degrees, u.slots = {}, {}
     for _, rs in ipairs(u.rel) do
       u.degrees[#u.degrees + 1] = rs.degree
       local last = timeline[#timeline]
       local sl
-      if last and last.degree == rs.degree and last.e == u.start + rs.s then
+      local spec = rs.spec
+      local k = (spec and spec.from) and T.key(key.root, spec.from) or key
+      -- (Not where a named progression moves the bass under the same chord:
+      -- the Meyer's V4/3 to V6/5.)
+      if last and last.degree == rs.degree and last.e == u.start + rs.s
+         and (last.spec and last.spec.bass) == (spec and spec.bass) then
         last.e = u.start + rs.e
         sl = last
       else
-        sl = { s = u.start + rs.s, e = u.start + rs.e, beat = u.start + rs.s, degree = rs.degree, key = key,
-               chord = T.chord(key, rs.degree, colour), origin = rs.orig or rs }
+        sl = { s = u.start + rs.s, e = u.start + rs.e, beat = u.start + rs.s, degree = rs.degree, key = k,
+               chord = T.chord(k, rs.degree, colour), origin = rs.orig or rs, spec = spec }
+        -- A named progression's inverted chord: the scale degree it names
+        -- in the bass (Pachelbel's V6, the Prinner's I6).
+        if spec and spec.bass then
+          local bpc = T.pc(key, spec.bass)
+          for idx, pc in ipairs(sl.chord.pcs) do
+            if pc == bpc and idx > 1 then
+              sl.bassPc, sl.bassPos = pc, sl.chord.pos[idx]
+              sl.inversion = ({ ["3"] = 1, ["5"] = 2, ["7"] = 3 })[T.roleOf(sl.chord, pc)]
+            end
+          end
+        end
         timeline[#timeline + 1] = sl
       end
       if u.slots[#u.slots] ~= sl then u.slots[#u.slots + 1] = sl end
@@ -803,7 +954,8 @@ function M.borrow(timeline, key, r, rnd, colour)
   local cands, weights = {}, {}
   for i = 2, #timeline - 2 do
     local sl = timeline[i]
-    for _, f in ipairs(from) do
+    -- (A named progression's chords are its own.)
+    for _, f in ipairs(sl.spec and {} or from) do
       if T.SCALES[f[1]].iv ~= T.SCALES[key.scale].iv then
         local other = T.key(key.root, f[1])
         local ch = T.chord(other, sl.degree, colour)
@@ -997,7 +1149,7 @@ function M.applied(timeline, plan, key, r, rnd, colour)
     local x1, x2 = rnd(), rnd()
     local x = after.degree
     local q = T.degreeQuality(key, x)
-    local can = not keep[sl] and not sl.borrowed and not after.borrowed and lastDone ~= i - 1
+    local can = not keep[sl] and not sl.borrowed and not after.borrowed and lastDone ~= i - 1 and not sl.spec
                 and same[sl.origin or sl]
                 and x ~= 0 and (q == "major" or q == "minor")
     local go, kind
@@ -1062,6 +1214,13 @@ function M.flavour(timeline, plan, key, r, rnd)
       local cands, weights = {}, {}
       for _, f in ipairs(T.FLAVOURS) do
         local ch = T.flavourChord(sl.key or key, sl.degree, f, seventh)
+        -- (Not one that drops a named progression's bass note: no sus4 over
+        -- Pachelbel's G/B.)
+        if ch and sl.bassPc then
+          local has = false
+          for _, pc in ipairs(ch.pcs) do if pc == sl.bassPc then has = true end end
+          if not has then ch = nil end
+        end
         -- (Not one that sounds like the chord either side of it. An add9 has
         -- the notes and the name of Mixed's own; it changes the voicing,
         -- putting its ninth on top.)
@@ -1147,7 +1306,7 @@ function M.invert(timeline, plan, key, r, rnd, meter)
       go = x < chance or (dimTriad and x < M.DIM_FIRST)
     end
     if sl.inversion then go = false end
-    if go and not keep[sl] and not sl.flavour and not sl.applied then
+    if go and not keep[sl] and not sl.flavour and not sl.applied and not sl.spec then
       local ch = sl.chord
       local pb, nb = bassPcOf(before), after.chord.rootPc
       local k = sl.key or key
@@ -1544,9 +1703,12 @@ local function goalFor(ctx, u, prev, target, step)
   local ch = M.chordAt(ctx.timeline, step).chord
   local tonic = T.chord(ctx.key, 0, "Triads")
   local ok
-  if u.cad == "PAC" then ok = function(p) return p % n == 0 end
-  elseif u.cad == "IAC" then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
-  elseif u.cad == "HC" then ok = function(p) return T.onChord(key, ch, p) end
+  -- (A close whose chord is not the tonic - the blues, which plays its own
+  -- changes bar by bar - lands on a note of the chord it has.)
+  local home = ch.rootPc == tonic.rootPc
+  if u.cad == "PAC" and home then ok = function(p) return p % n == 0 end
+  elseif u.cad == "IAC" and home then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
+  elseif u.cad == "HC" or u.cad == "PAC" or u.cad == "IAC" then ok = function(p) return T.onChord(key, ch, p) end
   elseif u.cad == "DC" then
     -- The tune lands where the tonic was due - do, which vi also has - and
     -- the harmony goes elsewhere under it.
@@ -2734,11 +2896,13 @@ function M.make(st, meter, seed)
     r.colour, r.chordPace, r.chordStyle = "Triads", "One a bar", "Block"
     r.flavours, r.voicing, r.inversions = "Off", "Close", "Off"
     r.partWriting = "Free"
+    r.progression = "Walk"
   end
   local book = r.partWriting == "By the book"
   local plan = M.plan(r, meter, M.stream(seed, "plan"))
   local colour = r.colour
-  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
+  local sch, schemaWhy = M.schemaFor(r, key, M.stream(seed, "schema"))
+  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   local applied = M.applied(timeline, plan, key, r, M.stream(seed, "applied"), colour)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
@@ -2849,6 +3013,8 @@ function M.make(st, meter, seed)
   if r.chords then
     said[#said + 1] = r.colour:lower()
     if r.voicing ~= "Close" then said[#said + 1] = r.voicing:lower() .. " voicing" end
+    if sch then said[#said + 1] = sch.name:lower() .. " progression"
+    elseif schemaWhy then said[#said + 1] = "walked (" .. schemaWhy .. ")" end
     said[#said + 1] = M.valueName(M.BY_ID.chordPace, r.chordPace)
     said[#said + 1] = r.chordStyle:lower() .. ((r.chordStyle == "Broken" and arpName) and (" (" .. arpName .. ")") or "")
   end
@@ -2896,6 +3062,7 @@ function M.make(st, meter, seed)
     ending = cadNames[plan.ending] or "",
     borrowed = notes,
     applied = appliedNotes,
+    schema = sch and sch.name or nil,
   }
 end
 

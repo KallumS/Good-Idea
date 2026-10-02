@@ -67,6 +67,10 @@ that make music sound like music:
   becomes that chord's own dominant - D7 before G in C major (V7/V), E before
   Am (V/vi) - or its leading-tone chord. The tune bends with it, and the
   window says which chord it is, where, and what it leads to.
+- **Named progressions.** Instead of the walk, the chords can play a
+  progression you know: doo-wop, Pachelbel, the lament, the blues, the
+  circle of fifths, and others - with their basses as written (Pachelbel's
+  G/B, the galant Prinner's C/E).
 
 So there is chance in it - **New Idea** picks which rhythm, which chords,
 which notes - but only among choices that make musical sense.
@@ -145,6 +149,18 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      one: the cadential I6/4, a passing or a pedal six-four. A diminished
      chord is usually in first inversion, as vii6. The bass plays it, and
      the chord line writes it C/E.
+   - **Progression** - Walk (the default: each chord drawn from the one
+     before, as always), Any named, or one of the progressions everyone
+     knows by ear: Doo-wop (I vi IV V), Singer-songwriter (vi IV I V),
+     Puff (I iii IV I), Pachelbel (the canon's bass stepping down), Lament
+     (i VII VI V, the Andalusian cadence), Circle (round the circle of
+     fifths), Double plagal (I bVII IV I), Galant (two 18th-century stock
+     phrases: the Meyer, then the Prinner) and Blues (8, 12 or 16 bars, a
+     chord a bar, Measures only). The chords play it in order, going
+     round, and a passage that closes still ends on its cadence; a Loop
+     shows it best. One that does not suit the key (a lament in a major
+     key) is not played, and the summary line says why. Any named picks
+     one that suits.
    - **Part-writing** - By the book (the default) or Free. By the book does
      what the harmony and orchestration books say: an inverted chord does
      not double its bass note (G/B plays no second B above the bass), a

@@ -197,7 +197,10 @@ local function audit(idea, tag)
   rule("and end at the end", tl[#tl].e == b.beats * 4, tag)
   for i = 2, #tl do
     rule("each chord starts where the last ended", tl[i].s == tl[i - 1].e, tag)
-    rule("no chord follows itself", tl[i].degree ~= tl[i - 1].degree, tag .. " " .. idea.chords)
+    -- (But for the same chord with its bass moving, as the galant Meyer's
+    -- V4/3 to V6/5.)
+    rule("no chord follows itself", tl[i].degree ~= tl[i - 1].degree
+         or I.bassPcOf(tl[i]) ~= I.bassPcOf(tl[i - 1]), tag .. " " .. idea.chords)
     rule("chords change on a beat, or an eighth before one when pushed",
          tl[i].s % meter.beat == 0 or (tl[i].pushed and (tl[i].s + 2) % meter.beat == 0), tag)
   end
@@ -205,7 +208,9 @@ local function audit(idea, tag)
   -- that closes is V-I.)
   local u1 = idea.plan.units[1]
   local tailLen = (u1.cad == "PAC" or u1.cad == "IAC") and 2 or 1
-  rule("an idea opens on the tonic chord", tl[1].degree == 0 or #u1.rel <= tailLen, tag .. " " .. idea.chords)
+  -- (A named progression opens where it opens: the singer-songwriter on vi.)
+  rule("an idea opens on the tonic chord", tl[1].degree == 0 or #u1.rel <= tailLen
+       or (idea.schema and tl[1].spec ~= nil), tag .. " " .. idea.chords)
   local last = tl[#tl]
   local ending = idea.plan.ending
   if ending == "PAC" or ending == "IAC" then
@@ -236,9 +241,10 @@ local function audit(idea, tag)
       end
     end
   end
-  -- A deceptive close (1.8): a cadence chord, then vi.
+  -- A deceptive close (1.8): a cadence chord, then vi. (Not in the blues,
+  -- which plays its own changes bar by bar.)
   for _, u in ipairs(idea.plan.units) do
-    if u.cad == "DC" and T.scaleLen(key) == 7 and u.slots and #u.slots >= 2 then
+    if u.cad == "DC" and T.scaleLen(key) == 7 and u.slots and #u.slots >= 2 and idea.schema ~= "Blues" then
       local last, before = u.slots[#u.slots], u.slots[#u.slots - 1]
       rule("a deceptive close goes from a cadence chord to vi",
            last.degree == 5 and CADENCE_PCS(key)[before.degree] == true, tag .. " " .. idea.chords)
@@ -306,6 +312,13 @@ local function audit(idea, tag)
       -- (A rootless voicing puts the chord's ninth where its root was.)
       rule("every note of the chords part is on its chord",
            ch.has[n.pitch % 12] == true or (r.voicing == "Rootless" and n.pitch % 12 == ch.nine), tag)
+    end
+  end
+  -- A chord's bass note is one of its notes (an inversion, a named
+  -- progression's G/B: no sus4 over a B).
+  if r.chords then
+    for _, sl in ipairs(idea.timeline) do
+      if sl.bassPc then rule("a chord's bass note is a note of the chord", sl.chord.has[sl.bassPc] == true, tag .. " " .. idea.chords) end
     end
   end
   -- Part-writing by the book (1.7).
@@ -407,6 +420,12 @@ for mi, sig in ipairs(METERS) do
       -- Every fourth Measure in one of the 1.8 forms (Any rolls only 1.0's).
       local NEWFORMS = { "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4", "Ternary", "Extended" }
       if seed % 4 == 1 then st.form = NEWFORMS[(seed // 4) % #NEWFORMS + 1] end
+      -- Every third idea plays a named progression (1.9), or Any named.
+      if seed % 3 == 0 then
+        local names = { "Any named" }
+        for _, n in ipairs(I.PROGRESSION_ORDER) do names[#names + 1] = n end
+        st.progression = names[(seed // 3) % #names + 1]
+      end
       -- Every seventh idea in a scale other than major, all sixteen covered.
       if seed % 2 == 0 then st.scale = SCALES[(seed // 2) % #SCALES + 1] end
       if seed % 3 == 1 then st.root = "Any" end
@@ -1931,6 +1950,122 @@ do
     if want[f] then rolled = true end
   end
   ok(not rolled, "Any never rolls a 1.8 form: they are there to be chosen")
+end
+
+------------------------------------------------------------------------------
+-- 1.9: named progressions
+------------------------------------------------------------------------------
+
+do
+  -- In a Loop at a chord a bar, a named progression is played as written,
+  -- from its first chord.
+  local want = {
+    ["Doo-wop"] = { 1, "C Am F G" }, ["Singer-songwriter"] = { 1, "Am F C G" }, Puff = { 1, "C Em F" },
+    Pachelbel = { 1, "C G/B Am Em/G" }, Lament = { 2, "Cm Bb Ab G" }, Circle = { 1, "C F Bdim Em" },
+    ["Double plagal"] = { 1, "C Bb F" }, Galant = { 1, "C G/D G/B C" },
+  }
+  local bad = {}
+  for name, w in pairs(want) do
+    for seed = 1, 10 do
+      local idea = make({ kind = "Measure", form = "Loop", measureBars = 8, chordPace = "One a bar",
+                          progression = name, scale = w[1], root = 1, colour = "Triads",
+                          push = "None", pull = "None", flavours = "Off" }, seed)
+      local got = {}
+      for _, sl in ipairs(idea.timeline) do
+        got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
+      end
+      local line = table.concat(got, " ")
+      if line:sub(1, #w[2]) ~= w[2] then bad[#bad + 1] = name .. ": " .. line end
+      if idea.schema ~= name then bad[#bad + 1] = name .. " not named" end
+    end
+  end
+  eq(#bad, 0, "each named progression is played as written: " .. table.concat(bad, "; "))
+  -- A repeat carries the progression on: all eight of Pachelbel's chords
+  -- over a sixteen-bar Loop of four-bar statements, and doo-wop's four over
+  -- a Loop at a chord every two bars.
+  local short = {}
+  for seed = 1, 10 do
+    for _, c in ipairs({ { "Pachelbel", "One a bar", "C G/B Am Em/G F C/E F G C G/B Am Em/G F C/E F G" },
+                         { "Doo-wop", "Slow", "C Am F G" } }) do
+      local idea = make({ kind = "Measure", form = "Loop", measureBars = 16, chordPace = c[2],
+                          progression = c[1], scale = 1, root = 1, colour = "Triads",
+                          push = "None", pull = "None" }, seed)
+      local got = {}
+      for _, sl in ipairs(idea.timeline) do
+        got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
+      end
+      local line = table.concat(got, " ")
+      if line:sub(1, #c[3]) ~= c[3] then short[#short + 1] = c[1] .. ": " .. line end
+    end
+  end
+  eq(#short, 0, "a Loop's repeats carry a named progression on: " .. table.concat(short, "; "))
+  -- Flavoured, a named chord keeps its bass note: G(add9)/B, never Gsus4/B.
+  local lost, flavoured = 0, 0
+  for _, name in ipairs({ "Pachelbel", "Galant" }) do
+    for seed = 1, 40 do
+      local idea = make({ kind = "Measure", form = "Loop", progression = name, scale = 1, colour = "Mixed",
+                          flavours = "Common" }, seed)
+      for _, sl in ipairs(idea.timeline) do
+        if sl.bassPc then
+          if sl.flavour then flavoured = flavoured + 1 end
+          if not sl.chord.has[sl.bassPc] then lost = lost + 1 end
+        end
+      end
+    end
+  end
+  ok(lost == 0 and flavoured > 0, ("a flavoured named chord keeps its bass note (%d flavoured)"):format(flavoured))
+  -- The blues: a chord a bar, I I I I IV IV I I V IV I I.
+  local blues = make({ kind = "Measure", measureBars = 12, progression = "Blues", root = 1, scale = 1,
+                       push = "None", pull = "None", colour = "Triads" }, 3)
+  local per = {}
+  for b = 0, 11 do per[#per + 1] = I.chordAt(blues.timeline, b * 16).chord.name end
+  eq(table.concat(per, " "), "C C C C F F C C G F C C", "the 12-bar blues, bar by bar")
+  -- The blues plays its own changes, so a close the form asks for may fall
+  -- on IV or V: the tune lands on a note of the chord there.
+  local offChord, closes = 0, 0
+  for seed = 1, 60 do
+    local idea = make({ kind = "Measure", progression = "Blues", scale = 1,
+                        measureBars = ({ 8, 12, 16 })[seed % 3 + 1],
+                        form = ({ "Period", "Sentence", "Song", "Extended", "Hybrid 1" })[seed % 5 + 1] }, seed)
+    for _, n in ipairs(idea.melody) do
+      if n.closes then
+        closes = closes + 1
+        local sl = I.chordAt(idea.timeline, n.step)
+        if not T.onChord(I.keyAt({ timeline = idea.timeline, key = idea.key }, n.step), sl.chord, n.pos) then
+          offChord = offChord + 1
+        end
+      end
+    end
+  end
+  ok(offChord == 0 and closes > 60, ("in the blues every close lands on its chord (%d of %d off)"):format(offChord, closes))
+  -- A progression that does not suit the key is not played: the chords walk,
+  -- and the summary says why.
+  local idea = make({ kind = "Measure", progression = "Lament", scale = 1 }, 1)
+  ok(idea.schema == nil and idea.summary:find("needs a minor key", 1, true), "a lament in a major key walks, and says why")
+  local ph = make({ kind = "Phrase", content = "Chords", progression = "Blues" }, 1)
+  ok(ph.schema == nil and ph.summary:find("needs a Measure", 1, true), "the blues needs a Measure")
+  -- Any named picks one that suits the key.
+  local seen, wrong = {}, 0
+  for seed = 1, 120 do
+    local x = make({ kind = "Measure", progression = "Any named", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+    if x.schema then
+      seen[x.schema] = true
+      local p = I.PROGRESSIONS[x.schema]
+      local minor = seed % 2 == 0
+      if not p.blues and ((minor and not p.minor) or (not minor and not p.major)) then wrong = wrong + 1 end
+    end
+  end
+  local n = 0
+  for _ in pairs(seen) do n = n + 1 end
+  ok(n >= 6 and wrong == 0, ("Any named plays %d different ones, each suiting the key"):format(n))
+  -- Walk is 1.8, and hidden it changes nothing.
+  local hidden = 0
+  for seed = 1, 30 do
+    local a = make({ kind = "Motif", progression = "Walk" }, seed)
+    local b = make({ kind = "Motif", progression = "Doo-wop" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then hidden = hidden + 1 end
+  end
+  eq(hidden, 0, "Progression, hidden under a Motif, changes nothing")
 end
 
 C.done()
