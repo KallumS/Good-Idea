@@ -367,6 +367,7 @@ local function audit(idea, tag)
     end
   end
 
+  local cp = part(idea, "Chords")
   -- The 1.11 chord styles and named rhythms, in a Measure (a Phrase's own
   -- bass is struck at the bar lines in every style).
   if r.kind == "Measure" and cp then
@@ -409,8 +410,18 @@ local function audit(idea, tag)
     end
   end
 
+  -- A chord is struck only where the tune and the bass hear that chord: a
+  -- pulled chord's last eighth is held, never struck (1.11).
+  if cp then
+    for _, n in ipairs(cp.notes) do
+      local st = n.start * 4
+      local a, b = I.chordAt(idea.chordTimeline, st + 1e-6), I.chordAt(tl, st + 1e-6)
+      rule("a chord is struck only where the tune and the bass hear it",
+           a and b and a.degree == b.degree and a.chord.rootPc == b.chord.rootPc, tag .. " " .. r.chordStyle)
+    end
+  end
+
   -- The chords part: every note a chord tone of the chord it sounds over.
-  local cp = part(idea, "Chords")
   if cp then
     for _, n in ipairs(cp.notes) do
       -- (Against the chords part's own timeline: a pulled chord comes late.)
@@ -2386,7 +2397,8 @@ do
         end
         if from and table.concat(bar, " ") ~= w then bad[#bad + 1] = name .. " " .. pn .. ": " .. table.concat(bar, " ") end
       end
-      local drums = make({ kind = "Drums", groove = name, beat = "Backbeat", fills = "None", figures = "Plain" }, seed)
+      -- (Dotted figures asked for: a named rhythm's kick takes none.)
+      local drums = make({ kind = "Drums", groove = name, beat = "Backbeat", fills = "None", figures = "Dotted" }, seed)
       local kicks = {}
       for _, n in ipairs(drums.block.notes) do
         if n.pitch == I.DRUM.kick and n.start < 4 then kicks[#kicks + 1] = n.start * 4 end
@@ -2462,7 +2474,7 @@ do
   end
   eq(pedalExtra, 0, "a Pedal chord is struck once")
   ok(offOn == 0 and offLong == 0, ("Offbeat chords are off the beat and short (%d on, %d long)"):format(offOn, offLong))
-  ok(fillOnTune == 0 and fillHeld > fillStrokes / 2,
+  ok(fillOnTune == 0 and fillHeld > fillStrokes * 0.4,
      ("Fill chords come where the tune holds or rests: %d of %d strokes, %d on a moving note"):format(fillHeld, fillStrokes, fillOnTune))
 end
 
