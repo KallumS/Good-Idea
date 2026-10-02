@@ -62,6 +62,8 @@ Keep that true. So:
   *retired* (`retired = true`, never shown, one value): the Measure's
   `drums` switch, since 1.2 ([0013](docs/decisions/0013-drums-are-a-kind-of-idea.md));
   its one value is Off since 1.3, when a Measure lost its drums.
+- Every Off / Rare setting also has **Common** (1.6): the same draws with
+  a higher threshold, so Common only ever adds to what Rare does.
 - **A value added to a setting Any rolls** goes outside Any
   (`anyValues`/`anyWeights` keep 1.0's list): "1.5 a bar" and "4 a bar" in
   the chord pace ([0015](docs/decisions/0015-chord-rhythm-figures-and-one-and-a-half.md),
@@ -143,7 +145,8 @@ everywhere means strength >= 2.
    carries its scale, `sl.key`. Then:
    - **borrow** ([0011](docs/decisions/0011-borrowed-chords-rarely-and-named.md)):
      `I.borrow` - about one idea in four (`I.BORROW_CHANCE`), with Borrowed
-     on Rare, a seven-note scale and at least four chords - swaps one chord
+     on Rare (two in three on Common, with a second chord, never adjacent,
+     half the time in an idea of eight chords or more: `I.BORROW_AGAIN`), a seven-note scale and at least four chords - swaps one chord
      (not the first, not the last two) for the same degree from another
      seven-note scale on the same key note (`BORROW_FROM`), setting
      `sl.key` to that scale and `sl.borrowed` to its name, its numeral
@@ -160,16 +163,21 @@ everywhere means strength >= 2.
      the tune and bass use the timeline on the beat.
    - **flavour** ([0018](docs/decisions/0018-flavours-voicings-and-inversions.md)):
      `I.flavour`, with Mixed and Flavours on Rare, after borrowing - about
-     one chord in five that may (`I.FLAVOUR_CHANCE`) becomes
+     one chord in five that may (`I.FLAVOUR_CHANCE`; half on Common) becomes
      `T.flavourChord`: sus4, sus2, add2 (inside), add9 (on top), 9, 6, or the
      diminished seventh a third up. In key, offered only where the interval
      is real; keeps `sl.degree`; never the first, last or a cadence's chord
      (`cadenceSlots`), never a borrowed one; `sl.flavour`.
    - **invert** (0018): `I.invert`, after the push - about one chord in four
-     that could (`I.INVERT_CHANCE`): first inversion where the bass steps in
-     or out, second only cadential, passing or over a held bass, third only
-     where the seventh falls a step onto the next chord's root or third
-     (which takes it in its bass). `sl.bassPc`, `sl.bassPos`,
+     that could (`I.INVERT_CHANCE`; three in five on Common): first
+     inversion where the bass steps in or out; second only as the textbooks
+     allow a six-four - cadential (at a cadence, before its V, on a stronger
+     beat: `I.weightAt`), passing (the bass one way through three notes) or
+     pedal (held), those two on a weaker beat between chords of the same
+     function; third only where the seventh falls a step onto the next
+     chord's root or third (which takes it in its bass). A diminished triad
+     is considered three times in four (`I.DIM_FIRST`), first inversion only
+     (vii6). `sl.bassPc`, `sl.bassPos`,
      `sl.inversion`; `I.bassPcOf(sl)` is the bass everywhere. Not on
      flavoured or cadence chords; never two running.
    Flavours and inversions follow a copied chord's original (`rs.orig` ->
@@ -373,7 +381,7 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition, and the low interval limit. |
-| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 571,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job, C/E). The sweep plays every idea in one of the seven voicings. |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 571,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), and Common against Rare. The sweep plays every idea in one of the seven voicings, and every third on Common. |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
 | `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (shown only with Mixed), the seven voicings, inversions, a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
@@ -403,7 +411,10 @@ rootless voicing with its root, no low interval limit, Close played open,
 flavours at a cadence, flavours drawn afresh each time round, flavours or
 inversions when off, the bass ignoring an inversion, any six-four, a third
 inversion onto a seventh, no slash in the chord line, a spread voicing over
-a Phrase's bass, Flavours shown with Triads - and watching it fail. Separate dice were not covered at first:
+a Phrase's bass, Flavours shown with Triads; in 1.6 a cadential 6/4 anywhere,
+a passing 6/4 turning back, a pedal 6/4 on a strong beat, diminished triads
+like any other, a diminished 6/4, Common no more than Rare, two borrowed
+chords side by side, Common borrowing only one - and watching it fail. Separate dice were not covered at first:
 nothing compared the bass or drums under two chord styles. A test does now,
 and chords and bass drawing from one stream fails it.
 

@@ -314,11 +314,12 @@ function M.buildSettings()
         Some = "Some chords arrive an eighth early - on the 'and' before the beat - and the tune and the bass come with them.",
         Lots = "Most chords arrive an eighth early: a pushed, syncopated feel.",
       } },
-    { id = "borrowed", label = "Borrowed", step = "Key", values = { "Off", "Rare" }, default = "Rare",
+    { id = "borrowed", label = "Borrowed", step = "Key", values = { "Off", "Rare", "Common" }, default = "Rare",
       when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
       hints = {
         Off = "Every chord from the scale.",
         Rare = "About one idea in four borrows one chord from another scale on the same key note - a minor iv or a bVI in a major key, a major IV in a minor one. The window says which chord, and where it is from. Seven-note scales only.",
+        Common = "About two ideas in three borrow a chord, and a longer one (eight chords or more) sometimes two.",
       } },
 
     -- Added in 1.2, last for the same reason.
@@ -360,7 +361,7 @@ function M.buildSettings()
 
     -- Added in 1.5, last for the same reason. Off, Close and Off are the
     -- 1.4 sound, and draw nothing from the dice.
-    { id = "flavours", label = "Flavours", step = "Chords", values = { "Off", "Rare" }, default = "Rare",
+    { id = "flavours", label = "Flavours", step = "Chords", values = { "Off", "Rare", "Common" }, default = "Rare",
       when = function(st)
         return hasChords(st) and (st.colour == "Mixed" or st.colour == "Any")
            and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7)
@@ -368,6 +369,7 @@ function M.buildSettings()
       hints = {
         Off = "Mixed is sevenths and added ninths only.",
         Rare = "With Mixed, now and then a chord takes another colour: a sus4 or sus2, an added 2nd, a 6th, a 9th, or the diminished chord on its third (G7 becomes Bm7b5). Never the first chord or the cadence. Seven-note scales only.",
+        Common = "The same colours, on about half the chords that can take one.",
       } },
     { id = "voicing", label = "Voicing", step = "Chords", values = T.VOICINGS, any = true, default = "Close",
       weights = { 3, 1, 1, 1, 1, 1, 1 }, when = hasChords,
@@ -380,11 +382,12 @@ function M.buildSettings()
         Shell = "The root, the third and the seventh - the notes that say what the chord is, and nothing else.",
         Rootless = "No root - the bass has it: the third, fifth, seventh and ninth, the jazz pianist's left hand.",
       } },
-    { id = "inversions", label = "Inversions", step = "Chords", values = { "Off", "Rare" }, default = "Rare",
+    { id = "inversions", label = "Inversions", step = "Chords", values = { "Off", "Rare", "Common" }, default = "Rare",
       when = hasChords,
       hints = {
         Off = "Every chord with its root in the bass.",
         Rare = "Now and then a chord's third, fifth or seventh in the bass, where it makes the bass move by step - C G/B Am, a passing chord, or the I6/4 before the cadence. The bass plays it.",
+        Common = "The same, on more than half the chords where an inversion does its job.",
       } },
   }
   M.BY_ID = {}
@@ -721,7 +724,10 @@ end
 -- seven-note scales, so the scale positions line up note for note.
 ------------------------------------------------------------------------------
 
-M.BORROW_CHANCE = 0.25
+M.BORROW_CHANCE = { Rare = 0.25, Common = 0.65 }
+-- With Common, a second borrowed chord in an idea of eight chords or more,
+-- this often, never next to the first.
+M.BORROW_AGAIN = 0.5
 
 -- Where to borrow from, by what the home key is: the parallel minor or major
 -- most of all (the commonest mixture), the modes a step from it next.
@@ -737,8 +743,9 @@ local function sameNotes(a, b)
 end
 
 function M.borrow(timeline, key, r, rnd, colour)
-  if r.borrowed ~= "Rare" or T.scaleLen(key) ~= 7 or #timeline < 4 then return {} end
-  if rnd() >= M.BORROW_CHANCE then return {} end
+  local chance = M.BORROW_CHANCE[r.borrowed]
+  if not chance or T.scaleLen(key) ~= 7 or #timeline < 4 then return {} end
+  if rnd() >= chance then return {} end
   local tonic = T.degreeQuality(key, 0)
   local from = BORROW_FROM[(tonic == "major") and "major" or "minor"]
   local inKey = {}
@@ -761,14 +768,32 @@ function M.borrow(timeline, key, r, rnd, colour)
     end
   end
   if #cands == 0 then return {} end
+  local function take(c)
+    c.slot.chord, c.slot.key = c.chord, c.key
+    -- Named against the home key: Ab in C major is bVI, Fm is iv.
+    local shift = (c.chord.rootPc - T.pc(key, c.slot.degree)) % 12
+    local numeral = ((shift == 11) and "b" or (shift == 1) and "#" or "") ..
+                    T.degreeNumeral(c.key, c.slot.degree)
+    c.slot.borrowed = { name = c.chord.name, numeral = numeral, from = M.keyName(c.key) }
+  end
   local c = weighted(rnd, cands, weights)
-  c.slot.chord, c.slot.key = c.chord, c.key
-  -- Named against the home key: Ab in C major is bVI, Fm is iv.
-  local shift = (c.chord.rootPc - T.pc(key, c.slot.degree)) % 12
-  local numeral = ((shift == 11) and "b" or (shift == 1) and "#" or "") ..
-                  T.degreeNumeral(c.key, c.slot.degree)
-  c.slot.borrowed = { name = c.chord.name, numeral = numeral, from = M.keyName(c.key) }
-  return { c.slot }
+  take(c)
+  local out = { c.slot }
+  if r.borrowed == "Common" and #timeline >= 8 and rnd() < M.BORROW_AGAIN then
+    local at = {}
+    for i, sl in ipairs(timeline) do at[sl] = i end
+    local more, mw = {}, {}
+    for i, d in ipairs(cands) do
+      if math.abs(at[d.slot] - at[c.slot]) > 1 then more[#more + 1] = d; mw[#mw + 1] = weights[i] end
+    end
+    if #more > 0 then
+      local d = weighted(rnd, more, mw)
+      take(d)
+      out[2] = d.slot
+      if at[d.slot] < at[c.slot] then out = { d.slot, c.slot } end
+    end
+  end
+  return out
 end
 
 ------------------------------------------------------------------------------
@@ -852,21 +877,22 @@ end
 
 -- With Mixed, now and then a chord takes another colour (`T.flavourChord`):
 -- about one chord in five that may.
-M.FLAVOUR_CHANCE = 0.2
+M.FLAVOUR_CHANCE = { Rare = 0.2, Common = 0.5 }
 local FLAVOUR_WEIGHT = { sus4 = 3, sus2 = 2, add2 = 1.5, add9 = 1.5, ["9"] = 2, ["6"] = 2, dim = 1.5 }
 
 -- A chord copied from another (a repeat, an answer's first half, a Loop
 -- going round) takes the flavour its original took, where it can, and
 -- draws nothing: the music that comes round again sounds the same.
 function M.flavour(timeline, plan, key, r, rnd)
-  if r.flavours ~= "Rare" or r.colour ~= "Mixed" or T.scaleLen(key) ~= 7 then return end
+  local chance = M.FLAVOUR_CHANCE[r.flavours]
+  if not chance or r.colour ~= "Mixed" or T.scaleLen(key) ~= 7 then return end
   local keep = cadenceSlots(plan, timeline)
   local decided = {}
   for i, sl in ipairs(timeline) do
     local was = sl.origin and decided[sl.origin]
     local go
     if was ~= nil then go = was ~= false
-    else go = not keep[sl] and not sl.borrowed and rnd() < M.FLAVOUR_CHANCE end
+    else go = not keep[sl] and not sl.borrowed and rnd() < chance end
     if go and not keep[sl] and not sl.borrowed then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
@@ -914,14 +940,36 @@ end
 --           the next chord, which then takes that note in its bass
 --           (V4/2 I6)
 --
--- About one chord in four that could be inverted is; never two running
--- (but for the chord a third inversion resolves to), never a flavoured one.
-M.INVERT_CHANCE = 0.25
+-- About one chord in four that could be inverted is (more than half with
+-- Common); never two running (but for the chord a third inversion resolves
+-- to), never a flavoured one.
+--
+-- Checked against the textbooks' rules for six-fours (Open Music Theory;
+-- Puget Sound's Music Theory for the 21st-Century Classroom): a cadential
+-- 6/4 comes at a cadence, right before its V, on a stronger beat; a passing
+-- 6/4 walks the bass through three notes one way and a pedal 6/4 holds it,
+-- both on a weaker beat, between two chords of the same function. And a
+-- diminished triad is most at home in first inversion (vii6): in root
+-- position its fifth is a tritone over the bass. So a diminished triad is
+-- inverted three times in four where its bass steps, and never to a 6/4.
+M.INVERT_CHANCE = { Rare = 0.25, Common = 0.6 }
+M.DIM_FIRST = 0.75
+
+-- How strong a beat is, with the odd bars of a pair stronger than the even
+-- (so a chord a bar still has strong and weak places).
+local function weightAt(meter, step)
+  local w = M.strength(meter, step)
+  if step % meter.bar == 0 and (step // meter.bar) % 2 == 0 then w = w + 0.5 end
+  return w
+end
+M.weightAt = weightAt
+local function beatAt(sl) return sl.beat or sl.s end
 
 -- As with flavours, a chord copied from another is inverted as its original
 -- was, where the bass around it still allows it, and draws nothing.
-function M.invert(timeline, plan, key, r, rnd)
-  if r.inversions ~= "Rare" or #timeline < 3 then return end
+function M.invert(timeline, plan, key, r, rnd, meter)
+  local chance = M.INVERT_CHANCE[r.inversions]
+  if not chance or #timeline < 3 then return end
   local keep = cadenceSlots(plan, timeline)
   local decided = {}
   local i = 2
@@ -929,23 +977,34 @@ function M.invert(timeline, plan, key, r, rnd)
     local sl, before, after = timeline[i], timeline[i - 1], timeline[i + 1]
     local step = 1
     local was = sl.origin and decided[sl.origin]
+    local dimTriad = sl.chord.quality == "diminished" and #sl.chord.pcs == 3 and not sl.flavour
     local go
     if was ~= nil then go = was ~= false
-    else go = rnd() < M.INVERT_CHANCE end
+    else
+      local x = rnd()
+      go = x < chance or (dimTriad and x < M.DIM_FIRST)
+    end
     if sl.inversion then go = false end
     if go and not keep[sl] and not sl.flavour then
       local ch = sl.chord
       local pb, nb = bassPcOf(before), after.chord.rootPc
+      local k = sl.key or key
+      local sameFunction = T.functionOf(k, before.degree) == T.functionOf(k, after.degree)
+      local weaker = weightAt(meter, beatAt(sl)) < weightAt(meter, beatAt(before))
       local opts, weights = {}, {}
       for idx, pc in ipairs(ch.pcs) do
         local role = T.roleOf(ch, pc)
         if role == "3" and (byStep(pb, pc) or byStep(pc, nb)) then
           opts[#opts + 1] = { idx = idx, inv = 1 }
           weights[#weights + 1] = (byStep(pb, pc) and byStep(pc, nb)) and 3 or 1
-        elseif role == "5" then
-          local pedal = pc == pb and pc == nb
-          local passing = byStep(pb, pc) and byStep(pc, nb) and pb ~= nb
-          local cadential = sl.degree == 0 and T.rootAbove(sl.key or key, after.degree) == 7
+        elseif role == "5" and not dimTriad then
+          local up = (pc - pb) % 12
+          local on = (nb - pc) % 12
+          local oneWay = (up >= 1 and up <= 2 and on >= 1 and on <= 2) or (up >= 10 and on >= 10)
+          local pedal = pc == pb and pc == nb and sameFunction and weaker
+          local passing = oneWay and sameFunction and weaker
+          local cadential = sl.degree == 0 and keep[after] and T.rootAbove(k, after.degree) == 7
+                            and weightAt(meter, beatAt(sl)) > weightAt(meter, beatAt(after))
           if pedal or passing or cadential then
             opts[#opts + 1] = { idx = idx, inv = 2 }
             weights[#weights + 1] = 1
@@ -2184,7 +2243,7 @@ function M.make(st, meter, seed)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
   M.push(timeline, meter, r, M.stream(seed, "push"))
-  M.invert(timeline, plan, key, r, M.stream(seed, "invert"))
+  M.invert(timeline, plan, key, r, M.stream(seed, "invert"), meter)
   -- The chords part plays from its own copy, pulled late where it is; the
   -- tune, the bass and the drums play on the beat.
   local chordTl = r.chords and M.pull(timeline, meter, r, M.stream(seed, "pull")) or timeline

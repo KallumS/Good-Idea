@@ -1,7 +1,9 @@
 # 0018. Flavours for Mixed, a choice of voicings, and inversions where the bass steps
 
 Taken 2026-10-02. Stands. Widens [0006](0006-chords-stay-in-the-key.md)
-(every new chord is still built from the scale).
+(every new chord is still built from the scale). In 1.6 the six-four rules
+were tightened against the textbooks, diminished triads favour first
+inversion, and every Rare setting gained Common (see the end).
 
 ## Context
 
@@ -123,3 +125,57 @@ diminished chords here are the key's own.
 **Inversions anywhere, by chance.** Rejected: a six-four or a seventh in the
 bass in the wrong place sounds wrong, not adventurous. The dice choose only
 among places an inversion does its job.
+
+## 1.6: checked against the textbooks, and Common
+
+"Could you check your knowledge on inversions using the internet please.
+Also, anywhere we have an option called Rare could we add one for Common
+too please?"
+
+Searched: Open Music Theory ("6/4 chords as forms of prolongation"), Puget
+Sound's *Music Theory for the 21st-Century Classroom* ("Types of six-four
+chords"), Toby Rush's part-writing pages, and others quoting them. (The
+pages themselves are blocked from the build container; the search results
+quote them.) What held: first inversions as prolongations giving the bass a
+line; V4/2 resolving to I6, the seventh falling by step. What was too
+loose, and is now as the books say:
+
+- **Cadential 6/4**: at a cadence - right before the cadence's own V, the
+  chord a closing unit's dominant - and on a stronger beat than the V.
+  (Before, any I before any V, on any beat.)
+- **Passing 6/4**: the bass walks through three notes in one direction, on
+  a weaker beat than the chord before, between two chords of the same
+  function (I V6/4 I6, IV I6/4 IV6). (Before, steps either side, any
+  direction, any beat, any functions.)
+- **Pedal 6/4**: the bass held, on a weaker beat, between two chords of the
+  same function (I IV6/4 I, V I6/4 V).
+- **Diminished triads**: "usually found in first inversion (vii6)": in root
+  position the fifth is a tritone over the bass, and the second inversion is
+  rarely met. So a diminished triad is considered for inversion three times
+  in four (`I.DIM_FIRST`) and only ever to first inversion. (A diminished
+  seventh chord is left alone: the books note it is common in root
+  position.)
+
+"Weaker" and "stronger" are `I.weightAt`: the beat's strength, with the
+first bar of each pair of bars stronger than the second, so ideas with a
+chord a bar have strong and weak places too.
+
+**Common**, beside Rare, in every setting that has Rare (no Any, so a new
+value is free and no idea number changes):
+
+- **Borrowed**: about two ideas in three borrow (`I.BORROW_CHANCE`), and
+  one with eight chords or more borrows a second half the time
+  (`I.BORROW_AGAIN`), never next to the first. Rare stays one chord.
+- **Flavours**: half the chords that may (from one in five).
+- **Inversions**: three in five of the chords that may (from one in four);
+  never two running still holds, so Common gives about one and a half to
+  twice as many.
+
+The same draws decide Rare and Common (a higher threshold on the same
+dice), so turning Rare to Common only ever adds.
+
+Tests: the six-four check in the idea tests now holds the textbook rules
+(cadence, beat, direction, function); a diminished triad is inverted far
+more often than the rest and never to a 6/4; Common gives at least half as
+much again as Rare for all three; two borrowed chords are never side by
+side. Eight deliberate breakages, each caught.

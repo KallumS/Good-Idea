@@ -55,7 +55,8 @@ that make music sound like music:
   eighth early, onto the "and" before the beat, with the tune and the bass
   coming along; or **pulled** an eighth late, laid back; and the whole idea
   can **swing**.
-- **Borrowed chords.** Rarely - about one idea in four, at most one chord -
+- **Borrowed chords.** Rarely - about one idea in four, at most one chord
+  (or on Common, most ideas, sometimes two) -
   a chord is borrowed from another scale on the same key note: the minor iv
   or the bVI in a major key, the major IV in a minor one. The tune bends to
   it, and the window always tells you which chord it is, where, and which
@@ -92,8 +93,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    Phrase, the **content**: Melody, Chords or Both.
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
-   out underneath. **Borrowed** - Off, or Rare (the default): whether an
-   idea may borrow a chord (seven-note scales only).
+   out underneath. **Borrowed** - Off, Rare (the default) or Common: whether
+   an idea may borrow a chord (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
    and triplet rhythms now and then, in the tune and the chords together -
@@ -112,8 +113,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
 4. **Melody** - the **contour** (Arch, Rise, Fall, Wave, Valley) and the
    **register** (Low, Middle, High).
 5. **Chords** - the **colour** (Triads; Sevenths; Mixed - sevenths where they
-   pull, added ninths elsewhere) and, with Mixed, the **flavours** (Off, or
-   Rare: now and then a chord becomes a sus4 or sus2, an add2 or add9, a 6th,
+   pull, added ninths elsewhere) and, with Mixed, the **flavours** (Off;
+   Rare; or Common, on about half the chords that can: now and then a chord becomes a sus4 or sus2, an add2 or add9, a 6th,
    a 9th, or the diminished chord on its third - G7 becomes Bm7b5 - built
    from the scale, never at the start or the cadence), the **chord pace** (0.5 a bar - a chord
    every two bars; 1 a bar; 1.5 a bar - three chords over two bars, 3+3+2
@@ -123,10 +124,12 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    the third an octave up; Drop 2, Drop 3 and Drop 2 & 4 - four notes with
    the second, third, or second and fourth from the top dropped an octave;
    Shell - root, third and seventh; Rootless - third, fifth, seventh and
-   ninth, the bass having the root) and the **inversions** (Off, or Rare:
-   now and then the third, fifth or seventh in the bass, only where it makes
-   the bass move by step - C G/B Am, the cadential I6/4, V4/2 falling to I6
-   - and the bass plays it; the chord line writes it C/E).
+   ninth, the bass having the root) and the **inversions** (Off; Rare; or
+   Common: now and then the third, fifth or seventh in the bass, only where
+   it makes the bass move by step - C G/B Am, V4/2 falling to I6 - and the
+   six-fours only where the textbooks allow them: the cadential I6/4, a
+   passing or a pedal six-four. A diminished chord is usually in first
+   inversion, as vii6. The bass plays it; the chord line writes it C/E).
 6. **Arrangement** (Measure only) - the **form** and the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
    new chord). A Measure has no drums: make a groove with **Drums**, the

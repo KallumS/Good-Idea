@@ -308,6 +308,8 @@ for mi, sig in ipairs(METERS) do
                    register = (seed % 7 == 0) and "Any" or "Middle",
                    voicing = T.VOICINGS[seed % #T.VOICINGS + 1],
                    colour = (seed % 5 == 0) and "Mixed" or "Any" }
+      -- Every third idea borrows, flavours and inverts on Common.
+      if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions = "Common", "Common", "Common" end
       -- Every seventh idea in a scale other than major, all sixteen covered.
       if seed % 2 == 0 then st.scale = SCALES[(seed // 2) % #SCALES + 1] end
       if seed % 3 == 1 then st.root = "Any" end
@@ -1435,11 +1437,21 @@ do
           -- (Unless it is the chord a third inversion resolved to.)
           if not (before.inversion == 3 and byStep(pb, b)) then wrong[#wrong + 1] = "first, no step " .. tag end
         elseif sl.inversion == 2 then
-          local pedal = b == pb and b == nb
-          local passing = byStep(pb, b) and byStep(b, nb) and pb ~= nb
-          local cadential = sl.degree == 0 and T.rootAbove(sl.key, after.degree) == 7
+          -- The textbook six-fours: cadential (at a cadence, before its V,
+          -- on a stronger beat), passing (the bass through three notes one
+          -- way) or pedal (the bass held), those two on a weaker beat
+          -- between chords of the same function.
+          local m = I.meter(4, 4)
+          local w = function(x) return I.weightAt(m, x.beat or x.s) end
+          local same = T.functionOf(sl.key, before.degree) == T.functionOf(sl.key, after.degree)
+          local up, on = (b - pb) % 12, (nb - b) % 12
+          local oneWay = (up >= 1 and up <= 2 and on >= 1 and on <= 2) or (up >= 10 and on >= 10)
+          local pedal = b == pb and b == nb and same and w(sl) < w(before)
+          local passing = oneWay and same and w(sl) < w(before)
+          local cadential = sl.degree == 0 and keep[after] and T.rootAbove(sl.key, after.degree) == 7 and w(sl) > w(after)
           local resolved = before.inversion == 3 and byStep(pb, b)
           if not (pedal or passing or cadential or resolved) then wrong[#wrong + 1] = "second, no 6/4 " .. tag end
+          if sl.chord.quality == "diminished" and #sl.chord.pcs == 3 then wrong[#wrong + 1] = "a diminished 6/4 " .. tag end
         elseif sl.inversion == 3 then
           local d = (b - nb) % 12
           if d ~= 1 and d ~= 2 then wrong[#wrong + 1] = "third, seventh not falling a step " .. tag end
@@ -1461,6 +1473,63 @@ do
   eq(slash, 0, "and written over its bass note: C/E")
   eq(off, 0, "with Inversions off, none")
   eq(tuned, 0, "an inversion moves the bass, never the tune")
+  -- A diminished triad is most at home in first inversion: inverted far
+  -- more often than other chords are.
+  local dim, dimInv, other, otherInv = 0, 0, 0, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", colour = "Triads", scale = 1, inversions = "Rare" }, seed)
+    local keep = cadenceOwned(idea)
+    for i, sl in ipairs(idea.timeline) do
+      if not keep[sl] and i > 1 and i < #idea.timeline then
+        if sl.chord.quality == "diminished" then dim = dim + 1; if sl.inversion then dimInv = dimInv + 1 end
+        else other = other + 1; if sl.inversion then otherInv = otherInv + 1 end end
+      end
+    end
+  end
+  ok(dim > 0 and dimInv / dim > 2 * otherInv / other,
+     ("a diminished triad is inverted far more often than the rest: %d of %d, against %d of %d"):format(dimInv, dim, otherInv, other))
+end
+
+-- Common: more than Rare, the same rules. Borrowed on Common borrows in most
+-- ideas, sometimes two chords, never side by side, never the first or the
+-- last two.
+do
+  local counts = { Rare = { b = 0, f = 0, i = 0 }, Common = { b = 0, f = 0, i = 0 } }
+  local two, apart, edge, more = 0, 0, 0, 0
+  for seed = 1, 200 do
+    for _, lvl in ipairs({ "Rare", "Common" }) do
+      local idea = make({ kind = "Measure", colour = "Mixed", scale = 1, borrowed = lvl, flavours = lvl, inversions = lvl }, seed)
+      local c = counts[lvl]
+      c.b = c.b + #idea.borrowed
+      for _, sl in ipairs(idea.timeline) do
+        if sl.flavour then c.f = c.f + 1 end
+        if sl.inversion then c.i = c.i + 1 end
+      end
+      if lvl == "Common" then
+        local at = {}
+        for i, sl in ipairs(idea.timeline) do at[sl] = i end
+        local slots = {}
+        for i, sl in ipairs(idea.timeline) do
+          if sl.borrowed then
+            slots[#slots + 1] = i
+            if i == 1 or i >= #idea.timeline - 1 then edge = edge + 1 end
+          end
+        end
+        if #slots == 2 then two = two + 1; if slots[2] - slots[1] < 2 then apart = apart + 1 end end
+        if #slots > 2 then more = more + 1 end
+        if #slots ~= #idea.borrowed then more = more + 1 end
+      end
+    end
+  end
+  for _, k in ipairs({ "b", "f", "i" }) do
+    ok(counts.Common[k] >= 1.5 * counts.Rare[k],
+       ("Common is more than Rare (%s): %d against %d"):format(({ b = "borrowed", f = "flavours", i = "inversions" })[k],
+       counts.Common[k], counts.Rare[k]))
+  end
+  ok(two > 0, "Borrowed on Common sometimes borrows two chords: " .. two .. " of 200 Measures")
+  eq(apart, 0, "never side by side")
+  eq(edge, 0, "never the first chord or the last two")
+  eq(more, 0, "never more than two, and the window lists each")
 end
 
 -- Hidden, they change nothing: no chords, no flavours, voicing or

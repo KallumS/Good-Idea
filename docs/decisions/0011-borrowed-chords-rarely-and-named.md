@@ -1,6 +1,8 @@
 # 0011. Borrowed chords: rarely, from the same key note, and always named
 
-Taken 2026-10-01. Stands. Widens [0006](0006-chords-stay-in-the-key.md).
+Taken 2026-10-01. Stands. Widens [0006](0006-chords-stay-in-the-key.md). Since 1.6 there is Common too
+([0018](0018-flavours-voicings-and-inversions.md)): about two ideas in three,
+and a second chord in a longer idea.
 
 ## Context
 
