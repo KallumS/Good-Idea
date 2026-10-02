@@ -414,7 +414,7 @@ local function audit(idea, tag)
       end
       for _, t in ipairs(idea.melody) do
         local d = t.dissonance
-        if d and d.res then
+        if d and d.res and d.res ~= d.root then
           for _, n in ipairs(cp.notes) do
             local s, e = n.start * 4, (n.start + n.len) * 4
             if s < d.e and e > d.s and n.pitch % 12 == d.res and at[n.start] > 2
@@ -2234,7 +2234,7 @@ do
       local cp = part(idea, "Chords")
       for _, t in ipairs(idea.melody) do
         local d = t.dissonance
-        if d and d.res then
+        if d and d.res and d.res ~= d.root then
           for _, c in ipairs(cp.notes) do
             if c.start * 4 < d.e and (c.start + c.len) * 4 > d.s and c.pitch % 12 == d.res then n = n + 1 end
           end
@@ -2243,6 +2243,23 @@ do
     end
     return n
   end
+  -- (But for the 9-8, where the note it falls to is the chord's root,
+  -- which the chords keep.)
+  local nineEight, kept = 0, 0
+  for seed = 1, 200 do
+    local idea = make({ kind = "Measure", tension = "Common", chordStyle = "Block" }, seed)
+    local cp = part(idea, "Chords")
+    for _, t in ipairs(idea.melody) do
+      local d = t.dissonance
+      if d and d.res and d.res == d.root then
+        nineEight = nineEight + 1
+        for _, c in ipairs(cp.notes) do
+          if c.start * 4 < d.e and (c.start + c.len) * 4 > d.s and c.pitch % 12 == d.res then kept = kept + 1; break end
+        end
+      end
+    end
+  end
+  ok(nineEight > 5 and kept >= nineEight * 0.8, ("under a 9-8 the chords keep the root: %d of %d"):format(kept, nineEight))
   local book, free = doubled("By the book"), doubled("Free")
   ok(free > 20 and book < free / 4, ("the chords leave out a suspension's resolution by the book: %d against %d free"):format(book, free))
   -- Hidden (no tune), Tension and Second voice change nothing.

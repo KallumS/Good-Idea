@@ -262,7 +262,8 @@ everywhere means strength >= 2.
    an eighth early, off the beat). Each sets `nt.dissonance = { s, e, res }`
    but the anticipation; an exact repeat follows its source (`nt.from`,
    `decided`). By the book, `I.clearResolutions` takes the `res` note out
-   of chords struck under a dissonance. **`I.secondVoice`** (Second voice
+   of chords struck under a dissonance - not the root (`d.root`, the 9-8):
+   Open Music Theory's rule. **`I.secondVoice`** (Second voice
    Thirds/Sixths, no dice) puts a note a third or a sixth under every note
    of the tune, on the chord on the beat; it is the last part (channel 4 in
    a Measure), and the chords sit under both. **Every position becomes a pitch through the scale
@@ -482,7 +483,12 @@ parallels allowed, a half close keeping its seventh, chords as loud as the
 tune, Free not being 1.6; in 1.8 an applied chord with no bent note,
 two running, copies deciding afresh, the tune not bending, a deceptive
 close going home, Any rolling the new forms, the tune ignoring do at a
-deceptive close, a wrong leading-tone chord; in 1.9 a progression
+deceptive close, a wrong leading-tone chord; in 1.10 tension when Off, an
+appoggiatura not falling, a suspension unprepared or not held, an
+anticipation on the beat, a minor ninth on the bass, a resolution onto the
+bass, repeats leaning afresh, the chords doubling a resolution or dropping
+a 9-8's root, a second voice off the chord, before the other parts, or
+moving the tune; in 1.9 a progression
 ignored, Any named ignoring the key, the blues wrong, inversions on named
 chords, a silent fallback, the named bass ignored, a sus4 over a named bass
 (missed by the quick sweep at first: a named test now covers it), a blues close

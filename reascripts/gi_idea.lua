@@ -445,7 +445,7 @@ function M.buildSettings()
       default = "Rare", when = hasMelody,
       hints = {
         Off = "Every note on the beat is a note of the chord, as Good Idea's tunes were before 1.10.",
-        Rare = "Now and then the tune leans on the beat and falls a step to the chord: a suspension (the note before held over the chord change, then falling), an appoggiatura (leapt up to, a step above the chord's note), or, at a close, the last note arriving an eighth early (an anticipation). The textbooks' most expressive notes.",
+        Rare = "Now and then the tune leans on the beat and falls a step to the chord: a suspension (the note before held over the chord change, then falling), an appoggiatura (leapt up to, a step above the chord's note), or, at a close, the last note arriving an eighth early (an anticipation).",
         Common = "The same, on more of the beats where one can go.",
       } },
     { id = "secondVoice", label = "Second voice", step = "Melody", values = { "Off", "Thirds", "Sixths" },
@@ -1962,7 +1962,10 @@ function M.melody(plan, ctx, r, rnd)
   end
   -- (What each dissonance falls to: the note after it.)
   for i, nt in ipairs(notes) do
-    if nt.dissonance and notes[i + 1] then nt.dissonance.res = notes[i + 1].pitch % 12 end
+    if nt.dissonance and notes[i + 1] then
+      nt.dissonance.res = notes[i + 1].pitch % 12
+      nt.dissonance.root = M.chordAt(ctx.timeline, nt.dissonance.s).chord.rootPc
+    end
   end
   return notes
 end
@@ -1970,7 +1973,7 @@ end
 ------------------------------------------------------------------------------
 -- Tension (1.10; docs/decisions/0022-tension-and-a-second-voice.md)
 --
--- The accented non-chord tones the books call the most expressive
+-- The accented non-chord tones the books teach
 -- (Hutchinson, ch. 10; Open Music Theory, "Embellishing tones"):
 --
 --   - a suspension: the note before a chord change, a step above a note of
@@ -2582,13 +2585,17 @@ end
 -- inside the bass's range, each note the octave nearest the one before.
 -- Only octaves move: the notes are the same.
 -- By the book, while a suspension or an appoggiatura sounds, the chords do
--- not play the note it falls to: "the note of resolution should not be
--- doubled" (Hutchinson, ch. 10) - the tune brings it. A chord struck then
+-- not play the note it falls to: "with the exception of 9-8, the pitch
+-- class of the resolution tone should never sound in another voice
+-- simultaneous with the suspended tone" (Open Music Theory, "Embellishing
+-- tones"; the appoggiatura is treated alike) - the tune brings it. So not
+-- when it falls to the chord's root (the 9-8). A chord struck then
 -- leaves it out (but keeps two notes, and a Phrase's own bass).
 function M.clearResolutions(list, tune, keepBass)
   local spans = {}
   for _, nt in ipairs(tune or {}) do
-    if nt.dissonance and nt.dissonance.res then spans[#spans + 1] = nt.dissonance end
+    local d = nt.dissonance
+    if d and d.res and d.res ~= d.root then spans[#spans + 1] = d end
   end
   if #spans == 0 then return list end
   local at, low = {}, {}
