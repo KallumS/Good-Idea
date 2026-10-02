@@ -1970,10 +1970,14 @@ local function fit(ctx, u, notes, ending)
       local ch = M.chordAt(ctx.timeline, step).chord
       local key = M.keyAt(ctx, step)
       if not T.onChord(key, ch, nt.pos) then
+        -- (Within an octave and more either way; a chord always has a note
+        -- there in its own scale, but a search must end.)
         local up, down = nt.pos + 1, nt.pos - 1
-        while not T.onChord(key, ch, up) do up = up + 1 end
-        while not T.onChord(key, ch, down) do down = down - 1 end
-        nt.pos = (up - nt.pos <= nt.pos - down) and up or down
+        while not T.onChord(key, ch, up) and up < nt.pos + 15 do up = up + 1 end
+        while not T.onChord(key, ch, down) and down > nt.pos - 15 do down = down - 1 end
+        if T.onChord(key, ch, up) or T.onChord(key, ch, down) then
+          nt.pos = (T.onChord(key, ch, up) and (not T.onChord(key, ch, down) or up - nt.pos <= nt.pos - down)) and up or down
+        end
       end
     end
   end
