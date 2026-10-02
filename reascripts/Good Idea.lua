@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.10
+ * Version:        1.11
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua

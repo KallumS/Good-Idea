@@ -367,6 +367,48 @@ local function audit(idea, tag)
     end
   end
 
+  -- The 1.11 chord styles and named rhythms, in a Measure (a Phrase's own
+  -- bass is struck at the bar lines in every style).
+  if r.kind == "Measure" and cp then
+    local ctl = idea.chordTimeline
+    local onsets = {}
+    for _, n in ipairs(cp.notes) do onsets[n.start * 4] = n end
+    local arrive = {}
+    for _, sl in ipairs(ctl) do arrive[sl.s] = true end
+    local named = I.rhythmOf(meter, r.groove)
+    local inBar = {}
+    for _, t in ipairs(named or {}) do inBar[t] = true end
+    for st, n in pairs(onsets) do
+      if r.chordStyle == "Pedal" then
+        rule("a pedal chord is struck only where its chord comes", arrive[st] == true, tag)
+      elseif r.chordStyle == "Offbeat" then
+        rule("an offbeat chord is struck off the beat, short",
+             (I.strength(meter, st) < 2 or arrive[st]) and n.len <= 0.25 + 1e-9, tag)
+      elseif r.chordStyle == "Pulse" and named and (st % 1 == 0) then
+        rule("a pulse in a named rhythm is struck on its steps, or where a chord comes",
+             inBar[st % meter.bar] or arrive[st], tag .. " " .. r.groove)
+      end
+    end
+    if r.chordStyle == "Fill" and mel then
+      local tuneAt = {}
+      for _, t in ipairs(mel) do tuneAt[t.step] = true end
+      for st in pairs(onsets) do
+        rule("fill chords are struck where the tune is not moving, or where a chord comes",
+             not tuneAt[st] or arrive[st], tag)
+      end
+    end
+    local bp = part(idea, "Bass")
+    if named and r.bass == "Pulse" and bp then
+      for _, n in ipairs(bp.notes) do
+        local st = n.start * 4
+        local arr = false
+        for _, sl in ipairs(tl) do if math.abs(sl.s - st) < 1e-6 then arr = true end end
+        rule("a pulsing bass in a named rhythm plays its steps, or where a chord comes",
+             inBar[st % meter.bar] or arr, tag .. " " .. r.groove)
+      end
+    end
+  end
+
   -- The chords part: every note a chord tone of the chord it sounds over.
   local cp = part(idea, "Chords")
   if cp then
@@ -507,6 +549,9 @@ for mi, sig in ipairs(METERS) do
       -- second voice every fourth idea.
       if seed % 3 == 2 then st.tension = "Common" elseif seed % 7 == 3 then st.tension = "Off" end
       if seed % 4 == 3 then st.secondVoice = (seed % 8 == 3) and "Thirds" or "Sixths" end
+      -- The 1.11 chord styles every sixth idea, a named rhythm every fifth.
+      if seed % 6 == 5 then st.chordStyle = ({ "Pedal", "Offbeat", "Fill" })[(seed // 6) % 3 + 1] end
+      if seed % 5 == 4 then st.groove = ({ "Tresillo", "Habanera", "Clave", "3+3+3+3+2+2" })[(seed // 5) % 4 + 1] end
       -- Every fourth Measure in one of the 1.8 forms (Any rolls only 1.0's).
       local NEWFORMS = { "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4", "Ternary", "Extended" }
       if seed % 4 == 1 then st.form = NEWFORMS[(seed // 4) % #NEWFORMS + 1] end
@@ -2304,6 +2349,121 @@ do
   ok(#tracks.block.parts == 4 and tracks.block.layout == "tracks", "on tracks, a fourth track")
   local motif = make({ kind = "Motif", secondVoice = "Sixths" }, 7)
   ok(#motif.block.parts == 2 and motif.block.parts[2].chan == 1, "a Motif with a second voice: channel 2")
+end
+
+------------------------------------------------------------------------------
+-- 1.11: chord styles and named rhythms
+------------------------------------------------------------------------------
+
+do
+  local function onsetsOf(notes)
+    local at, list = {}, {}
+    for _, n in ipairs(notes) do
+      local st = n.start * 4
+      if not at[st] then at[st] = true; list[#list + 1] = st end
+    end
+    table.sort(list)
+    return list
+  end
+  -- Each named rhythm, bar by bar, in the pulsing chords (one chord a bar),
+  -- the pulsing bass and the kick.
+  local want = { Tresillo = "0 6 12", Habanera = "0 6 8 12", Clave = "0 3 6 10 12", ["3+3+3+3+2+2"] = "0 3 6 9 12 14" }
+  local bad = {}
+  for name, w in pairs(want) do
+    for seed = 1, 6 do
+      local idea = make({ kind = "Measure", groove = name, chordStyle = "Pulse", bass = "Pulse", chordPace = "One a bar",
+                          push = "None", pull = "None", figures = "Plain" }, seed)
+      -- (In the first bar after the first that holds one chord all through.)
+      local from
+      for b = 1, idea.block.beats / 4 - 1 do
+        local sl = I.chordAt(idea.timeline, b * 16)
+        if not from and sl.s == b * 16 and sl.e >= b * 16 + 16 then from = b * 16 end
+      end
+      for _, pn in ipairs({ "Chords", "Bass" }) do
+        local bar = {}
+        for _, st in ipairs(onsetsOf(part(idea, pn).notes)) do
+          if from and st >= from and st < from + 16 then bar[#bar + 1] = tostring(math.floor(st - from)) end
+        end
+        if from and table.concat(bar, " ") ~= w then bad[#bad + 1] = name .. " " .. pn .. ": " .. table.concat(bar, " ") end
+      end
+      local drums = make({ kind = "Drums", groove = name, beat = "Backbeat", fills = "None", figures = "Plain" }, seed)
+      local kicks = {}
+      for _, n in ipairs(drums.block.notes) do
+        if n.pitch == I.DRUM.kick and n.start < 4 then kicks[#kicks + 1] = n.start * 4 end
+      end
+      local inW = {}
+      for x in w:gmatch("%d+") do inW[tonumber(x)] = true end
+      for _, k in ipairs(kicks) do if not inW[k] then bad[#bad + 1] = name .. " kick " .. k end end
+    end
+  end
+  eq(#bad, 0, "each named rhythm in the chords, the bass and the kick: " .. table.concat(bad, "; "))
+  -- Elsewhere a named rhythm plays as Syncopated; and Any never rolls one.
+  local same = 0
+  for seed = 1, 20 do
+    local a = make({ kind = "Measure", groove = "Clave" }, seed, I.meter(3, 4))
+    local b = make({ kind = "Measure", groove = "Syncopated" }, seed, I.meter(3, 4))
+    if fingerprint(a.block.notes) == fingerprint(b.block.notes) then same = same + 1 end
+  end
+  eq(same, 20, "in 3/4 a named rhythm is Syncopated")
+  local rolled, styles = false, false
+  for seed = 1, 300 do
+    local x = make({ kind = "Measure" }, seed)
+    if I.RHYTHMS[x.r.groove] then rolled = true end
+    if x.r.chordStyle == "Pedal" or x.r.chordStyle == "Offbeat" or x.r.chordStyle == "Fill" then styles = true end
+  end
+  ok(not rolled and not styles, "Any never rolls a named rhythm or a 1.11 chord style")
+  -- The tune is the same in a named rhythm as syncopated.
+  local moved = 0
+  for seed = 1, 20 do
+    local a = make({ kind = "Motif", groove = "Tresillo" }, seed)
+    local b = make({ kind = "Motif", groove = "Syncopated" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then moved = moved + 1 end
+  end
+  eq(moved, 0, "the tune plays a named rhythm as Syncopated")
+end
+
+do
+  -- Pedal: struck once a chord. Offbeat: off the beat, short. Fill: where
+  -- the tune holds or rests.
+  local pedalExtra, offOn, offLong, fillOnTune, fillStrokes, fillHeld = 0, 0, 0, 0, 0, 0
+  for seed = 1, 40 do
+    local p = make({ kind = "Measure", chordStyle = "Pedal" }, seed)
+    local count = {}
+    for _, n in ipairs(part(p, "Chords").notes) do
+      local sl = I.chordAt(p.chordTimeline, n.start * 4 + 1e-6)
+      count[sl] = count[sl] or {}
+      count[sl][n.start] = true
+    end
+    for _, starts in pairs(count) do
+      local k = 0
+      for _ in pairs(starts) do k = k + 1 end
+      if k > 1 then pedalExtra = pedalExtra + 1 end
+    end
+    local o = make({ kind = "Measure", chordStyle = "Offbeat", push = "None", pull = "None" }, seed)
+    for _, n in ipairs(part(o, "Chords").notes) do
+      if I.strength(I.meter(4, 4), n.start * 4) >= 2 then offOn = offOn + 1 end
+      if n.len > 0.25 then offLong = offLong + 1 end
+    end
+    local f = make({ kind = "Measure", chordStyle = "Fill", push = "None", pull = "None" }, seed)
+    local tuneAt = {}
+    for _, t in ipairs(f.melody) do tuneAt[t.step] = t end
+    local arrive = {}
+    for _, sl in ipairs(f.chordTimeline) do arrive[sl.s] = true end
+    local seen = {}
+    for _, n in ipairs(part(f, "Chords").notes) do
+      local st = n.start * 4
+      if not seen[st] then
+        seen[st] = true
+        fillStrokes = fillStrokes + 1
+        if tuneAt[st] and not arrive[st] then fillOnTune = fillOnTune + 1 end
+        if not tuneAt[st] then fillHeld = fillHeld + 1 end
+      end
+    end
+  end
+  eq(pedalExtra, 0, "a Pedal chord is struck once")
+  ok(offOn == 0 and offLong == 0, ("Offbeat chords are off the beat and short (%d on, %d long)"):format(offOn, offLong))
+  ok(fillOnTune == 0 and fillHeld > fillStrokes / 2,
+     ("Fill chords come where the tune holds or rests: %d of %d strokes, %d on a moving note"):format(fillHeld, fillStrokes, fillOnTune))
 end
 
 C.done()

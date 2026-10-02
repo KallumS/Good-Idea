@@ -112,7 +112,9 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    Rare (the default) or Common: whether a chord may become the next chord's
    own V or leading-tone chord (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
-   Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
+   Syncopated; or, to choose, a named rhythm - Tresillo, Habanera, Clave
+   or 3+3+3+3+2+2 - which in 4/4 the pulsing chords, the pulsing bass and
+   the drums' kick play as written, and the tune plays syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
    and triplet rhythms now and then, in the tune and the chords together -
    in the tune a quarter note can become a dotted eighth and a sixteenth or
    a triplet, and a half note a dotted quarter and an eighth or a
@@ -148,7 +150,10 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      bar (three chords over two bars, 3+3+2 beats), 2 a bar, or 4 a bar (a
      chord on every beat; three a bar in 3/4). Any rolls 0.5, 1 and 2; 1.5
      and 4 are there to choose.
-   - **Style** - Block, Pulse, Broken.
+   - **Style** - Block, Pulse, Broken; and, to choose (Any leaves them
+     be), Pedal (each chord struck once and held - a pad), Offbeat (short
+     chords on the off-beats: the reggae skank, the "pah" of oom-pah), and
+     Fill (the chords answer the tune, struck where it holds or rests).
    - **Voicing** - Close; Open (root, fifth, then the third an octave up);
      Drop 2, Drop 3 and Drop 2 & 4 (four notes with the second, third, or
      second and fourth from the top dropped an octave); Shell (root, third

@@ -202,11 +202,19 @@ function M.buildSettings()
         Flowing = "Eighth notes moving.",
         Busy = "Sixteenths.",
       } },
-    { id = "groove", label = "Groove", step = "Feel", values = { "Straight", "Syncopated" },
+    { id = "groove", label = "Groove", step = "Feel",
+      values = { "Straight", "Syncopated", "Tresillo", "Habanera", "Clave", "3+3+3+3+2+2" },
       any = true, default = "Any",
+      -- (Any rolls the two 1.0 had; the named rhythms, 1.11, are there to
+      -- choose.)
+      anyValues = { "Straight", "Syncopated" },
       hints = {
         Straight = "Notes on the strongest beats first: on the beat, then the half beat.",
         Syncopated = "Notes spread evenly over the bar (a Euclidean rhythm) and turned so they fall off the beat - the tresillo, the cinquillo.",
+        Tresillo = "3+3+2 eighths: 1, the 'and' of 2, 4 - the Cuban tresillo, the commonest syncopation in pop. Pulsing chords, a pulsing bass and the kick play it; the tune is syncopated. (In 4/4; syncopated elsewhere.)",
+        Habanera = "The habanera: 1, the 'and' of 2, 3, 4 - the tresillo with beat 3 filled in. Pulsing chords, a pulsing bass and the kick play it. (In 4/4; syncopated elsewhere.)",
+        Clave = "The son clave, 3-2, in a bar of sixteenths: 1, the 'a' of 1, the 'and' of 2, the 'and' of 3, 4. Pulsing chords, a pulsing bass and the kick play it. (In 4/4; syncopated elsewhere.)",
+        ["3+3+3+3+2+2"] = "Sixteenths grouped 3+3+3+3+2+2 ('Shape of You'): the pop off-beat that spans the bar. Pulsing chords, a pulsing bass and the kick play it. (In 4/4; syncopated elsewhere.)",
       } },
 
     { id = "contour", label = "Contour", step = "Melody",
@@ -252,12 +260,17 @@ function M.buildSettings()
         ["Two a bar"] = "Two chords a bar: one every half bar.",
         ["4 a bar"] = "A chord on every beat - four a bar in 4/4, three in 3/4. (Chosen, not rolled by Any.)",
       } },
-    { id = "chordStyle", label = "Style", step = "Chords", values = { "Block", "Pulse", "Broken" },
-      any = true, default = "Any", weights = { 1, 1.2, 1 }, when = hasChords,
+    { id = "chordStyle", label = "Style", step = "Chords", values = { "Block", "Pulse", "Broken", "Pedal", "Offbeat", "Fill" },
+      any = true, default = "Any", weights = { 1, 1.2, 1, 1, 1, 1 }, when = hasChords,
+      -- (Any rolls the three 1.0 had; the 1.11 styles are there to choose.)
+      anyValues = { "Block", "Pulse", "Broken" }, anyWeights = { 1, 1.2, 1 },
       hints = {
         Block = "Held chords, struck again at each bar line.",
-        Pulse = "The chord struck in rhythm: on the beat, or syncopated.",
+        Pulse = "The chord struck in rhythm: on the beat, or syncopated, or in the groove's named rhythm.",
         Broken = "One note at a time: up, up and down, Alberti, rolling.",
+        Pedal = "Each chord struck once and held until the next - a pad, an orchestra's 'sustain pedal' under the tune.",
+        Offbeat = "Short chords on the off-beats only - the reggae skank, the 'pah' of oom-pah (afterbeats).",
+        Fill = "The chords answer the tune: struck where it holds a note or rests, quiet while it moves - and always where the chord changes, if nowhere else.",
       } },
 
     { id = "form", label = "Form", step = "Arrangement",
@@ -1547,7 +1560,28 @@ end
 
 -- The onsets of a cell `len` steps long starting at `base` in the bar, in
 -- steps from the start of the cell.
+-- The named rhythms (1.11; docs/decisions/0023-chord-styles-and-named-rhythms.md): steps in a bar of 4/4,
+-- as Toussaint writes them over sixteen pulses. Elsewhere they play as
+-- Syncopated.
+M.RHYTHMS = {
+  Tresillo = { 0, 6, 12 },
+  Habanera = { 0, 6, 8, 12 },
+  Clave = { 0, 3, 6, 10, 12 },
+  ["3+3+3+3+2+2"] = { 0, 3, 6, 9, 12, 14 },
+}
+-- The named rhythm a groove plays in this metre, or nil.
+function M.rhythmOf(meter, groove)
+  local t = M.RHYTHMS[groove]
+  if t and meter.bar == 16 and meter.beat == 4 then return t end
+end
+-- What a named rhythm is to the tune (and elsewhere): syncopated.
+local function plainGroove(groove)
+  return M.RHYTHMS[groove] and "Syncopated" or groove
+end
+M.plainGroove = plainGroove
+
 function M.cell(meter, base, len, pace, groove, rnd, figures)
+  groove = plainGroove(groove)
   local P = M.PACE[pace] or M.PACE.Flowing
   local pieces = { { 0, len } }
   -- Busy and straight rhythms are made a half bar at a time, for variety;
@@ -2064,7 +2098,7 @@ function M.tension(ctx, notes, r, rnd, total)
       local sus = not goal and still and onIt and before ~= sl and a.pos == b.pos + 1
                   and P(b.step, a.pos) == pa and not T.onChord(key, sl.chord, a.pos)
                   and T.onChord(M.keyAt(ctx, a.step), before.chord, a.pos)
-                  and againstBass(b.step, pa, pb) and againstBass(b.step + delay - 1e-3, pa, pb)
+                  and againstBass(b.step, pa, pb) and againstBass(b.step + delay - 1e-3, pa, pb) and againstBass(b.step + delay, pa, pb)
                   and clear({ a, late, c })
       -- An appoggiatura: leapt up to, a step above the chord's note.
       local app = b.pos + 1
@@ -2072,7 +2106,7 @@ function M.tension(ctx, notes, r, rnd, total)
       local appo = not goal and still and onIt and a.pos <= app - 2 and app <= ctx.hi + 1
                    and not T.onChord(key, sl.chord, app) and math.abs(pApp - pa) ~= 6
                    and math.abs(pApp - pa) <= 12 and againstBass(b.step, pApp, pb)
-                   and againstBass(b.step + delay - 1e-3, pApp, pb)
+                   and againstBass(b.step + delay - 1e-3, pApp, pb) and againstBass(b.step + delay, pApp, pb)
                    and clear({ a, { step = b.step, pos = app }, late, c })
       if was ~= nil then
         kind = (was == "anticipation" and antic and was) or (was == "suspension" and sus and was)
@@ -2370,6 +2404,21 @@ local onPush = onShift
 -- The onsets of a pulse inside [s, e), with dotted and triplet figures laid
 -- over it bar by bar.
 local function pulseOnsets(meter, s, e, pace, groove, rnd, pattern, figures)
+  -- A named rhythm: its steps in each bar, and where the chord comes.
+  local named = M.rhythmOf(meter, groove)
+  if named then
+    local out, seen = { s }, { [s] = true }
+    for _, b in ipairs(barStarts(meter, s, e)) do
+      local bar = (b // meter.bar) * meter.bar
+      for _, t in ipairs(named) do
+        local st = bar + t
+        if st >= s and st < e and not seen[st] then seen[st] = true; out[#out + 1] = st end
+      end
+    end
+    table.sort(out)
+    return out
+  end
+  groove = plainGroove(groove)
   -- Straight is on the beat (eighths when busy); syncopated is spread over
   -- the eighths.
   local unit = (pace == "Busy" or groove == "Syncopated") and 2 or meter.beat
@@ -2499,6 +2548,45 @@ local function tuneLowIn(tune, s, e)
   return low
 end
 
+-- Fill (1.11): the chords answer the tune - struck on the eighths where it
+-- has held a note a beat or more, or is resting, a beat apart at most, and
+-- held until it moves again; struck where the chord comes only if nowhere
+-- else (or if the tune is silent there).
+function M.fillOnsets(meter, sl, tune, to)
+  local starts, sounding = {}, {}
+  for _, n in ipairs(tune) do starts[#starts + 1] = n end
+  local function lastBefore(st)
+    local best
+    for _, n in ipairs(tune) do if n.step <= st + 1e-9 then best = n end end
+    return best
+  end
+  local function nextAfter(st)
+    for _, n in ipairs(tune) do if n.step > st + 1e-9 then return n.step end end
+  end
+  local out, stops = {}, {}
+  local last = -99
+  for st = math.ceil(sl.s / 2) * 2, (to or sl.e) - 1, 2 do
+    local n = lastBefore(st)
+    local moving = n and math.abs(n.step - st) < 1e-9
+    local rest = not n or n.step + n.len <= st + 1e-9
+    local held = n and not moving and st - n.step >= meter.beat
+    if not moving and (rest or held) and st - last >= meter.beat then
+      out[#out + 1] = st
+      stops[#stops + 1] = nextAfter(st) or sl.e
+      last = st
+    end
+  end
+  if #out == 0 or out[1] > sl.s then
+    -- (The chord is heard where it comes, if the tune is not answering then.)
+    if #out == 0 then
+      table.insert(out, 1, sl.s)
+      table.insert(stops, 1, nextAfter(sl.s) or sl.e)
+    end
+  end
+  out.stops = stops
+  return out
+end
+
 function M.chordsPart(ctx, timeline, r, rnd, win)
   local notes = {}
   local meter = ctx.meter
@@ -2546,8 +2634,25 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     local from = gridStart(sl)
     local nextSl = timeline[idx + 1]
     local to = nextSl and math.min(sl.e, beatOf(nextSl)) or sl.e
+    local short
     if r.chordStyle == "Pulse" then
       onsets = onShift(sl, pulseOnsets(meter, from, to, r.pace, r.groove, rnd, pattern, r.figures))
+    elseif r.chordStyle == "Pedal" then
+      -- (Struck once, where the chord comes, and held.)
+      onsets = { sl.s }
+    elseif r.chordStyle == "Offbeat" then
+      -- The eighths between the beats, from where the chord comes to where
+      -- it goes; short.
+      -- (Struck no later than the next chord's beat, as every style is: a
+      -- pulled chord only holds into the eighth after it.)
+      local first = math.ceil(sl.s / 2) * 2
+      for st = first, to - 1, 2 do
+        if M.strength(meter, st) < 2 then onsets[#onsets + 1] = st end
+      end
+      if #onsets == 0 then onsets = { sl.s } end
+      short = 1
+    elseif r.chordStyle == "Fill" and win.melody then
+      onsets = M.fillOnsets(meter, sl, win.melody, to)
     elseif r.chordStyle == "Broken" then
       local unit = (r.pace == "Calm") and meter.beat or (r.pace == "Busy" and 1 or 2)
       -- In triplets, an arpeggio rolls in eighth-note triplets.
@@ -2571,6 +2676,8 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     end
     for i, o in ipairs(onsets) do
       local stop = onsets[i + 1] or sl.e
+      if short then stop = math.min(stop, o + short) end
+      if type(onsets.stops) == "table" and onsets.stops[i] then stop = math.min(stop, onsets.stops[i]) end
       local accent = o % meter.bar == 0
       if perNote then
         local k = arp.order[(i - 1) % #arp.order + 1]
@@ -2702,10 +2809,17 @@ end
 
 -- The kick drum's places in a bar, which the bass can follow.
 function M.kickPattern(meter, r, rnd)
+  -- (A named rhythm, 1.11, is the kick's pattern, as it is; drawn nothing.)
+  local named = M.rhythmOf(meter, r.groove)
+  if named then
+    local out = {}
+    for i, t in ipairs(named) do out[i] = t end
+    return out
+  end
   local slots = meter.bar // 2
   local k = ({ Calm = 1, Flowing = 2, Busy = 3 })[r.pace] or 2
   k = math.max(1, round(k * slots / 8))
-  if r.groove == "Syncopated" then
+  if plainGroove(r.groove) == "Syncopated" then
     local kk = math.max(2, round(slots * ({ Calm = 0.38, Flowing = 0.38, Busy = 0.62 })[r.pace]))
     local pat = syncopated(meter, 0, 2, slots, math.min(kk, slots - 1), rnd)
     local out = {}
@@ -2887,7 +3001,10 @@ local function drumGroove(meter, r, rnd)
   end
   -- Dotted and triplet figures fall on the kick - but four on the floor is
   -- four on the floor.
-  if style ~= "Four on the floor" then g.kick = M.figure(meter, 0, bar, g.kick, r.figures, rnd) end
+  -- (Nor on a named rhythm, which is that rhythm.)
+  if style ~= "Four on the floor" and not (M.rhythmOf(meter, r.groove) and (style == "Backbeat" or style == "Half-time")) then
+    g.kick = M.figure(meter, 0, bar, g.kick, r.figures, rnd)
+  end
   if style ~= "Four on the floor" then
     local onSnare = {}
     for _, x in ipairs(g.snare) do onSnare[x] = true end
@@ -3222,7 +3339,7 @@ function M.make(st, meter, seed)
     local list
     list, arpName, lows = M.chordsPart(ctx, chordTl, r, M.stream(seed, "chords"),
                                  { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure",
-                                   book = book, tune = front, beatTl = timeline })
+                                   book = book, tune = front, beatTl = timeline, melody = melody })
     if book then list = M.clearResolutions(list, melody, r.kind ~= "Measure") end
     parts[#parts + 1] = { name = "Chords", list = list }
   end
