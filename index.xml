@@ -108,6 +108,21 @@ Walk is the default, so every idea number is as it was in 1.8.]]></changelog>
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.12" author="kallums" time="2026-10-03T06:00:00Z">
+        <changelog><![CDATA[Everything from 1.10, 1.11 and 1.12 (1.10 and 1.11 were not published on their own).
+Tension (Melody step, Rare by default): now and then the tune leans on the beat and falls a step into the chord - a suspension (the note before held over the chord change), an appoggiatura (leapt up to, a step above the chord's note), or, at a close, the last note arriving an eighth early (an anticipation). By the book, the chords leave out the note it falls to while it sounds (but for the 9-8), as Open Music Theory says.
+Second voice (Melody step, Off by default): a part in thirds or sixths under the tune, on a note of the chord on every beat, on its own channel or track.
+Three more chord styles, to choose: Pedal (each chord struck once and held), Offbeat (short chords on the off-beats - the skank, the oom-pah) and Fill (the chords answer the tune, struck where it holds or rests).
+Four named rhythms in Groove, to choose: Tresillo, Habanera, Clave and 3+3+3+3+2+2 - in 4/4 the pulsing chords, the pulsing bass and the drums' kick play them as written.
+The 6/9: half the 6 chords now take the ninth on top. Power, a voicing to choose: root, fifth, octave.
+Key change (Arrangement, Measures): Step up, Half step up or Truck driver - the last section a tone or a semitone higher, tune, chords and bass; the truck driver goes through the new key's V7 into its tonic (C ... A7 | D). The window says where and to what.
+What changes for idea numbers you have kept: with the default settings, some tunes now lean (about a third of Measures), and some 6 chords are now 6/9. With Tension Off and Flavours Off, every idea from 1.9 is as it was; every 1.0 idea number still gives the 1.0 idea with the plain settings.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
