@@ -366,7 +366,8 @@ do
   for _, s in ipairs(I.SETTINGS) do
     -- (A retired setting is kept in the list only for the order of the
     -- dice, and is never shown.)
-    if s.retired then goto continue end
+    -- (Nor is a hidden one, 1.13: the engine decides it.)
+    if s.retired or s.hidden then goto continue end
     local values = {}
     if s.any then values[1] = "Any" end
     for _, v in ipairs(s.values) do values[#values + 1] = I.valueName(s, v) end
@@ -571,6 +572,11 @@ clickIn("flavours", "Off")
 eq(chosenIn("flavours"), "Off", "and can be turned off")
 clickIn("colour", "Triads")
 ok(not rowShown("flavours"), "and is hidden with Triads, where it would do nothing")
+-- 1.13: the engine decides the progression, the part-writing and the form.
+clickIn("kind", "Measure")
+openAll()
+ok(rowShown("bass") and not rowShown("progression") and not rowShown("partWriting") and not rowShown("form"),
+   "a Measure's steps open: Progression, Part-writing and Form are not shown")
 clickIn("voicing", "Drop 2 & 4")
 eq(chosenIn("voicing"), "Drop 2 & 4", "a voicing can be chosen")
 local voicings = {}

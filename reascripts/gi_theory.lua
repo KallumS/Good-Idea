@@ -663,7 +663,8 @@ function M.cadenceChords(key, half)
     if half and M.rootAbove(key, d) == 5 then w = nil end
     if w then
       local q = M.degreeQuality(key, d)
-      if M.rootAbove(key, d) == 7 and q ~= "major" then w = 2 end   -- v, not V
+      -- (v, not V - but in the Minor scale the V is harmonic minor's, 1.13.)
+      if M.rootAbove(key, d) == 7 and q ~= "major" and M.SCALES[key.scale].name ~= "Minor" then w = 2 end
       if M.rootAbove(key, d) == 1 and q ~= "major" then w = 0 end   -- only a major bII
       if q == "diminished" or q == "augmented" then w = w * 0.25 end
       if w > 0 then out[#out + 1] = { degree = d, weight = w } end
@@ -714,6 +715,9 @@ end
      opts.cadence  how it ends:
                      "PAC", "IAC"  a cadence chord, then the tonic
                      "DC"          a cadence chord, then vi (a deceptive close)
+                     "EC"          a cadence chord, then the tonic - which
+                                   gi_idea stands on its third (an evaded
+                                   close, 1.13)
                      "HC"          on a cadence chord (a half cadence)
                      "open"        on anything but the tonic that leads back
                                    to opts.loopTo (default the first chord),
@@ -739,7 +743,7 @@ function M.progression(key, n, opts, rnd)
     if n == 1 then return { 5 } end
     local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
     tail = { c.degree, 5 }
-  elseif cad == "PAC" or cad == "IAC" then
+  elseif cad == "PAC" or cad == "IAC" or cad == "EC" then
     if n == 1 then return { 0 } end
     local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
     tail = { c.degree, 0 }

@@ -195,7 +195,14 @@ do
   ok(har[4] and har[4] >= 3, "so does harmonic minor's, with its leading tone")
   local nat = cad(T.key(1, 2))
   ok(nat[6] and nat[6] >= 2, "natural minor has the subtonic VII")
-  ok(nat[4] and nat[4] < 3, "and a weaker minor v")
+  -- (1.13: a key on the Minor scale takes its V from harmonic minor -
+  -- Hutchinson's "v ... rare" - so it leads home as strongly; Aeolian, the
+  -- mode, keeps a weaker minor v.)
+  ok(nat[4] and nat[4] >= 3, "and the V, harmonic minor's (Hutchinson)")
+  local aeo
+  for i, sc in ipairs(T.SCALES) do if sc.name == "Aeolian" then aeo = i end end
+  local mode = cad(T.key(1, aeo))
+  ok(mode[4] and mode[4] < 3, "while Aeolian has a weaker minor v")
   local phr = cad(T.key(1, 6))
   ok(phr[1] and phr[1] >= 2.5, "Phrygian has its bII")
   local half = {}

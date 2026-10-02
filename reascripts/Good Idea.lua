@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.12
+ * Version:        1.13
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -495,20 +495,19 @@ local function drawMelody(n)
 end
 
 local function drawChords(n)
-  fold(n, "Chords", summaryOf({ "progression", "colour", "flavours", "chordPace", "chordStyle", "voicing", "inversions", "partWriting" }), function()
-    settingRow({ "progression" }, 84)
+  -- (The progression and the part-writing are the engine's to decide, 1.13:
+  -- not shown.)
+  fold(n, "Chords", summaryOf({ "colour", "flavours", "chordPace", "chordStyle", "voicing", "inversions" }), function()
     settingRow({ "colour", "flavours" }, 60)
     settingRow({ "chordPace" }, 60)
     settingRow({ "chordStyle" }, 60)
     settingRow({ "voicing" }, 60)
     settingRow({ "inversions" }, 60)
-    settingRow({ "partWriting" }, 60)
   end)
 end
-
 local function drawArrangement(n)
-  fold(n, "Arrangement", summaryOf({ "form", "bass", "keyChange" }), function()
-    settingRow({ "form" }, 60)
+  -- (The form is rolled for every idea, 1.13: not shown.)
+  fold(n, "Arrangement", summaryOf({ "bass", "keyChange" }), function()
     settingRow({ "bass" }, 60)
     settingRow({ "keyChange" }, 84)
   end)

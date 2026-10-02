@@ -276,9 +276,9 @@ function M.buildSettings()
     { id = "form", label = "Form", step = "Arrangement",
       values = { "Period", "Sentence", "Song", "Loop", "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4",
                  "Ternary", "Extended" }, any = true, default = "Any",
-      -- (Any rolls the four 1.0 had, so a 1.0 idea number keeps its form;
-      -- the 1.8 forms are there to choose.)
-      anyValues = { "Period", "Sentence", "Song", "Loop" },
+      -- (1.13: not shown; every idea rolls one, each about one time in ten.
+      -- 0025.)
+      hidden = true,
       when = function(st) return st.kind == "Measure" end,
       hints = {
         ["Hybrid 1"] = "Antecedent + continuation (Caplin's first hybrid): an idea and a contrasting idea to a half close, then breaking it up and speeding to a full close. (Chosen, not rolled by Any.)",
@@ -360,13 +360,14 @@ function M.buildSettings()
       weights = { 1, 3, 0.3, 3, 0.2, 0.3, 0.2, 2, 0.2, 0.2, 0.2, 0.6, 0.2, 0.2, 0.2, 1 },
       when = function(st) return st.kind == "Drums" end },
     { id = "beat", label = "Beat", step = "Drums",
-      values = { "Backbeat", "Half-time", "Four on the floor", "Breakbeat" }, any = true, default = "Any",
-      weights = { 2, 1, 1, 1 }, when = function(st) return st.kind == "Drums" end,
+      values = { "Backbeat", "Half-time", "Four on the floor", "Breakbeat", "Reggaeton" }, any = true, default = "Any",
+      weights = { 2, 1, 1, 1, 1 }, when = function(st) return st.kind == "Drums" end,
       hints = {
         Backbeat = "Kick on and around 1 and 3, snare on 2 and 4.",
         ["Half-time"] = "The snare on 3 only: twice as slow, twice as heavy.",
         ["Four on the floor"] = "A kick on every beat, a clap on 2 and 4, open hats on the off-beats.",
         Breakbeat = "A broken kick, the snare on 2 and 4 with one knocked off it, sixteenths on the hats. (In 4/4; a backbeat elsewhere.)",
+        Reggaeton = "The dembow: a kick on every beat, the snare on the 'a' of 1, the 'and' of 2, the 'a' of 3 and the 'and' of 4 - the tresillo, twice. (In 4/4; a backbeat elsewhere.)",
       } },
     { id = "fills", label = "Fills", step = "Drums",
       values = { "None", "At the end", "Every 4 bars", "Every 2 bars" }, any = true, default = "Any",
@@ -422,7 +423,9 @@ function M.buildSettings()
     -- Added in 1.7, last for the same reason. Free is 1.6's part-writing,
     -- note for note, and draws nothing from the dice.
     { id = "partWriting", label = "Part-writing", step = "Chords", values = { "By the book", "Free" },
-      default = "By the book", when = hasChords,
+      -- (1.13: not shown - always by the book; Free is kept for the tests,
+      -- which compare the two. 0025.)
+      default = "By the book", when = hasChords, hidden = true,
       hints = {
         ["By the book"] = "As the harmony and orchestration books have it: an inverted chord does not double its bass note (G/B plays no B above the bass), a seventh falls a step into the next chord, a half close with Mixed is a plain V, the chords sit just under the tune, the bass no more than an octave and a fifth below the chords and never in among them, and no parallel fifths or octaves between the tune and the bass.",
         Free = "As Good Idea did before 1.7: every chord note in every chord, the chords under the whole tune's lowest note, the bass where it falls.",
@@ -440,8 +443,11 @@ function M.buildSettings()
     -- Added in 1.9, last for the same reason. Walk draws nothing new.
     { id = "progression", label = "Progression", step = "Chords",
       values = { "Walk", "Any named", "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament",
-                 "Circle", "Double plagal", "Galant", "Blues" },
-      default = "Walk", when = hasChords,
+                 "Circle", "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte" },
+      -- (1.13: not shown; every idea walks or plays a named progression that
+      -- suits its key, half and half. 0025.)
+      any = true, default = "Any", anyValues = { "Walk", "Any named" }, anyWeights = { 1, 1 },
+      hidden = true, when = hasChords,
       hints = {
         Walk = "Each chord drawn from the one before, by how strongly it leads there (tonic, subdominant, dominant) - the way Good Idea has always worked. A named progression fills the chords in order, going round, and a passage that closes still ends on its cadence, and a repeated passage carries the progression on. It is heard best in a Loop, which plays nothing else.",
         ["Any named"] = "One of the named progressions that suits the key, chosen by the idea number.",
@@ -454,6 +460,10 @@ function M.buildSettings()
         ["Double plagal"] = "I bVII IV I - two plagal steps home (the coda of 'Hey Jude'). Major keys.",
         Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. Major keys.",
         Blues = "The 12-bar blues - I I I I IV IV I I V IV I I - and its 8- and 16-bar cousins, a chord a bar. Measures only.",
+        ["Do-Re-Mi"] = "I V6/5 I - the bass do ti do under a tune rising do re mi: the galant Do-Re-Mi.",
+        Romanesca = "I V6 vi I6 - the bass do ti la mi: the galant Romanesca. Major keys.",
+        Fonte = "V7/ii ii V7 I - a pair stepped down: the galant Fonte ('fountain'). Major keys.",
+        Monte = "V7/IV IV V7/V V - a pair stepped up: the galant Monte ('mountain'). Major keys.",
       } },
 
     -- Added in 1.10, last for the same reason. Off draws nothing, and the
@@ -493,7 +503,9 @@ function M.valueName(s, v)
   return s.name and s.name(v) or tostring(v)
 end
 
-function M.shows(s, st) return not s.when or s.when(st) end
+-- (A `hidden` setting, 1.13, is never shown but still rolled: the engine
+-- decides it.)
+function M.shows(s, st) return not s.hidden and (not s.when or s.when(st)) end
 
 ------------------------------------------------------------------------------
 -- State
@@ -669,6 +681,12 @@ function M.plan(r, meter, rnd)
     text = pickOne(rnd, M.PLANS[r.kind][r.bars])
   end
   local units, total = M.parsePlan(text, meter, finalCad)
+  -- (1.13) Extended's stretch is a deceptive close or, half the time, an
+  -- evaded one (EC): the full close never comes, and the passage goes round
+  -- "one more time".
+  if r.kind == "Measure" and r.form == "Extended" and rnd() < 0.5 then
+    for _, u in ipairs(units) do if u.cad == "DC" then u.cad = "EC" end end
+  end
   -- A sequence moves by a step up, a step down, or to the dominant (up a
   -- fifth) - the second statement of a sentence's basic idea.
   for _, u in ipairs(units) do
@@ -711,7 +729,7 @@ local function countFor(meter, len, r, kind, cad, first)
   -- ending too - as long as the chords still fall evenly on the beats, line
   -- up with the bars, and come no faster than two a bar.
   if first and cad ~= "none" then
-    local tail = (cad == "PAC" or cad == "IAC" or cad == "DC") and 2 or 1
+    local tail = (cad == "PAC" or cad == "IAC" or cad == "DC" or cad == "EC") and 2 or 1
     if n <= tail then
       for m = tail + 1, math.max(tail + 1, round(2 * bars)) do
         local per = beats // m
@@ -744,13 +762,22 @@ M.PROGRESSIONS = {
              minor = { { 0 }, { 3 }, { 6, from = 2 }, { 2, from = 2 }, { 5, from = 2 }, { 1 }, { 4, from = 3 }, { 0 } } },
   ["Double plagal"] = { major = { { 0 }, { 6, from = 8 }, { 3 }, { 0 } } },
   Galant = { major = { { 0 }, { 4, bass = 1 }, { 4, bass = 6 }, { 0 }, { 3 }, { 0, bass = 2 }, { 6, bass = 1 }, { 0 } } },
+  -- (1.13) More galant schemata (Open Music Theory, "Galant schemata"): the
+  -- Do-Re-Mi (I V6/5 I, the bass do ti do), the Romanesca (I V6 vi I6, the
+  -- bass do ti la mi), the Fonte (V7/ii ii V7 I, a step down) and the Monte
+  -- (V7/IV IV V7/V V, a step up). `appliedTo`: the chord is that degree's own
+  -- dominant, from the home scale bent (I.appliedKey).
+  ["Do-Re-Mi"] = { major = { { 0 }, { 4, bass = 6 }, { 0 } }, minor = { { 0 }, { 4, from = 3, bass = 6 }, { 0 } } },
+  Romanesca = { major = { { 0 }, { 4, bass = 6 }, { 5 }, { 0, bass = 2 } } },
+  Fonte = { major = { { 5, appliedTo = 1 }, { 1 }, { 4 }, { 0 } } },
+  Monte = { major = { { 0, appliedTo = 3 }, { 3 }, { 1, appliedTo = 4 }, { 4 } } },
   -- (A chord a bar, by the bar: not filled in order like the rest.)
   Blues = { blues = { [8] = { 0, 4, 3, 3, 0, 4, 0, 0 },
                       [12] = { 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 },
                       [16] = { 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 } } },
 }
 M.PROGRESSION_ORDER = { "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament", "Circle",
-                        "Double plagal", "Galant", "Blues" }
+                        "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte" }
 
 -- The progression an idea plays - its chords for this key's mode - or nil
 -- (Walk, or one that does not suit the key, the kind or the length; `why`
@@ -866,7 +893,7 @@ local function unitChords(u, units, key, r, meter, rnd, prevLast, sch)
     end
     return out
   end
-  local need = (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC") and 2 or ((u.cad ~= "none") and 1 or 0)
+  local need = (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC" or u.cad == "EC") and 2 or ((u.cad ~= "none") and 1 or 0)
   local cut = src and M.cutFor(meter, src, u)
   -- (When the second half is too short for the ending's chords - half a bar
   -- of 4/4 has two beats, a full close needs a chord on each, and so on -
@@ -914,6 +941,10 @@ function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt)
       local sl
       local spec = rs.spec
       local k = (spec and spec.from) and T.key(key.root, spec.from) or key
+      -- (A named applied chord: the home scale bent to make it, a V7 but
+      -- with Triads.)
+      local applied = spec and spec.appliedTo and M.appliedKey(key, spec.appliedTo, "V")
+      if applied then k = applied end
       -- (Not where a named progression moves the bass under the same chord:
       -- the Meyer's V4/3 to V6/5.)
       if last and last.degree == rs.degree and last.e == u.start + rs.s
@@ -922,11 +953,13 @@ function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt)
         sl = last
       else
         sl = { s = u.start + rs.s, e = u.start + rs.e, beat = u.start + rs.s, degree = rs.degree, key = k,
-               chord = T.chord(k, rs.degree, colour), origin = rs.orig or rs, spec = spec }
+               chord = T.chord(k, rs.degree, (applied and colour ~= "Triads") and "Sevenths" or colour),
+               origin = rs.orig or rs, spec = spec }
+        if applied then sl.applied = { kind = "V", named = true } end
         -- A named progression's inverted chord: the scale degree it names
         -- in the bass (Pachelbel's V6, the Prinner's I6).
         if spec and spec.bass then
-          local bpc = T.pc(key, spec.bass)
+          local bpc = T.pc(k, spec.bass)
           for idx, pc in ipairs(sl.chord.pcs) do
             if pc == bpc and idx > 1 then
               sl.bassPc, sl.bassPos = pc, sl.chord.pos[idx]
@@ -937,8 +970,27 @@ function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt)
         timeline[#timeline + 1] = sl
       end
       if u.slots[#u.slots] ~= sl then u.slots[#u.slots + 1] = sl end
+      -- (An evaded close, 1.13: its tonic is I6 - the bass does not arrive
+      -- on do either.)
+      if u.cad == "EC" and rs == u.rel[#u.rel] and sl.degree == 0 and not sl.bassPc then
+        local third = T.pc(sl.key or key, 2)
+        if sl.chord.has[third] and third ~= sl.chord.rootPc then
+          sl.bassPc, sl.bassPos, sl.inversion = third, 2, 1
+          sl.spec = sl.spec or { 0, bass = 2 }
+          sl.evaded = true
+        end
+      end
     end
     prevLast = u.degrees[#u.degrees]
+  end
+  -- (A named applied chord - the Fonte's V7/ii - must lead to its chord: a
+  -- close that cuts in leaves it the plain chord of its degree.)
+  for i, sl in ipairs(timeline) do
+    local nx = timeline[i + 1]
+    if sl.applied and sl.applied.named and not (nx and nx.degree == sl.spec.appliedTo) then
+      sl.key, sl.applied = key, nil
+      sl.chord = T.chord(key, sl.degree, colour)
+    end
   end
   return timeline
 end
@@ -1002,7 +1054,7 @@ function M.borrow(timeline, key, r, rnd, colour)
     local sl = timeline[i]
     -- (A named progression's chords are its own; a chord after a key
     -- change, 1.12, is in another key.)
-    for _, f in ipairs((sl.spec or sl.moved) and {} or from) do
+    for _, f in ipairs((sl.spec or sl.moved or sl.raised) and {} or from) do
       if T.SCALES[f[1]].iv ~= T.SCALES[key.scale].iv then
         local other = T.key(key.root, f[1])
         local ch = T.chord(other, sl.degree, colour)
@@ -1118,7 +1170,7 @@ local function cadenceSlots(plan, timeline)
   for _, u in ipairs(plan.units) do
     if u.cad ~= "none" and u.slots and #u.slots > 0 then
       keep[u.slots[#u.slots]] = true
-      if (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC") and #u.slots > 1 then keep[u.slots[#u.slots - 1]] = true end
+      if (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC" or u.cad == "EC") and #u.slots > 1 then keep[u.slots[#u.slots - 1]] = true end
     end
   end
   return keep
@@ -1215,6 +1267,35 @@ function M.keyChange(plan, timeline, key, r, meter, colour, at)
 end
 
 ------------------------------------------------------------------------------
+-- The minor key's V (1.13)
+--
+-- In a minor key the dominant is major, its third the raised seventh - "v
+-- ... rare; V from the harmonic minor scale" (Hutchinson, ch. 7, Figure
+-- 7.3.1). So every V in a key on the Minor scale is the harmonic minor's,
+-- and the tune bends with it (B natural in C minor). The modes keep their
+-- own v: Aeolian, Dorian and Phrygian are what they are. A named
+-- progression's chords are as written.
+------------------------------------------------------------------------------
+
+local MINOR, HARM_MINOR
+function M.raiseDominant(timeline, key, colour)
+  if not MINOR then
+    for i, sc in ipairs(T.SCALES) do
+      if sc.name == "Minor" then MINOR = i elseif sc.name == "Harm Minor" then HARM_MINOR = i end
+    end
+  end
+  for _, sl in ipairs(timeline) do
+    local k = sl.key or key
+    if sl.degree == 4 and k.scale == MINOR and not k.iv and not sl.spec then
+      sl.key = { root = k.root, scale = HARM_MINOR, lift = k.lift }
+      sl.chord = T.chord(sl.key, 4, colour)
+      if sl.bassPc then sl.bassPc = nil; sl.bassPos = nil; sl.inversion = nil end
+      sl.raised = true
+    end
+  end
+end
+
+------------------------------------------------------------------------------
 -- Applied chords (1.8; docs/decisions/0020-applied-chords-cadences-and-forms.md)
 --
 -- The chord before a major or minor chord becomes that chord's own dominant
@@ -1287,7 +1368,7 @@ function M.applied(timeline, plan, key, r, rnd, colour)
     local x = after.degree
     local q = T.degreeQuality(key, x)
     local can = not keep[sl] and not sl.borrowed and not after.borrowed and lastDone ~= i - 1 and not sl.spec
-                and not sl.moved and not after.moved and not after.truck
+                and not sl.moved and not after.moved and not after.truck and not sl.raised and not after.applied
                 and same[sl.origin or sl]
                 and x ~= 0 and (q == "major" or q == "minor")
     local go, kind
@@ -1836,6 +1917,27 @@ local function nearestOn(ctx, key, ch, target, avoid)
   return best or math.max(ctx.lo, math.min(ctx.hi, round(target)))
 end
 
+-- (1.13) Do three pitches outline a consonant triad - major or minor, in
+-- any position, inside an octave? "No consecutive leaps in the same
+-- direction" but where they do (Open Music Theory, "Composing a cantus
+-- firmus").
+local TRIADS = { ["0,3,7"] = true, ["0,4,7"] = true, ["0,3,8"] = true, ["0,4,9"] = true,
+                 ["0,5,8"] = true, ["0,5,9"] = true }
+function M.outlinesTriad(a, b, c)
+  local lo = math.min(a, b, c)
+  local x = { a - lo, b - lo, c - lo }
+  table.sort(x)
+  return TRIADS[x[1] .. "," .. x[2] .. "," .. x[3]] == true
+end
+
+-- Three notes running (each { pos, pitch, first }): two leaps the same way
+-- that do not outline a triad? Not across a statement's start.
+function M.leapsBad(x, y, z)
+  if not (x and y and z) or y.first or z.first then return false end
+  local i1, i2 = y.pos - x.pos, z.pos - y.pos
+  return math.abs(i1) >= 2 and math.abs(i2) >= 2 and i1 * i2 > 0 and not M.outlinesTriad(x.pitch, y.pitch, z.pitch)
+end
+
 local function choose(ctx, key, prev, prevIv, prevNct, reps, target, ch, strong, rnd, goal, before)
   for relax = 0, 2 do
     local cands, ws = {}, {}
@@ -1846,6 +1948,9 @@ local function choose(ctx, key, prev, prevIv, prevNct, reps, target, ch, strong,
         local on = T.onChord(key, ch, p)
         if strong and not on then w = 0 end
         if relax < 2 and prevIv and math.abs(prevIv) >= 3 and (iv * prevIv >= 0 or math.abs(iv) > 2) then w = 0 end
+        -- (A leap after a leap the same way only if the three outline a triad.)
+        if relax < 2 and prevIv and before and math.abs(prevIv) >= 2 and math.abs(iv) >= 2 and iv * prevIv > 0
+           and not M.outlinesTriad(T.pitch(key, before), T.pitch(key, prev), T.pitch(key, p)) then w = 0 end
         if relax < 1 and prevNct and math.abs(iv) ~= 1 then w = 0 end
         if iv == 0 and reps >= 1 then w = 0 end
         if math.abs(iv) >= 2 and not on then w = w * 0.15 end
@@ -1883,6 +1988,18 @@ local function goalFor(ctx, u, prev, target, step)
   if u.cad == "PAC" and home then ok = function(p) return p % n == 0 end
   elseif u.cad == "IAC" and home then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
   elseif u.cad == "HC" or u.cad == "PAC" or u.cad == "IAC" then ok = function(p) return T.onChord(key, ch, p) end
+  elseif u.cad == "EC" then
+    -- An evaded close (1.13): the leading note does not resolve - the tune
+    -- leaps up instead, to a note of the chord that is not do.
+    local best, bestCost
+    for p = ctx.lo - 2, ctx.hi + 2 do
+      if T.onChord(key, ch, p) and p % n ~= 0 then
+        local up = T.pitch(key, p) - T.pitch(key, prev)
+        local cost = math.abs(p - target) * 0.4 + ((up >= 5 and up <= 9) and 0 or (up > 9 and up <= 12) and 3 or 40)
+        if up ~= 6 and (not bestCost or cost < bestCost) then best, bestCost = p, cost end
+      end
+    end
+    return best
   elseif u.cad == "DC" then
     -- The tune lands where the tonic was due - do, which vi also has - and
     -- the harmony goes elsewhere under it.
@@ -2200,7 +2317,7 @@ function M.tension(ctx, notes, r, rnd, total)
       local still = len >= 4 and chordOf(b.step + delay) == sl
       local key = M.keyAt(ctx, b.step)
       local onIt = T.onChord(key, sl.chord, b.pos)
-      local goal = b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC"
+      local goal = b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC" or b.closes == "EC"
       local pa, pb = P(a.step, a.pos), P(b.step, b.pos)
       -- By the book, no parallels with the bass from the notes in their new
       -- places: a suspension does not hide parallel octaves (C held over
@@ -2234,6 +2351,8 @@ function M.tension(ctx, notes, r, rnd, total)
                    and math.abs(pApp - pa) <= 12 and againstBass(b.step, pApp, pb)
                    and againstBass(b.step + delay - 1e-3, pApp, pb) and againstBass(b.step + delay, pApp, pb)
                    and clear({ a, { step = b.step, pos = app }, late, c })
+                   and not M.leapsBad(out[#out - 1] and { pos = out[#out - 1].pos, pitch = P(out[#out - 1].step, out[#out - 1].pos), first = out[#out - 1].first },
+                                      { pos = a.pos, pitch = pa, first = a.first }, { pos = app, pitch = pApp })
       if was ~= nil then
         kind = (was == "anticipation" and antic and was) or (was == "suspension" and sus and was)
                or (was == "appoggiatura" and appo and was) or nil
@@ -2376,7 +2495,11 @@ function M.untangle(ctx, notes)
       local z, y = notes[i - 2], notes[i + 2]
       local same = function(x) return x and apart(x, nil, b, p) == 0 end
       local triple = (same(a) and same(z)) or (same(a) and same(c)) or (same(c) and same(y))
-      if fits and inRange and not clash and not triple and p ~= b.pos then
+      -- (Nor two leaps the same way that outline no triad.)
+      local function at(x, pos) return x and { pos = pos or x.pos, pitch = P(x, pos), first = x.first } end
+      local nb = at(b, p)
+      local leaps = strict and (M.leapsBad(at(z), at(a), nb) or M.leapsBad(at(a), nb, at(c)) or M.leapsBad(nb, at(c), at(y)))
+      if fits and inRange and not clash and not triple and not leaps and p ~= b.pos then
         b.pos = p
         return true
       end
@@ -2402,6 +2525,12 @@ function M.untangle(ctx, notes)
         local p = b.pos + ((a.pos > b.pos) and n or -n)
         if apart(a, nil, b, p) ~= 6 and not (c and apart(b, p, c, nil) == 6)
            and p >= ctx.lo - 3 and p <= ctx.hi + 3 then b.pos = p end
+      end
+      -- Two leaps the same way that outline no triad (after the octave fix,
+      -- which can make one): the middle note moves, or the last, or the first.
+      local function at(x) return x and { pos = x.pos, pitch = P(x), first = x.first } end
+      if c and M.leapsBad(at(a), at(b), at(c)) then
+        if not (tryMove(i, false) or tryMove(i + 1, false)) and not a.first then tryMove(i - 1, false) end
       end
     end
   end
@@ -2433,7 +2562,7 @@ function M.noParallels(ctx, notes, bassPcAt)
     local a, b, c = notes[i - 1], notes[i], notes[i + 1]
     -- (A full or imperfect close's last note is its goal and stays; a half
     -- close's or an open ending's may move to another note of its chord.)
-    local goal = b and (b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC")
+    local goal = b and (b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC" or b.closes == "EC")
     if not b or goal or (i == 1 and not first) or (i == #notes and not b.closes) then return false end
     local ch = M.chordAt(ctx.timeline, b.step).chord
     local key = M.keyAt(ctx, b.step)
@@ -2459,6 +2588,12 @@ function M.noParallels(ctx, notes, bassPcAt)
         if (z and a and P(z) == P(a) and P(a) == pp) or (c and y and P(c) == pp and P(y) == pp)
            or (a and c and P(a) == pp and P(c) == pp) then good = false end
         if good and a and M.parallel(ctx, bassPcAt, a, nil, b, p) then good = false end
+        -- (Nor two leaps the same way that outline no triad, 1.13.)
+        if good then
+          local function at(x, pos) return x and { pos = pos or x.pos, pitch = P(x, pos), first = x.first } end
+          local nb = at(b, p)
+          if M.leapsBad(at(z), at(a), nb) or M.leapsBad(at(a), nb, at(c)) or M.leapsBad(nb, at(c), at(y)) then good = false end
+        end
         if good and c and M.parallel(ctx, bassPcAt, b, p, c, nil) then good = false end
       end
       if good then b.pos = p; return true end
@@ -2757,7 +2892,9 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
     if #v == 0 then v = T.voiceAs(sl.chord, "Close", nil, lo, hi + 12, nil, want) end
     if book then
       local dimTriad = sl.chord.quality == "diminished" and #sl.chord.pcs == 3
-      if sl.inversion and not dimTriad then v = M.undouble(v, sl.chord, sl.bassPc, r.voicing) end
+      -- (Not a six-four: "when a triad is in second inversion, double the
+      -- fifth (the bass note)" - Hutchinson, 26.9 and 26.12. 1.13.)
+      if sl.inversion and sl.inversion ~= 2 and not dimTriad then v = M.undouble(v, sl.chord, sl.bassPc, r.voicing) end
     end
     prev, prevCh = v, sl.chord
     lows[idx] = v[1]
@@ -3107,7 +3244,7 @@ local function drumGroove(meter, r, rnd)
   local D = M.DRUM
   local bar, beat = meter.bar, meter.beat
   local style = r.beat
-  if style == "Breakbeat" and not (bar == 16 and beat == 4) then style = "Backbeat" end
+  if (style == "Breakbeat" or style == "Reggaeton") and not (bar == 16 and beat == 4) then style = "Backbeat" end
   local g = { kick = {}, snare = {}, snarePitch = D.snare, open = {}, style = style }
   if style == "Four on the floor" then
     for b = 0, bar - 1, beat do g.kick[#g.kick + 1] = b end
@@ -3122,6 +3259,10 @@ local function drumGroove(meter, r, rnd)
     for k, v in pairs(r) do calm[k] = v end
     calm.pace = "Calm"
     g.kick = M.kickPattern(meter, calm, rnd)
+  elseif style == "Reggaeton" then
+    -- The dembow (1.13): four on the floor under the tresillo, twice.
+    for b = 0, bar - 1, beat do g.kick[#g.kick + 1] = b end
+    g.snare = { 3, 6, 11, 14 }
   elseif style == "Breakbeat" then
     g.kick = pickOne(rnd, { { 0, 10 }, { 0, 2, 10 }, { 0, 6, 10 }, { 0, 10, 11 } })
     g.snare = { 4, 12 }
@@ -3135,7 +3276,7 @@ local function drumGroove(meter, r, rnd)
   -- Dotted and triplet figures fall on the kick - but four on the floor is
   -- four on the floor.
   -- (Nor on a named rhythm, which is that rhythm.)
-  if style ~= "Four on the floor" and not (M.rhythmOf(meter, r.groove) and (style == "Backbeat" or style == "Half-time")) then
+  if style ~= "Four on the floor" and style ~= "Reggaeton" and not (M.rhythmOf(meter, r.groove) and (style == "Backbeat" or style == "Half-time")) then
     g.kick = M.figure(meter, 0, bar, g.kick, r.figures, rnd)
   end
   if style ~= "Four on the floor" then
@@ -3233,9 +3374,18 @@ function M.drumIdea(meter, r, rnd)
     if answer then
       local snareAt = {}
       for _, x in ipairs(g.snare) do snareAt[x] = true end
-      if change == "pickup" and not snareAt[bar - 2] then kick[#kick + 1] = bar - 2
-      elseif change == "double" and g.snare[#g.snare] and g.snare[#g.snare] - 1 > 0 then kick[#kick + 1] = g.snare[#g.snare] - 1
-      elseif change == "open" then open[bar - 2] = true end
+      -- (A pickup kick on the "and" of 4 - or on its "a", where the snare
+      -- has the "and", as in the dembow.)
+      -- (And an open hat only where there is a closed one to open: on the
+      -- ride, or with the hats in quarters, the pickup instead.)
+      local hatAt = false
+      for _, t in ipairs(g.time) do if t == bar - 2 then hatAt = true end end
+      local how = change
+      if how == "open" and not (g.timePitch == D.hat and hatAt) then how = "pickup" end
+      if how == "pickup" and not snareAt[bar - 2] then kick[#kick + 1] = bar - 2
+      elseif how == "pickup" and not snareAt[bar - 1] then kick[#kick + 1] = bar - 1
+      elseif how == "double" and g.snare[#g.snare] and g.snare[#g.snare] - 1 > 0 then kick[#kick + 1] = g.snare[#g.snare] - 1
+      elseif how == "open" then open[bar - 2] = true end
     end
     for _, k in ipairs(kick) do if k < fillFrom then add(base + k, 1, D.kick, k == 0) end end
     for _, x in ipairs(g.snare) do if x < fillFrom then add(base + x, 1, g.snarePitch, true) end end
@@ -3416,6 +3566,7 @@ function M.make(st, meter, seed)
   end
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch, changeAt)
   local keyChange = M.keyChange(plan, timeline, key, r, meter, colour, changeAt)
+  M.raiseDominant(timeline, key, colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   local applied = M.applied(timeline, plan, key, r, M.stream(seed, "applied"), colour)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"), M.stream(seed, "sixnine"))

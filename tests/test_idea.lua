@@ -18,6 +18,10 @@ local M44 = I.meter(4, 4)
 
 local function make(settings, seed, meter)
   local st = I.newState()
+  -- (1.13: an idea walks or plays a named progression, half and half. A
+  -- test that does not say walks, so it tests what it means to; the sweep
+  -- says, and plays both.)
+  st.progression = "Walk"
   for k, v in pairs(settings or {}) do st[k] = v end
   I.clampState(st)
   return I.make(st, meter or M44, seed or 1), st
@@ -242,6 +246,27 @@ local function audit(idea, tag)
       end
     end
   end
+  -- In a key on the Minor scale the V is major, its third the raised
+  -- seventh (1.13; Hutchinson, Figure 7.3.1) - but for a named chord.
+  if T.SCALES[key.scale].name == "Minor" then
+    for _, sl in ipairs(tl) do
+      if sl.degree == 4 and not sl.spec and not sl.moved and not sl.applied and not sl.borrowed and not sl.flavour then
+        rule("in a minor key the V is major", sl.chord.has[(T.pc(key, 6) + 1) % 12] == true, tag .. " " .. idea.chords)
+      end
+    end
+  end
+  -- An evaded close (1.13): a cadence chord, then I6 - and the tune does
+  -- not land on do.
+  for _, u in ipairs(idea.plan.units) do
+    if u.cad == "EC" and u.slots and #u.slots >= 2 then
+      local last = u.slots[#u.slots]
+      rule("an evaded close ends on the tonic", last.degree == 0, tag .. " " .. idea.chords)
+      if u.notes and #u.notes > 0 and idea.schema ~= "Blues" then
+        local n = u.notes[#u.notes]
+        rule("at an evaded close the tune does not land on do", n.pos % T.scaleLen(key) ~= 0, tag)
+      end
+    end
+  end
   -- A deceptive close (1.8): a cadence chord, then vi. (Not in the blues,
   -- which plays its own changes bar by bar.)
   for _, u in ipairs(idea.plan.units) do
@@ -317,6 +342,16 @@ local function audit(idea, tag)
         if not n.first then rule("no leap wider than an octave inside a statement", semis <= 12, tag) end
         run = (n.pitch == p.pitch) and run + 1 or 1
         rule("no note three times running", run < 3, tag)
+        -- Two leaps the same way outline a consonant triad (1.13; inside a
+        -- statement).
+        local q = mel[i - 2]
+        if q and not n.first and not p.first then
+          local i1, i2 = p.pos - q.pos, n.pos - p.pos
+          if math.abs(i1) >= 2 and math.abs(i2) >= 2 and i1 * i2 > 0 then
+            rule("two leaps the same way outline a triad", I.outlinesTriad(q.pitch, p.pitch, n.pitch),
+                 ("%s %s %s %s"):format(tag, T.pitchName(q.pitch), T.pitchName(p.pitch), T.pitchName(n.pitch)))
+          end
+        end
       end
     end
     rule("a tune stays within two octaves", hi - lo <= 24, tag)
@@ -446,7 +481,8 @@ local function audit(idea, tag)
     if r.chordStyle ~= "Broken" then
       for _, sl in ipairs(ctl) do
         -- (A two-note chord - a pentatonic scale's - keeps what it has.)
-        if sl.inversion and #sl.chord.pcs >= 3 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) then
+        -- (Nor a six-four, which doubles its bass: Hutchinson, 26.12.)
+        if sl.inversion and sl.inversion ~= 2 and #sl.chord.pcs >= 3 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) then
           local v = {}
           for _, n in ipairs(cp.notes) do if math.abs(n.start * 4 - sl.s) < 1e-6 then v[#v + 1] = n.pitch end end
           table.sort(v)
@@ -553,7 +589,9 @@ for mi, sig in ipairs(METERS) do
                    layout = (seed % 3 == 0) and "One item" or "Tracks",
                    register = (seed % 7 == 0) and "Any" or "Middle",
                    voicing = T.VOICINGS[seed % #T.VOICINGS + 1],
-                   colour = (seed % 5 == 0) and "Mixed" or "Any" }
+                   colour = (seed % 5 == 0) and "Mixed" or "Any",
+                   -- (The engine's own choice, 1.13: walk or named, half and half.)
+                   progression = "Any" }
       -- Every third idea borrows, flavours and inverts on Common.
       if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions, st.applied = "Common", "Common", "Common", "Common" end
       -- Tension (1.10) on Common with the others, off now and then; a
@@ -729,7 +767,7 @@ do
   local seen = {}
   for seed = 1, 400 do
     local kind = I.KINDS[seed % 3 + 1]
-    local idea = make({ kind = kind, root = "Any", scale = "Any", register = "Any", voicing = "Any" }, seed)
+    local idea = make({ kind = kind, root = "Any", scale = "Any", register = "Any", voicing = "Any", progression = "Any" }, seed)
     for id in pairs(idea.r.rolled) do
       seen[id] = seen[id] or {}
       seen[id][tostring(idea.r[id])] = true
@@ -1031,57 +1069,9 @@ end
 -- together are listed in does not matter), made by the 1.0 code itself.
 -- A Measure is compared without its 1.0 drums (since 1.3 it has none):
 -- its tune, chords and bass are 1.0's, note for note.
-do
-  local V10 = {
-  { "Motif", 1, 646483193 },
-  { "Motif", 7, 966472226 },
-  { "Motif", 42, 1627035517 },
-  { "Motif", 300, 871023702 },
-  { "Motif", 999, 2564792285 },
-  { "Motif", 4821, 360913389 },
-  { "Motif", 12345, 3876152090 },
-  { "Motif", 31337, 3193821783 },
-  { "Motif", 77777, 3326774625 },
-  { "Motif", 99999, 1577570922 },
-  { "Phrase", 1, 2725931372 },
-  { "Phrase", 7, 3949182337 },
-  { "Phrase", 42, 1127454063 },
-  { "Phrase", 300, 2740318878 },
-  { "Phrase", 999, 79680367 },
-  { "Phrase", 4821, 3652951295 },
-  { "Phrase", 12345, 2973240363 },
-  { "Phrase", 31337, 3216165730 },
-  { "Phrase", 77777, 555389959 },
-  { "Phrase", 99999, 1649638166 },
-  { "Measure", 1, 3937425089 },
-  { "Measure", 7, 1342217707 },
-  { "Measure", 42, 699456568 },
-  { "Measure", 300, 508197405 },
-  { "Measure", 999, 2162486200 },
-  { "Measure", 4821, 397537260 },
-  { "Measure", 12345, 642620913 },
-  { "Measure", 31337, 419754361 },
-  { "Measure", 77777, 135430041 },
-  { "Measure", 99999, 4245207203 },
-  }
-  local function hash(s)
-    local h = 2166136261
-    for i = 1, #s do h = ((h ~ s:byte(i)) * 16777619) % 4294967296 end
-    return h
-  end
-  local bad = {}
-  for _, v in ipairs(V10) do
-    local b = make({ kind = v[1], figures = "Plain", push = "None", pull = "None", borrowed = "Off", swing = 0,
-                     flavours = "Off", inversions = "Off", velocity = "Flat", partWriting = "Free",
-                     applied = "Off", tension = "Off" }, v[2]).block
-    local f = {}
-    for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
-    table.sort(f)
-    if hash(table.concat(f, " ")) ~= v[3] then bad[#bad + 1] = v[1] .. " " .. v[2] end
-  end
-  eq(#bad, 0, "with figures plain, no push, no borrowing and no swing, 1.0's ideas are unchanged: " ..
-     table.concat(bad, ", "))
-end
+-- (1.0's ideas were held unchanged by thirty fingerprints until 1.13, when
+-- the user, with no one using the script yet, let old idea numbers go:
+-- docs/decisions/0025-the-engine-decides-more.md.)
 
 local function offGrid(x) return math.abs(x * 4 - math.floor(x * 4 + 0.5)) > 1e-6 end
 
@@ -1709,7 +1699,7 @@ do
     local tl, keep = idea.timeline, cadenceOwned(idea)
     local any = false
     for i, sl in ipairs(tl) do
-      if sl.inversion then
+      if sl.inversion and not sl.spec then
         any = true
         kinds[sl.inversion] = true
         local before, after = tl[i - 1], tl[i + 1]
@@ -1746,7 +1736,7 @@ do
     end
     if any then with = with + 1 end
     local o = make({ kind = "Measure", inversions = "Off" }, seed)
-    for _, sl in ipairs(o.timeline) do if sl.inversion then off = off + 1 end end
+    for _, sl in ipairs(o.timeline) do if sl.inversion and not sl.spec then off = off + 1 end end
     -- (Free: by the book, the tune keeps clear of parallels with the bass,
     -- which an inversion moves.)
     local fi = make({ kind = "Measure", inversions = "Rare", partWriting = "Free" }, seed)
@@ -1769,8 +1759,8 @@ do
     local keep = cadenceOwned(idea)
     for i, sl in ipairs(idea.timeline) do
       if not keep[sl] and i > 1 and i < #idea.timeline then
-        if sl.chord.quality == "diminished" then dim = dim + 1; if sl.inversion then dimInv = dimInv + 1 end
-        else other = other + 1; if sl.inversion then otherInv = otherInv + 1 end end
+        if sl.chord.quality == "diminished" then dim = dim + 1; if sl.inversion and not sl.spec then dimInv = dimInv + 1 end
+        else other = other + 1; if sl.inversion and not sl.spec then otherInv = otherInv + 1 end end
       end
     end
   end
@@ -1791,7 +1781,7 @@ do
       c.b = c.b + #idea.borrowed
       for _, sl in ipairs(idea.timeline) do
         if sl.flavour then c.f = c.f + 1 end
-        if sl.inversion then c.i = c.i + 1 end
+        if sl.inversion and not sl.spec then c.i = c.i + 1 end
       end
       if lvl == "Common" then
         local at = {}
@@ -1861,7 +1851,7 @@ do
         local v = {}
         for _, x in ipairs(ch) do if math.abs(x.start * 4 - sl.s) < 1e-6 then v[#v + 1] = x.pitch end end
         table.sort(v)
-        if sl.inversion and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) and #sl.chord.pcs >= 3 then
+        if sl.inversion and sl.inversion ~= 2 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) and #sl.chord.pcs >= 3 then
           c.inv = c.inv + 1
           for _, p in ipairs(v) do if p % 12 == sl.bassPc then c.dbl = c.dbl + 1; break end end
         end
@@ -2072,7 +2062,7 @@ end
 do
   local want = {
     ["Hybrid 1"] = { "HC", "PAC" }, ["Hybrid 2"] = { "HC", "PAC" }, ["Hybrid 3"] = { "PAC" },
-    ["Hybrid 4"] = { "PAC" }, Ternary = { "HC", "PAC" }, Extended = { "DC", "PAC" },
+    ["Hybrid 4"] = { "PAC" }, Ternary = { "HC", "PAC" }, Extended = { "PAC" },
   }
   local bad, dcTonic, dcs = {}, 0, 0
   for form, cads in pairs(want) do
@@ -2084,6 +2074,8 @@ do
         local seen = {}
         for _, c in ipairs(got) do seen[c] = true end
         for _, c in ipairs(cads) do if not seen[c] then bad[#bad + 1] = form .. " " .. bars .. " lacks " .. c end end
+        -- (Extended's stretch: a deceptive close, or an evaded one, 1.13.)
+        if form == "Extended" and not (seen.DC or seen.EC) then bad[#bad + 1] = "Extended " .. bars .. " lacks DC or EC" end
         if got[#got] ~= "PAC" then bad[#bad + 1] = form .. " " .. bars .. " does not close" end
         if idea.block.beats ~= bars * 4 then bad[#bad + 1] = form .. " " .. bars .. " is " .. idea.block.beats .. " beats" end
         for _, u in ipairs(idea.plan.units) do
@@ -2099,13 +2091,18 @@ do
   eq(#bad, 0, "the 1.8 forms are as they say: " .. table.concat(bad, "; "))
   ok(dcs > 0 and dcTonic >= dcs * 0.5,
      ("at a deceptive cadence the tune mostly holds do over vi: %d of %d"):format(dcTonic, dcs))
-  -- Any rolls only 1.0's four.
-  local rolled = false
-  for seed = 1, 300 do
-    local f = make({ kind = "Measure", form = "Any" }, seed).r.form
-    if want[f] then rolled = true end
+  -- (1.13) Every idea rolls its form, each about one time in ten.
+  local count, n = {}, 1000
+  for seed = 1, n do
+    local f = make({ kind = "Measure" }, seed).r.form
+    count[f] = (count[f] or 0) + 1
   end
-  ok(not rolled, "Any never rolls a 1.8 form: they are there to be chosen")
+  local off = {}
+  for _, f in ipairs(I.BY_ID.form.values) do
+    local c = count[f] or 0
+    if c < n * 0.06 or c > n * 0.14 then off[#off + 1] = f .. " " .. c end
+  end
+  eq(#off, 0, "every form about one idea in ten (of 1000): " .. table.concat(off, ", "))
 end
 
 ------------------------------------------------------------------------------
@@ -2651,6 +2648,149 @@ do
   local said = make({ kind = "Measure", keyChange = "Step up", scale = 1, root = 1 }, 3)
   ok(said.keyChange and said.keyChange.text:find("D Major", 1, true), "the window says where the key changes, and to what: " ..
      tostring(said.keyChange and said.keyChange.text))
+end
+
+------------------------------------------------------------------------------
+-- 1.13: the engine decides more; leaps, the minor V, the evaded close, more
+-- galant schemata, the dembow, the six-four's bass
+------------------------------------------------------------------------------
+
+do
+  -- Progression, Part-writing and Form are never shown, but every idea has
+  -- them: walked or named half and half, by the book, a form rolled.
+  local st = I.newState()
+  st.kind = "Measure"
+  for _, id in ipairs({ "progression", "partWriting", "form" }) do
+    ok(not I.shows(I.BY_ID[id], st), id .. " is not shown")
+  end
+  eq(st.partWriting, "By the book", "part-writing is by the book")
+  local named, n = 0, 400
+  for seed = 1, n do
+    local idea = make({ kind = "Measure", progression = "Any", scale = 1 }, seed)
+    if idea.r.progression == "Any named" then named = named + 1 end
+  end
+  ok(named > n * 0.4 and named < n * 0.6, ("half the ideas look for a named progression: %d of %d"):format(named, n))
+  -- And Keep leaves them be.
+  local kept = I.keep(I.newState(), make({ kind = "Measure" }, 3))
+  ok(kept.progression == "Any" and kept.form == "Any", "Keep leaves the hidden settings to the engine")
+end
+
+do
+  -- What outlines a triad: C E G, E G C, A C E; not B D F (diminished),
+  -- C E B, nor C F A# (no triad at all).
+  ok(I.outlinesTriad(60, 64, 67) and I.outlinesTriad(64, 67, 72) and I.outlinesTriad(57, 60, 64)
+     and not I.outlinesTriad(59, 62, 65) and not I.outlinesTriad(60, 64, 71) and not I.outlinesTriad(60, 65, 70),
+     "two leaps the same way may outline C E G, E G C or A C E - not B D F or C E B")
+end
+
+do
+  -- The minor key's V: major, the tune bending to its leading note; the
+  -- Aeolian mode keeps its v.
+  local minorV, raisedTune, aeolV = 0, 0, 0
+  local AEO
+  for i, sc in ipairs(T.SCALES) do if sc.name == "Aeolian" then AEO = i end end
+  for seed = 1, 60 do
+    local m = make({ kind = "Measure", scale = 2, root = 1, borrowed = "Off", applied = "Off" }, seed)
+    for _, sl in ipairs(m.timeline) do
+      -- (A sus4 has no third to raise.)
+      if sl.degree == 4 and not sl.flavour and not sl.chord.has[11] then minorV = minorV + 1 end
+    end
+    for _, nt in ipairs(m.melody) do
+      local sl = I.chordAt(m.timeline, nt.step)
+      if sl.degree == 4 and nt.pitch % 12 == 11 then raisedTune = raisedTune + 1 end
+    end
+    local a = make({ kind = "Measure", scale = AEO, root = 1, borrowed = "Off", applied = "Off" }, seed)
+    for _, sl in ipairs(a.timeline) do if sl.degree == 4 and not sl.flavour and not sl.chord.has[11] then aeolV = aeolV + 1 end end
+  end
+  ok(minorV == 0 and raisedTune > 20 and aeolV > 20,
+     ("in C minor the V is G with B natural, and the tune takes B (%d); Aeolian keeps Gm (%d)"):format(raisedTune, aeolV))
+end
+
+do
+  -- The evaded close: Extended stretches by it half the time; V then I6,
+  -- the tune leaping up instead of landing on do.
+  local ec, dc, i6, leapt, n = 0, 0, 0, 0, 0
+  for seed = 1, 200 do
+    local idea = make({ kind = "Measure", form = "Extended", scale = 1 }, seed)
+    for _, u in ipairs(idea.plan.units) do
+      if u.cad == "EC" then
+        ec = ec + 1
+        local last = u.slots[#u.slots]
+        if last.degree == 0 and last.inversion == 1 then i6 = i6 + 1 end
+      elseif u.cad == "DC" then dc = dc + 1 end
+    end
+    for k, nt in ipairs(idea.melody) do
+      if nt.closes == "EC" and idea.melody[k - 1] then
+        n = n + 1
+        if nt.pitch - idea.melody[k - 1].pitch >= 5 then leapt = leapt + 1 end
+      end
+    end
+  end
+  ok(ec > 60 and dc > 60, ("Extended stretches by an evaded close or a deceptive one: %d and %d"):format(ec, dc))
+  ok(i6 >= ec * 0.85, ("the evaded close's tonic stands on its third: %d of %d"):format(i6, ec))
+  ok(leapt >= n * 0.6, ("and the tune leaps up a fourth or more instead of resolving: %d of %d"):format(leapt, n))
+end
+
+do
+  -- More galant schemata, as written in a Loop at a chord a bar.
+  local want = { ["Do-Re-Mi"] = "C G/B C", Romanesca = "C G/B Am C/E", Fonte = "A7 Dm7 G7 Cmaj7",
+                 Monte = "C7 Fmaj7 D7 G7" }
+  local bad = {}
+  for name, w in pairs(want) do
+    for seed = 1, 6 do
+      local idea = make({ kind = "Measure", form = "Loop", measureBars = 8, chordPace = "One a bar", progression = name,
+                          scale = 1, root = 1, colour = (name == "Fonte" or name == "Monte") and "Sevenths" or "Triads",
+                          push = "None", pull = "None", flavours = "Off" }, seed)
+      local got = {}
+      for _, sl in ipairs(idea.timeline) do
+        got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
+      end
+      local line = table.concat(got, " ")
+      if line:sub(1, #w) ~= w then bad[#bad + 1] = name .. ": " .. line end
+    end
+  end
+  eq(#bad, 0, "the Do-Re-Mi, the Romanesca, the Fonte and the Monte, as written: " .. table.concat(bad, "; "))
+end
+
+do
+  -- The dembow: a kick on every beat, the snare on 3 6 11 14; a backbeat
+  -- in 3/4.
+  local bad = 0
+  for seed = 1, 20 do
+    local idea = make({ kind = "Drums", beat = "Reggaeton", fills = "None", drumBars = 2 }, seed)
+    local kicks, snares = {}, {}
+    for _, nt in ipairs(idea.block.notes) do
+      if nt.start < 4 then
+        if nt.pitch == I.DRUM.kick then kicks[#kicks + 1] = ("%g"):format(nt.start * 4) end
+        if nt.pitch == I.DRUM.snare then snares[#snares + 1] = ("%g"):format(nt.start * 4) end
+      end
+    end
+    table.sort(kicks, function(x, y) return tonumber(x) < tonumber(y) end)
+    table.sort(snares, function(x, y) return tonumber(x) < tonumber(y) end)
+    if table.concat(kicks, " ") ~= "0 4 8 12" or table.concat(snares, " ") ~= "3 6 11 14" then bad = bad + 1 end
+  end
+  eq(bad, 0, "Reggaeton: the kick on every beat, the snare on the dembow")
+  local three = make({ kind = "Drums", beat = "Reggaeton" }, 1, I.meter(3, 4))
+  ok(three.drums.style == "Backbeat", "a Reggaeton in 3/4 is played as a backbeat")
+end
+
+do
+  -- By the book a six-four doubles its bass (Hutchinson, 26.12); a first
+  -- inversion does not.
+  local sixFour, doubled = 0, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", inversions = "Common", chordStyle = "Block", voicing = "Close",
+                        push = "None", pull = "None", tension = "Off" }, seed)
+    for _, sl in ipairs(idea.chordTimeline) do
+      if sl.inversion == 2 and not sl.spec then
+        sixFour = sixFour + 1
+        for _, x in ipairs(part(idea, "Chords").notes) do
+          if math.abs(x.start * 4 - sl.s) < 1e-6 and x.pitch % 12 == sl.bassPc then doubled = doubled + 1; break end
+        end
+      end
+    end
+  end
+  ok(sixFour > 10 and doubled >= sixFour * 0.9, ("a six-four keeps its doubled bass: %d of %d"):format(doubled, sixFour))
 end
 
 C.done()
