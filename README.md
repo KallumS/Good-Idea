@@ -91,7 +91,11 @@ Each idea has an **idea number**. The same number with the same settings is
 A number written down from version 1.0 still gives the same idea with
 Figures on Plain, Push and Pull on None, Borrowed, Flavours and Inversions
 on Off, Voicing on Close, Part-writing on Free, Velocity on Flat, Applied on
-Off, Tension on Off and no swing.
+Off, Tension on Off and no swing. (Between versions, fixes to the
+part-writing can still move a note: from 1.9 to 1.12, with Tension and
+Flavours off, about 2 Measures in 100 have a tune note moved to keep clear
+of parallels with the bass, the chords under it following; their chords
+are the same.)
 
 ## The settings
 
