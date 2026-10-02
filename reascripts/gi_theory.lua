@@ -76,6 +76,31 @@ local NUMERALS = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII" }
 function M.key(root, scale) return { root = root or 1, scale = scale or 1 } end
 
 local function ivOf(key) return key.iv or M.SCALES[key.scale].iv end
+
+-- The same scale `semis` semitones up (1.12, a key change): every position
+-- sounds that much higher. Its key note is spelled the way that gives the
+-- scale the fewest sharps and flats (D, not C##; Eb, not D#), and where it
+-- passes B it is lifted an octave (B up a tone is C#, above, not below).
+function M.transpose(key, semis)
+  local from = M.rootPc(key) + (key.lift or 0)
+  local want = (from + semis) % 12
+  local best, bestCost
+  for i, rt in ipairs(M.ROOTS) do
+    local pc = M.rootPc({ root = i })
+    if pc == want then
+      local k = { root = i, scale = key.scale, iv = key.iv }
+      local cost = 0
+      for pos = 0, #ivOf(k) - 1 do
+        local name = M.noteName(k, pos)
+        cost = cost + #name - 1
+        if name:find("##") or name:find("bb") then cost = cost + 10 end
+      end
+      if not bestCost or cost < bestCost then best, bestCost = k, cost end
+    end
+  end
+  best.lift = from + semis - want
+  return best
+end
 M.ivOf = ivOf
 
 function M.scaleLen(key) return #ivOf(key) end
@@ -95,7 +120,7 @@ function M.pitch(key, pos)
   local n   = #iv
   local oct = math.floor(pos / n)
   local k   = pos - oct * n
-  return M.rootPc(key) + iv[k + 1] + 12 * oct
+  return M.rootPc(key) + (key.lift or 0) + iv[k + 1] + 12 * oct
 end
 
 -- The highest position at or below a pitch. Every pitch has one, because the
@@ -103,7 +128,7 @@ end
 function M.floorPos(key, midi)
   local iv   = ivOf(key)
   local n    = #iv
-  local root = M.rootPc(key)
+  local root = M.rootPc(key) + (key.lift or 0)
   local oct  = math.floor((midi - root) / 12)
   local kmax = 0
   for k = 1, n do
@@ -516,6 +541,11 @@ function M.flavourShape(key, degree, flavour, seventh)
   elseif flavour == "dim" then
     if M.degreeQuality(key, degree + 2) ~= "diminished" then return nil end
     return { 2, 4, 6, 8 }
+  elseif flavour == "6/9" then
+    -- (1.12: a 6 with the whole-tone ninth on top - not in FLAVOURS, so the
+    -- flavours drawn before are drawn the same; a 6 may become one.)
+    if seventh or not triad or semisAbove(key, degree, 5) ~= 9 or semisAbove(key, degree, 1) ~= 2 then return nil end
+    return { 0, 2, 4, 5, 8 }
   end
 end
 
@@ -538,13 +568,15 @@ function M.flavourChord(key, degree, flavour, seventh)
   ch.quality = M.degreeQuality(key, ch.degree)
   ch.numeral = M.degreeNumeral(key, ch.degree)
   ch.addInside = flavour == "add2" or nil
-  ch.ninthUp = (flavour == "add9" or flavour == "9") or nil
+  ch.ninthUp = (flavour == "add9" or flavour == "9" or flavour == "6/9") or nil
   ch.nine = M.ninthOf(key, ch.degree)
   ch.name = M.chordName(key, ch)
   -- An added 2nd and an added 9th are the same notes; the name says which
   -- way it is voiced.
   if flavour == "add2" then
     ch.name = M.noteName(key, ch.degree) .. ((ch.quality == "minor") and "m(add2)" or "add2")
+  elseif flavour == "6/9" then
+    ch.name = M.noteName(key, ch.degree) .. ((ch.quality == "minor") and "m6/9" or "6/9")
   end
   return ch
 end
@@ -890,7 +922,7 @@ end
 -- thirds down there are mud.
 ------------------------------------------------------------------------------
 
-M.VOICINGS = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless" }
+M.VOICINGS = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless", "Power" }
 
 -- What a note is in its chord, by its distance above the root.
 local function roleOf(ch, pc)
@@ -980,6 +1012,13 @@ local function shapes(ch, style)
       out[1] = { order = { ch.rootPc, third, top } }
       out[2] = { order = { ch.rootPc, top, third } }
     end
+  elseif style == "Power" then
+    -- (1.12) The root, the fifth over it and the root again: no third. A
+    -- chord with no perfect fifth (diminished, augmented) plays its root in
+    -- octaves.
+    local fifth
+    for _, pc in ipairs(ch.pcs) do if (pc - ch.rootPc) % 12 == 7 then fifth = pc end end
+    out[1] = { order = fifth and { ch.rootPc, fifth, ch.rootPc } or { ch.rootPc, ch.rootPc } }
   elseif style == "Rootless" then
     local set = {}
     for _, pc in ipairs(pcs) do if pc ~= ch.rootPc then set[#set + 1] = pc end end

@@ -563,6 +563,8 @@ for mi, sig in ipairs(METERS) do
       -- The 1.11 chord styles every sixth idea, a named rhythm every fifth.
       if seed % 6 == 5 then st.chordStyle = ({ "Pedal", "Offbeat", "Fill" })[(seed // 6) % 3 + 1] end
       if seed % 5 == 4 then st.groove = ({ "Tresillo", "Habanera", "Clave", "3+3+3+3+2+2" })[(seed // 5) % 4 + 1] end
+      -- A key change every seventh Measure (1.12).
+      if seed % 7 == 6 then st.keyChange = ({ "Step up", "Half step up", "Truck driver" })[(seed // 7) % 3 + 1] end
       -- Every fourth Measure in one of the 1.8 forms (Any rolls only 1.0's).
       local NEWFORMS = { "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4", "Ternary", "Extended" }
       if seed % 4 == 1 then st.form = NEWFORMS[(seed // 4) % #NEWFORMS + 1] end
@@ -1650,6 +1652,10 @@ do
         if style == "Open" and #v >= 3 then check(v[1] % 12 == ch.rootPc and v[#v] - v[1] > 12, tag .. " spread from its root")
         elseif style == "Shell" and #ch.pcs >= 3 then check(#v == 3 and v[1] % 12 == ch.rootPc, tag .. " three notes on its root")
         elseif style == "Rootless" and ch.nine and #ch.pcs >= 3 then check(not root, tag .. " has no root")
+        elseif style == "Power" then
+          local only = v[1] % 12 == ch.rootPc
+          for _, p in ipairs(v) do if p % 12 ~= ch.rootPc and (p - ch.rootPc) % 12 ~= 7 then only = false end end
+          check(only, tag .. " root and fifth only")
         elseif (style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4") and #ch.pcs >= 3 then check(#v == 4, tag .. " four voices") end
       end
     end
@@ -2476,6 +2482,137 @@ do
   ok(offOn == 0 and offLong == 0, ("Offbeat chords are off the beat and short (%d on, %d long)"):format(offOn, offLong))
   ok(fillOnTune == 0 and fillHeld > fillStrokes * 0.4,
      ("Fill chords come where the tune holds or rests: %d of %d strokes, %d on a moving note"):format(fillHeld, fillStrokes, fillOnTune))
+end
+
+------------------------------------------------------------------------------
+-- 1.12: the 6/9, power chords, a key change
+------------------------------------------------------------------------------
+
+do
+  -- Half the 6 chords are 6/9, and a Loop plays the same each time round.
+  local six, sixNine, loopsDiffer = 0, 0, 0
+  for seed = 1, 150 do
+    local idea = make({ kind = "Measure", colour = "Mixed", flavours = "Common", scale = 1, form = "Loop",
+                        borrowed = "Off", applied = "Off" }, seed)
+    for _, sl in ipairs(idea.timeline) do
+      if sl.flavour == "6" then six = six + 1 elseif sl.flavour == "6/9" then sixNine = sixNine + 1 end
+    end
+    local units = idea.plan.units
+    local function names(u)
+      local out = {}
+      for _, sl in ipairs(u.slots) do out[#out + 1] = sl.chord.name end
+      return table.concat(out, " ")
+    end
+    if units[#units].kind == "repeat" and names(units[1]) ~= names(units[#units]) then loopsDiffer = loopsDiffer + 1 end
+  end
+  ok(sixNine > 10 and six > 10 and sixNine < six * 2, ("about half the 6 chords are 6/9: %d 6/9 and %d 6"):format(sixNine, six))
+  eq(loopsDiffer, 0, "a Loop plays its 6/9s each time round")
+  -- Flavours drawn before 1.12 are drawn the same: with the 6/9s put back
+  -- to 6, the chords are 1.11's.
+  local moved = 0
+  for seed = 1, 60 do
+    local idea = make({ kind = "Measure", colour = "Mixed", flavours = "Common" }, seed)
+    for _, sl in ipairs(idea.timeline) do
+      if sl.flavour and sl.flavour ~= "6/9" and not T.flavourChord(sl.key or idea.key, sl.degree, sl.flavour, false)
+         and not T.flavourChord(sl.key or idea.key, sl.degree, sl.flavour, true) then moved = moved + 1 end
+    end
+  end
+  eq(moved, 0, "every flavour is one its chord can take")
+  -- Power: root and fifth only, the root at the bottom; Any never rolls it.
+  local bad, rolled = 0, false
+  for seed = 1, 40 do
+    local idea = make({ kind = "Measure", voicing = "Power", chordStyle = "Block", tension = "Off" }, seed)
+    local stacks = {}
+    for _, n in ipairs(part(idea, "Chords").notes) do
+      stacks[n.start] = stacks[n.start] or {}
+      table.insert(stacks[n.start], n.pitch)
+    end
+    for at, v in pairs(stacks) do
+      table.sort(v)
+      local ch = I.chordAt(idea.chordTimeline, at * 4).chord
+      if v[1] % 12 ~= ch.rootPc then bad = bad + 1 end
+      for _, p in ipairs(v) do if p % 12 ~= ch.rootPc and (p - ch.rootPc) % 12 ~= 7 then bad = bad + 1 end end
+    end
+  end
+  for seed = 1, 300 do if make({ kind = "Measure" }, seed).r.voicing == "Power" then rolled = true end end
+  ok(bad == 0 and not rolled, ("power chords are root and fifth on the root (%d not), and only when chosen"):format(bad))
+end
+
+do
+  -- A key change: the last section the same degrees a step (or a semitone)
+  -- up, the tune with them.
+  local wrong, moved, seen = 0, 0, 0
+  for _, kc in ipairs({ { "Step up", 2 }, { "Half step up", 1 } }) do
+    for seed = 1, 30 do
+      local plain = make({ kind = "Measure", form = "Song", tension = "Off", borrowed = "Off", applied = "Off",
+                           push = "None", pull = "None", keyChange = "None" }, seed)
+      local up = make({ kind = "Measure", form = "Song", tension = "Off", borrowed = "Off", applied = "Off",
+                        push = "None", pull = "None", keyChange = kc[1] }, seed)
+      local at = up.keyChange and up.keyChange.at
+      if at then
+        seen = seen + 1
+        for i, sl in ipairs(up.timeline) do
+          local p = plain.timeline[i]
+          if sl.s >= at then
+            if not (p and p.degree == sl.degree and (sl.chord.rootPc - p.chord.rootPc) % 12 == kc[2]) then wrong = wrong + 1 end
+          elseif not (p and p.chord.name == sl.chord.name) then wrong = wrong + 1 end
+        end
+        local mp, mu = plain.melody, up.melody
+        for i, n in ipairs(mu) do
+          if n.step >= at and mp[i] and mp[i].step == n.step and n.pitch - mp[i].pitch ~= kc[2] then moved = moved + 1 end
+        end
+      end
+    end
+  end
+  ok(seen >= 50 and wrong == 0, ("the last section's chords are the same degrees, moved up (%d of %d ideas wrong)"):format(wrong, seen))
+  ok(moved <= seen, ("and the tune moves with them: %d notes not moved, in %d ideas"):format(moved, seen))
+  -- From B the new key note wraps round to C#: still a tone higher, not
+  -- a seventh lower.
+  local wrapped, checked = 0, 0
+  local B
+  for i, rt in ipairs(T.ROOTS) do if rt.name == "B" then B = i end end
+  for seed = 1, 10 do
+    local base = { kind = "Measure", form = "Loop", root = B, scale = 1, tension = "Off", borrowed = "Off",
+                   applied = "Off", push = "None", pull = "None" }
+    local plain = make(base, seed)
+    base.keyChange = "Step up"
+    local up = make(base, seed)
+    local at = up.keyChange.at
+    for i, n in ipairs(up.melody) do
+      local p = plain.melody[i]
+      if n.step >= at and p and p.step == n.step then
+        checked = checked + 1
+        if n.pitch - p.pitch ~= 2 then wrapped = wrapped + 1 end
+      end
+    end
+  end
+  ok(checked > 50 and wrapped <= checked / 20, ("from B, up a tone is C# above: %d of %d notes not a tone up"):format(wrapped, checked))
+  -- The truck driver: the new key's V just before the change.
+  local trucks, good = 0, 0
+  for seed = 1, 40 do
+    local idea = make({ kind = "Measure", keyChange = "Truck driver", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+    local kc = idea.keyChange
+    if kc and kc.truck then
+      trucks = trucks + 1
+      local V = kc.truck
+      -- (Up to the change - or to where its first chord is pushed in.)
+      local nx = I.chordAt(idea.timeline, V.e)
+      if (V.e == kc.at or (nx.pushed and V.e == kc.at - 2)) and V.chord.quality == "major"
+         and (V.chord.rootPc - T.pc(kc.key, 0)) % 12 == 7 then good = good + 1 end
+    end
+  end
+  ok(trucks >= 30 and good == trucks, ("the truck driver puts the new key's V just before the change: %d of %d"):format(good, trucks))
+  -- None, or hidden (not a Measure), changes nothing.
+  local hidden = 0
+  for seed = 1, 20 do
+    local a = make({ kind = "Phrase", keyChange = "None" }, seed)
+    local b = make({ kind = "Phrase", keyChange = "Truck driver" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then hidden = hidden + 1 end
+  end
+  eq(hidden, 0, "Key change, hidden under a Phrase, changes nothing")
+  local said = make({ kind = "Measure", keyChange = "Step up", scale = 1, root = 1 }, 3)
+  ok(said.keyChange and said.keyChange.text:find("D Major", 1, true), "the window says where the key changes, and to what: " ..
+     tostring(said.keyChange and said.keyChange.text))
 end
 
 C.done()

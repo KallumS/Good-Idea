@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.11
+ * Version:        1.12
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -507,9 +507,10 @@ local function drawChords(n)
 end
 
 local function drawArrangement(n)
-  fold(n, "Arrangement", summaryOf({ "form", "bass" }), function()
+  fold(n, "Arrangement", summaryOf({ "form", "bass", "keyChange" }), function()
     settingRow({ "form" }, 60)
     settingRow({ "bass" }, 60)
+    settingRow({ "keyChange" }, 84)
   end)
 end
 
@@ -593,6 +594,11 @@ local function drawResult()
       ImGui.TextWrapped(ctx, "Applied chord: " .. a.text)
       tip("The next chord's own dominant (or leading-tone chord), borrowed from the key that chord " ..
           "is home in. While it sounds, the tune bends with it.")
+    end
+    -- And a key change: where, and to what.
+    if idea.keyChange then
+      ImGui.TextWrapped(ctx, "Key change: " .. idea.keyChange.text)
+      tip("The last section, tune, chords and bass, in a key a step higher - the pop key change.")
     end
     local parts = {}
     for _, p in ipairs(block.parts) do parts[#parts + 1] = p.name end

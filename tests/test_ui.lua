@@ -575,7 +575,7 @@ clickIn("voicing", "Drop 2 & 4")
 eq(chosenIn("voicing"), "Drop 2 & 4", "a voicing can be chosen")
 local voicings = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "voicing" then voicings[#voicings + 1] = b end end
-eq(table.concat(voicings, ","), "Any,Close,Open,Drop 2,Drop 3,Drop 2 & 4,Shell,Rootless", "seven voicings, and Any")
+eq(table.concat(voicings, ","), "Any,Close,Open,Drop 2,Drop 3,Drop 2 & 4,Shell,Rootless,Power", "eight voicings (Power since 1.12), and Any")
 clickIn("inversions", "Off")
 eq(chosenIn("inversions"), "Off", "inversions can be turned off")
 

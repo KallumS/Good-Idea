@@ -406,6 +406,12 @@ do
             if p % 12 == ch.nine then nine = true end
           end
           check(not root and nine, tag .. " has no root and the ninth in its place")
+        elseif style == "Power" then
+          -- (1.12) Root, fifth, root: no third.
+          local fifth = ch.has[(ch.rootPc + 7) % 12]
+          local ok5 = v[1] % 12 == ch.rootPc and v[#v] % 12 == ch.rootPc and v[#v] - v[1] == 12
+          for _, p in ipairs(v) do if p % 12 ~= ch.rootPc and (p - ch.rootPc) % 12 ~= 7 then ok5 = false end end
+          check(ok5 and #v == (fifth and 3 or 2), tag .. " is the root, the fifth and the root again")
         end
       end
     end
@@ -432,6 +438,39 @@ do
          "Close is close position, exactly as it always was")
   eqList(T.voiceAs(T.flavourChord(Cmaj, 0, "add9"), "Close", nil, 53, 69), { 55, 60, 64, 74 }, "an add9 has its ninth on top")
   eqList(T.voiceAs(T.flavourChord(Cmaj, 0, "add2"), "Close", nil, 53, 69), { 60, 62, 64, 67 }, "an add2 its second inside")
+end
+
+------------------------------------------------------------------------------
+-- 1.12: the 6/9
+------------------------------------------------------------------------------
+
+do
+  local CK = T.key(1, 1)
+  local c69 = T.flavourChord(CK, 0, "6/9", false)
+  local names = {}
+  for _, p in ipairs(c69.pcs) do names[#names + 1] = T.pitchName(p + 60, CK):sub(1, -2) end
+  eq(c69.name .. " " .. table.concat(names, " "), "C6/9 C E G A D", "C6/9 is C E G A D")
+  eq(T.flavourChord(CK, 1, "6/9", false).name, "Dm6/9", "Dm6/9 in C: the Dorian sixth, B")
+  ok(T.flavourChord(CK, 2, "6/9", false) == nil, "no 6/9 on Em in C: its sixth is minor")
+  ok(T.flavourChord(CK, 0, "6/9", true) == nil, "no 6/9 where the chord had a seventh")
+  -- Every one in every seven-note scale: a major sixth and a whole-tone ninth
+  -- over its root, and every note in the key.
+  local bad = 0
+  for sc = 1, #T.SCALES do
+    local key = T.key(1, sc)
+    if T.scaleLen(key) == 7 then
+      local inKey = {}
+      for pos = 0, 6 do inKey[T.pc(key, pos)] = true end
+      for d = 0, 6 do
+        local ch = T.flavourChord(key, d, "6/9", false)
+        if ch then
+          if not (ch.has[(ch.rootPc + 9) % 12] and ch.has[(ch.rootPc + 2) % 12]) then bad = bad + 1 end
+          for _, pc in ipairs(ch.pcs) do if not inKey[pc] then bad = bad + 1 end end
+        end
+      end
+    end
+  end
+  eq(bad, 0, "every 6/9 has its major sixth and whole-tone ninth, in key")
 end
 
 C.done()

@@ -68,7 +68,7 @@ end
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
                   pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16,
-                  tension = 17 }
+                  tension = 17, sixnine = 18 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -397,6 +397,9 @@ function M.buildSettings()
         Common = "The same colours, on about half the chords that can take one.",
       } },
     { id = "voicing", label = "Voicing", step = "Chords", values = T.VOICINGS, any = true, default = "Close",
+      -- (Any rolls the seven 1.5 had; Power, 1.12, is there to choose.)
+      anyValues = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless" },
+      anyWeights = { 3, 1, 1, 1, 1, 1, 1 },
       weights = { 3, 1, 1, 1, 1, 1, 1 }, when = hasChords,
       hints = {
         Close = "Every note once, inside an octave, each chord nearest the one before.",
@@ -406,6 +409,7 @@ function M.buildSettings()
         ["Drop 2 & 4"] = "Four notes with the second and the fourth from the top dropped an octave: wide, like a big band's saxes.",
         Shell = "The root, the third and the seventh - the notes that say what the chord is, and nothing else.",
         Rootless = "No root - the bass has it: the third, fifth, seventh and ninth, the jazz pianist's left hand.",
+        Power = "The root, the fifth and the root an octave up - no third: the rock guitarist's power chord (C5). A chord with no perfect fifth plays its root in octaves. (Chosen, not rolled by Any.)",
       } },
     { id = "inversions", label = "Inversions", step = "Chords", values = { "Off", "Rare", "Common" }, default = "Rare",
       when = hasChords,
@@ -467,6 +471,17 @@ function M.buildSettings()
         Off = "The tune alone.",
         Thirds = "A second part a third under the tune, moving with it - a fourth or a sixth under where a third would not be a note of the chord on the beat. Its own channel (or track).",
         Sixths = "A second part a sixth under the tune, moving with it - a third or a fourth under where a sixth would not be a note of the chord on the beat. Its own channel (or track).",
+      } },
+
+    -- Added in 1.12, last for the same reason. None draws nothing.
+    { id = "keyChange", label = "Key change", step = "Arrangement",
+      values = { "None", "Step up", "Half step up", "Truck driver" }, default = "None",
+      when = function(st) return st.kind == "Measure" end,
+      hints = {
+        None = "One key all the way.",
+        ["Step up"] = "The last section a whole tone higher - the pop key change for a last chorus. Tune, chords and bass all go up.",
+        ["Half step up"] = "The last section a semitone higher.",
+        ["Truck driver"] = "A whole tone up, with the new key's V7 squeezed in before it (C ... A7 | D) - the 'truck-driver' gear change. Seven-note scales; a plain step up in others.",
       } },
   }
   M.BY_ID = {}
@@ -887,7 +902,7 @@ end
 -- Each unit's chords, and one timeline of { s, e, degree, chord } for the
 -- whole idea, in steps. The same chord twice running (where one unit ends on
 -- the chord the next begins with) is one chord, held.
-function M.harmony(plan, key, r, meter, rnd, colour, sch)
+function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt)
   local timeline = {}
   local prevLast
   for _, u in ipairs(plan.units) do
@@ -902,7 +917,7 @@ function M.harmony(plan, key, r, meter, rnd, colour, sch)
       -- (Not where a named progression moves the bass under the same chord:
       -- the Meyer's V4/3 to V6/5.)
       if last and last.degree == rs.degree and last.e == u.start + rs.s
-         and (last.spec and last.spec.bass) == (spec and spec.bass) then
+         and (last.spec and last.spec.bass) == (spec and spec.bass) and u.start + rs.s ~= breakAt then
         last.e = u.start + rs.e
         sl = last
       else
@@ -985,8 +1000,9 @@ function M.borrow(timeline, key, r, rnd, colour)
   local cands, weights = {}, {}
   for i = 2, #timeline - 2 do
     local sl = timeline[i]
-    -- (A named progression's chords are its own.)
-    for _, f in ipairs(sl.spec and {} or from) do
+    -- (A named progression's chords are its own; a chord after a key
+    -- change, 1.12, is in another key.)
+    for _, f in ipairs((sl.spec or sl.moved) and {} or from) do
       if T.SCALES[f[1]].iv ~= T.SCALES[key.scale].iv then
         local other = T.key(key.root, f[1])
         local ch = T.chord(other, sl.degree, colour)
@@ -1109,6 +1125,86 @@ local function cadenceSlots(plan, timeline)
 end
 
 ------------------------------------------------------------------------------
+-- A key change (1.12; docs/decisions/0024-...)
+--
+-- The pop key change for a last section (Open Music Theory, "Modulation";
+-- Hutchinson, ch. 21): from the start of the last unit that begins at or
+-- after half way, on a bar line, with two bars or more to go, every chord is
+-- the same degree of the key a step (or a semitone) up, so the tune - which
+-- is positions in the scale - goes up with it. The truck driver puts the new
+-- key's V (V7 with Sevenths or Mixed) in the second half of the chord before
+-- (or in its place, if it is short).
+------------------------------------------------------------------------------
+
+M.KEY_CHANGE = { ["Step up"] = 2, ["Half step up"] = 1, ["Truck driver"] = 2 }
+
+function M.changeAt(plan, meter)
+  local best
+  for _, u in ipairs(plan.units) do
+    if u.start > 0 and u.start * 2 >= plan.total and u.start % meter.bar == 0
+       and plan.total - u.start >= 2 * meter.bar then best = u.start end
+  end
+  if not best then
+    local last = plan.units[#plan.units]
+    if last.start > 0 then best = last.start end
+  end
+  return best
+end
+
+function M.keyChange(plan, timeline, key, r, meter, colour, at)
+  local semis = M.KEY_CHANGE[r.keyChange]
+  if not semis or not at then return nil end
+  local newKey = T.transpose(key, semis)
+  for _, sl in ipairs(timeline) do
+    if sl.s >= at then
+      local was = sl.chord
+      sl.key = T.transpose(sl.key or key, semis)
+      sl.chord = T.chord(sl.key, sl.degree, colour)
+      if sl.bassPc then sl.bassPc = (sl.bassPc + semis) % 12 end
+      sl.moved = semis
+    end
+  end
+  local truck
+  if r.keyChange == "Truck driver" and T.scaleLen(key) == 7 then
+    -- The new key's V: major, from harmonic minor in a minor key.
+    local K = newKey
+    if T.degreeQuality(K, 4) ~= "major" then
+      local HARM
+      for i, sc in ipairs(T.SCALES) do if sc.name == "Harm Minor" then HARM = i end end
+      K = HARM and T.transpose(T.key(key.root, HARM), semis) or nil
+      if K and T.degreeQuality(K, 4) ~= "major" then K = nil end
+    end
+    local idx
+    for i, sl in ipairs(timeline) do if sl.s < at then idx = i end end
+    local sl = idx and timeline[idx]
+    if K and sl and idx > 1 then
+      local V = { degree = 4, key = K, chord = T.chord(K, 4, (colour == "Triads") and "Triads" or "Sevenths"),
+                  spec = { 4, truck = true }, truck = true }
+      local cut = sl.s + snap(meter, (sl.e - sl.s) / 2)
+      if sl.e - sl.s >= 2 * meter.beat and cut > sl.s and cut < sl.e then
+        V.s, V.e, V.beat = cut, sl.e, cut
+        sl.e = cut
+        table.insert(timeline, idx + 1, V)
+        for _, u in ipairs(plan.units) do
+          for j, x in ipairs(u.slots or {}) do
+            if x == sl and cut < u.start + u.len then table.insert(u.slots, j + 1, V); break end
+          end
+        end
+      else
+        V.s, V.e, V.beat = sl.s, sl.e, sl.beat
+        timeline[idx] = V
+        for _, u in ipairs(plan.units) do
+          for j, x in ipairs(u.slots or {}) do if x == sl then u.slots[j] = V end end
+        end
+      end
+      V.origin = V
+      truck = V
+    end
+  end
+  return { at = at, semis = semis, key = newKey, truck = truck }
+end
+
+------------------------------------------------------------------------------
 -- Applied chords (1.8; docs/decisions/0020-applied-chords-cadences-and-forms.md)
 --
 -- The chord before a major or minor chord becomes that chord's own dominant
@@ -1181,6 +1277,7 @@ function M.applied(timeline, plan, key, r, rnd, colour)
     local x = after.degree
     local q = T.degreeQuality(key, x)
     local can = not keep[sl] and not sl.borrowed and not after.borrowed and lastDone ~= i - 1 and not sl.spec
+                and not sl.moved and not after.moved and not after.truck
                 and same[sl.origin or sl]
                 and x ~= 0 and (q == "major" or q == "minor")
     local go, kind
@@ -1225,7 +1322,12 @@ local FLAVOUR_WEIGHT = { sus4 = 3, sus2 = 2, add2 = 1.5, add9 = 1.5, ["9"] = 2, 
 -- A chord copied from another (a repeat, an answer's first half, a Loop
 -- going round) takes the flavour its original took, where it can, and
 -- draws nothing: the music that comes round again sounds the same.
-function M.flavour(timeline, plan, key, r, rnd)
+-- (1.12) A 6 becomes a 6/9 - the whole-tone ninth on top - half the time
+-- the ninth is there, on dice of its own, so the flavours drawn before are
+-- drawn as they were.
+M.SIXNINE_CHANCE = 0.5
+
+function M.flavour(timeline, plan, key, r, rnd, sixRnd)
   local chance = M.FLAVOUR_CHANCE[r.flavours]
   if not chance or r.colour ~= "Mixed" or T.scaleLen(key) ~= 7 then return end
   local keep = cadenceSlots(plan, timeline)
@@ -1256,7 +1358,7 @@ function M.flavour(timeline, plan, key, r, rnd)
         -- the notes and the name of Mixed's own; it changes the voicing,
         -- putting its ninth on top.)
         if ch and (ch.name ~= sl.chord.name or f == "add9") and not (before and before.chord.name == ch.name)
-           and not (after and after.chord.name == ch.name) and (was == nil or was == f) then
+           and not (after and after.chord.name == ch.name) and (was == nil or was == f or (was == "6/9" and f == "6")) then
           cands[#cands + 1] = ch
           weights[#weights + 1] = FLAVOUR_WEIGHT[f]
         end
@@ -1264,6 +1366,14 @@ function M.flavour(timeline, plan, key, r, rnd)
       if #cands > 0 then
         sl.chord = (was ~= nil) and cands[1] or weighted(rnd, cands, weights)
         sl.flavour = sl.chord.flavour
+        if sl.flavour == "6" then
+          local up = T.flavourChord(sl.key or key, sl.degree, "6/9", false)
+          local go
+          if was ~= nil then go = was == "6/9" else go = sixRnd and sixRnd() < M.SIXNINE_CHANCE end
+          if up and go and not (sl.bassPc and not up.has[sl.bassPc]) then
+            sl.chord, sl.flavour = up, "6/9"
+          end
+        end
       end
     end
     if sl.origin and was == nil then decided[sl.origin] = sl.flavour or false end
@@ -1753,7 +1863,9 @@ local function goalFor(ctx, u, prev, target, step)
   local key = M.keyAt(ctx, step)
   local n = T.scaleLen(key)
   local ch = M.chordAt(ctx.timeline, step).chord
-  local tonic = T.chord(ctx.key, 0, "Triads")
+  -- (The tonic of the key sounding there: after a key change, 1.12, the new
+  -- one's.)
+  local tonic = T.chord(key, 0, "Triads")
   local ok
   -- (A close whose chord is not the tonic - the blues, which plays its own
   -- changes bar by bar - lands on a note of the chord it has.)
@@ -2350,6 +2462,13 @@ function M.noParallels(ctx, notes, bassPcAt)
         elseif i == 2 and M.parallel(ctx, bassPcAt, notes[1], nil, notes[2], nil) then
           -- (At the very start, the idea's first note may move as a last resort.)
           try(1, true, true)
+        end
+        if M.parallel(ctx, bassPcAt, notes[i - 1], nil, notes[i], nil) and notes[i + 1] then
+          -- (Boxed in from the other side - the note before is a close's
+          -- goal, and every way out would be a tritone with the note after:
+          -- the note after moves, then this one.)
+          local keep = notes[i + 1].pos
+          if not ((try(i + 1) or try(i + 1, true)) and (try(i) or try(i, true))) then notes[i + 1].pos = keep end
         end
       end
     end
@@ -3264,10 +3383,14 @@ function M.make(st, meter, seed)
   local plan = M.plan(r, meter, M.stream(seed, "plan"))
   local colour = r.colour
   local sch, schemaWhy = M.schemaFor(r, key, M.stream(seed, "schema"))
-  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch)
+  -- (1.12) Where the key changes, if it does: the timeline keeps the same
+  -- chord either side apart there.
+  local changeAt = (r.kind == "Measure" and M.KEY_CHANGE[r.keyChange]) and M.changeAt(plan, meter) or nil
+  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch, changeAt)
+  local keyChange = M.keyChange(plan, timeline, key, r, meter, colour, changeAt)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   local applied = M.applied(timeline, plan, key, r, M.stream(seed, "applied"), colour)
-  M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
+  M.flavour(timeline, plan, key, r, M.stream(seed, "colour"), M.stream(seed, "sixnine"))
   -- By the book, a half close with Mixed stands on a plain V: "almost
   -- invariably a triad, rather than a seventh chord" (Open Music Theory,
   -- "Classical cadence types"). Sevenths, chosen for sevenths everywhere,
@@ -3397,6 +3520,7 @@ function M.make(st, meter, seed)
   if r.push ~= "None" then said[#said + 1] = r.push:lower() .. " push" end
   if r.chords and r.pull ~= "None" then said[#said + 1] = r.pull:lower() .. " pull" end
   if warp then said[#said + 1] = math.floor(st.swing) .. "% swing" end
+  if keyChange then said[#said + 1] = r.keyChange:lower() .. " to " .. M.keyName(keyChange.key) end
 
   -- Each borrowed chord, said in full for the window.
   local notes = {}
@@ -3436,6 +3560,13 @@ function M.make(st, meter, seed)
     ending = cadNames[plan.ending] or "",
     borrowed = notes,
     applied = appliedNotes,
+    keyChange = keyChange and {
+      at = keyChange.at, key = keyChange.key, truck = keyChange.truck,
+      text = ("%s to %s at bar %d%s"):format(
+        ({ ["Step up"] = "Up a whole tone", ["Half step up"] = "Up a semitone", ["Truck driver"] = "Up a whole tone" })[r.keyChange],
+        M.keyName(keyChange.key), keyChange.at // meter.bar + 1,
+        keyChange.truck and (", through its V (" .. keyChange.truck.chord.name .. ") - the truck driver") or ""),
+    } or nil,
     schema = sch and sch.name or nil,
   }
 end
