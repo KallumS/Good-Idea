@@ -30,3 +30,4 @@ the standing rules; this holds the decisions behind them.
 | [0017](0017-the-tune-takes-figures-too.md) | The tune takes figures too: its quarters and halves, not only its eighths |
 | [0018](0018-flavours-voicings-and-inversions.md) | Flavours for Mixed, a choice of voicings, and inversions where the bass steps |
 | [0019](0019-part-writing-by-the-book.md) | Part-writing by the book (Hutchinson, Rimsky-Korsakov, Open Music Theory), and shaped velocity |
+| [0020](0020-applied-chords-cadences-and-forms.md) | Applied chords, the deceptive cadence, and six more forms (hybrids, ternary, extended) |

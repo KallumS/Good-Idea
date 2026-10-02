@@ -217,6 +217,34 @@ local function audit(idea, tag)
     rule("a half close ends on a dominant", CADENCE_PCS(key, true)[last.degree] == true, tag .. " " .. idea.chords)
   end
 
+  -- Applied chords (1.8): each the dominant or the leading-tone chord of
+  -- the chord after it, and never two running.
+  for i, sl in ipairs(tl) do
+    if sl.applied then
+      local nx = tl[i + 1]
+      rule("an applied chord leads to another chord", nx ~= nil, tag)
+      if nx then
+        local up = (nx.chord.rootPc - sl.chord.rootPc) % 12
+        if sl.applied.kind == "V" then
+          rule("an applied V is major, a fifth above the chord it leads to",
+               up == 5 and sl.chord.quality == "major", tag .. " " .. idea.chords)
+        else
+          rule("an applied leading-tone chord is diminished, a semitone under the chord it leads to",
+               up == 1 and sl.chord.quality == "diminished", tag .. " " .. idea.chords)
+        end
+        rule("never two applied chords running", not (tl[i - 1] and tl[i - 1].applied), tag)
+      end
+    end
+  end
+  -- A deceptive close (1.8): a cadence chord, then vi.
+  for _, u in ipairs(idea.plan.units) do
+    if u.cad == "DC" and T.scaleLen(key) == 7 and u.slots and #u.slots >= 2 then
+      local last, before = u.slots[#u.slots], u.slots[#u.slots - 1]
+      rule("a deceptive close goes from a cadence chord to vi",
+           last.degree == 5 and CADENCE_PCS(key)[before.degree] == true, tag .. " " .. idea.chords)
+    end
+  end
+
   -- The tune.
   local mel = idea.melody
   if mel then
@@ -375,7 +403,10 @@ for mi, sig in ipairs(METERS) do
                    voicing = T.VOICINGS[seed % #T.VOICINGS + 1],
                    colour = (seed % 5 == 0) and "Mixed" or "Any" }
       -- Every third idea borrows, flavours and inverts on Common.
-      if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions = "Common", "Common", "Common" end
+      if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions, st.applied = "Common", "Common", "Common", "Common" end
+      -- Every fourth Measure in one of the 1.8 forms (Any rolls only 1.0's).
+      local NEWFORMS = { "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4", "Ternary", "Extended" }
+      if seed % 4 == 1 then st.form = NEWFORMS[(seed // 4) % #NEWFORMS + 1] end
       -- Every seventh idea in a scale other than major, all sixteen covered.
       if seed % 2 == 0 then st.scale = SCALES[(seed // 2) % #SCALES + 1] end
       if seed % 3 == 1 then st.root = "Any" end
@@ -874,7 +905,8 @@ do
   local bad = {}
   for _, v in ipairs(V10) do
     local b = make({ kind = v[1], figures = "Plain", push = "None", pull = "None", borrowed = "Off", swing = 0,
-                     flavours = "Off", inversions = "Off", velocity = "Flat", partWriting = "Free" }, v[2]).block
+                     flavours = "Off", inversions = "Off", velocity = "Flat", partWriting = "Free",
+                     applied = "Off" }, v[2]).block
     local f = {}
     for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
     table.sort(f)
@@ -1558,7 +1590,7 @@ do
   -- more often than other chords are.
   local dim, dimInv, other, otherInv = 0, 0, 0, 0
   for seed = 1, 300 do
-    local idea = make({ kind = "Measure", colour = "Triads", scale = 1, inversions = "Rare" }, seed)
+    local idea = make({ kind = "Measure", colour = "Triads", scale = 1, inversions = "Rare", applied = "Off" }, seed)
     local keep = cadenceOwned(idea)
     for i, sl in ipairs(idea.timeline) do
       if not keep[sl] and i > 1 and i < #idea.timeline then
@@ -1778,6 +1810,127 @@ do
   ok(mean(down) > mean(off) + 10, ("the downbeat louder than the sixteenths: %.0f against %.0f"):format(mean(down), mean(off)))
   ok(mean(mel) > mean(chords) + 5, ("the tune over the chords: %.0f against %.0f"):format(mean(mel), mean(chords)))
   ok(mean(top) > mean(inner), ("a chord's top over its inner notes: %.0f against %.0f"):format(mean(top), mean(inner)))
+end
+
+------------------------------------------------------------------------------
+-- 1.8: applied chords, the deceptive cadence, more forms
+------------------------------------------------------------------------------
+
+do
+  local count = { Off = 0, Rare = 0, Common = 0 }
+  local ideas = { Off = 0, Rare = 0, Common = 0 }
+  local outside, edge, said, kinds = 0, 0, 0, {}
+  local n = 200
+  for seed = 1, n do
+    for _, lvl in ipairs({ "Off", "Rare", "Common" }) do
+      local idea = make({ kind = "Measure", applied = lvl, borrowed = "Off", scale = 1,
+                          colour = ({ "Triads", "Sevenths", "Mixed" })[seed % 3 + 1] }, seed)
+      local tl = idea.timeline
+      local any = false
+      for i, sl in ipairs(tl) do
+        if sl.applied then
+          count[lvl] = count[lvl] + 1
+          any = true
+          kinds[sl.applied.numeral:gsub("7", "")] = true
+          local out = false
+          for _, pc in ipairs(sl.chord.pcs) do if not ({ [0]=1, [2]=1, [4]=1, [5]=1, [7]=1, [9]=1, [11]=1 })[pc] then out = true end end
+          if out then outside = outside + 1 end
+          if i == 1 or i == #tl then edge = edge + 1 end
+        end
+      end
+      if any then ideas[lvl] = ideas[lvl] + 1 end
+      if lvl ~= "Off" and #idea.applied == (function() local k = 0 for _, sl in ipairs(tl) do if sl.applied then k = k + 1 end end return k end)() then said = said + 1 end
+    end
+  end
+  eq(count.Off, 0, "with Applied off, no applied chords")
+  ok(ideas.Rare >= n * 0.2 and ideas.Rare <= n * 0.8,
+     ("with Rare, some Measures have an applied chord: %d of %d"):format(ideas.Rare, n))
+  ok(count.Common >= 1.5 * count.Rare, ("Common more than Rare: %d against %d"):format(count.Common, count.Rare))
+  eq(outside, count.Rare + count.Common, "every applied chord has a note from outside the key")
+  eq(edge, 0, "never the first chord or the last")
+  eq(said, 2 * n, "the window lists every one")
+  ok(kinds["V/V"] and kinds["V/vi"] and kinds["viio/V"], "V/V, V/vi and the leading-tone chords among them")
+  -- In C major, V7/V is D7, with F#: and the tune bends with it.
+  local found, bent = false, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", applied = "Common", colour = "Sevenths", root = 1, scale = 1, borrowed = "Off" }, seed)
+    for _, sl in ipairs(idea.timeline) do
+      if sl.applied and sl.applied.numeral == "V7/V" then
+        found = found or sl.chord.name == "D7"
+        for _, nt in ipairs(idea.melody) do
+          if nt.step >= sl.s and nt.step < sl.e and nt.pitch % 12 == 5 then bent = bent + 1 end
+        end
+      end
+    end
+  end
+  ok(found, "V7/V in C is D7")
+  eq(bent, 0, "and under it the tune plays F#, never F")
+  -- The same each time round a Loop.
+  local bad = 0
+  for seed = 1, 60 do
+    local idea = make({ kind = "Measure", form = "Loop", measureBars = 16, applied = "Common", borrowed = "Off" }, seed)
+    local units = idea.plan.units
+    local function names(u)
+      local out = {}
+      for i = 1, #u.slots - 1 do out[i] = u.slots[i].chord.name end
+      return table.concat(out, " ")
+    end
+    for _, u in ipairs(units) do if names(u) ~= names(units[1]) then bad = bad + 1 end end
+  end
+  eq(bad, 0, "a Loop plays the same applied chords each time round")
+  -- Hidden, it changes nothing.
+  local PENT
+  for i, sc in ipairs(T.SCALES) do if sc.name == "Maj Pent" then PENT = i end end
+  local hidden = 0
+  for seed = 1, 30 do
+    local a = make({ kind = "Drums", applied = "Off" }, seed)
+    local b = make({ kind = "Drums", applied = "Common" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then hidden = hidden + 1 end
+    local c = make({ kind = "Measure", scale = PENT, applied = "Off" }, seed)
+    local d = make({ kind = "Measure", scale = PENT, applied = "Common" }, seed)
+    if fingerprint(c.block.notes) ~= fingerprint(d.block.notes) then hidden = hidden + 1 end
+  end
+  eq(hidden, 0, "Applied, hidden (Drums, a pentatonic scale), changes nothing")
+end
+
+-- The deceptive cadence and the 1.8 forms.
+do
+  local want = {
+    ["Hybrid 1"] = { "HC", "PAC" }, ["Hybrid 2"] = { "HC", "PAC" }, ["Hybrid 3"] = { "PAC" },
+    ["Hybrid 4"] = { "PAC" }, Ternary = { "HC", "PAC" }, Extended = { "DC", "PAC" },
+  }
+  local bad, dcTonic, dcs = {}, 0, 0
+  for form, cads in pairs(want) do
+    for _, bars in ipairs({ 8, 12, 16 }) do
+      for seed = 1, 20 do
+        local idea = make({ kind = "Measure", form = form, measureBars = bars, scale = 1 }, seed)
+        local got = {}
+        for _, u in ipairs(idea.plan.units) do if u.cad ~= "none" then got[#got + 1] = u.cad end end
+        local seen = {}
+        for _, c in ipairs(got) do seen[c] = true end
+        for _, c in ipairs(cads) do if not seen[c] then bad[#bad + 1] = form .. " " .. bars .. " lacks " .. c end end
+        if got[#got] ~= "PAC" then bad[#bad + 1] = form .. " " .. bars .. " does not close" end
+        if idea.block.beats ~= bars * 4 then bad[#bad + 1] = form .. " " .. bars .. " is " .. idea.block.beats .. " beats" end
+        for _, u in ipairs(idea.plan.units) do
+          if u.cad == "DC" then
+            dcs = dcs + 1
+            local last = u.notes[#u.notes]
+            if last and last.pos % 7 == 0 then dcTonic = dcTonic + 1 end
+          end
+        end
+      end
+    end
+  end
+  eq(#bad, 0, "the 1.8 forms are as they say: " .. table.concat(bad, "; "))
+  ok(dcs > 0 and dcTonic >= dcs * 0.5,
+     ("at a deceptive cadence the tune mostly holds do over vi: %d of %d"):format(dcTonic, dcs))
+  -- Any rolls only 1.0's four.
+  local rolled = false
+  for seed = 1, 300 do
+    local f = make({ kind = "Measure", form = "Any" }, seed).r.form
+    if want[f] then rolled = true end
+  end
+  ok(not rolled, "Any never rolls a 1.8 form: they are there to be chosen")
 end
 
 C.done()

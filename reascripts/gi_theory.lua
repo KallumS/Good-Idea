@@ -681,6 +681,7 @@ end
      opts.start    the first chord (default the tonic)
      opts.cadence  how it ends:
                      "PAC", "IAC"  a cadence chord, then the tonic
+                     "DC"          a cadence chord, then vi (a deceptive close)
                      "HC"          on a cadence chord (a half cadence)
                      "open"        on anything but the tonic that leads back
                                    to opts.loopTo (default the first chord),
@@ -699,7 +700,14 @@ function M.progression(key, n, opts, rnd)
   local start = norm(key, opts.start or 0)
   local cad = opts.cadence or "none"
   local tail = {}
-  if cad == "PAC" or cad == "IAC" then
+  -- A deceptive cadence (1.8): a cadence chord, then vi (VI in minor) where
+  -- the tonic was due - in a seven-note scale; elsewhere, an imperfect close.
+  if cad == "DC" and M.scaleLen(key) ~= 7 then cad = "IAC" end
+  if cad == "DC" then
+    if n == 1 then return { 5 } end
+    local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
+    tail = { c.degree, 5 }
+  elseif cad == "PAC" or cad == "IAC" then
     if n == 1 then return { 0 } end
     local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
     tail = { c.degree, 0 }

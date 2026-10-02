@@ -30,6 +30,10 @@ EOF
 out=$(lua5.4 "tests/$2" 2>&1)
 if echo "$out" | grep -q FAIL; then
   echo "BIT: $1 -> $(echo "$out" | grep FAIL | head -2 | cut -c1-150)"
+elif echo "$out" | grep -q "^lua5.4:"; then
+  # (A sabotage that crashes the suite is caught too - but say so: a crash
+  # may mean the sabotage, not the test, did the work.)
+  echo "BIT (crashed): $1 -> $(echo "$out" | grep "^lua5.4:" | head -1 | cut -c1-150)"
 else
   echo "MISSED: $1"
 fi

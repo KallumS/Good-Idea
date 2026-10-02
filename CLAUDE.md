@@ -44,7 +44,7 @@ is a pure function of the settings, the metre and the idea number (1 to
 `I.MAX_SEED`, 99999). The dice are Midi Variator's Park-Miller generator
 (`I.random`), and every part of an idea draws from **its own stream**
 (`I.stream(seed, name)`: pick, plan, harmony, rhythm, melody, chords, bass,
-drums, in 1.1 borrow and push, in 1.2 pull and kit, in 1.5 colour and invert), so changing how the chords are played
+drums, in 1.1 borrow and push, in 1.2 pull and kit, in 1.5 colour and invert, in 1.8 applied), so changing how the chords are played
 leaves the tune and the bass alone, and a different bass the tune and the
 chords. (A Measure's Pulse bass still takes its kick pattern from the
 `drums` stream, where 1.0's drums drew it.) The tests hold all of that.
@@ -54,8 +54,8 @@ chords. (A Measure's Pulse bass still takes its kick pattern from the
 the end of the list** (the window's layout is separate), and a new feature
 **draws nothing from the dice when it is off** (or draws from a stream of
 its own). With Figures Plain, Push None, Pull None, Borrowed Off, Flavours
-Off, Inversions Off, Voicing Close, Part-writing Free, Velocity Flat and no
-swing, every 1.0 idea number gives
+Off, Inversions Off, Voicing Close, Part-writing Free, Velocity Flat, Applied
+Off and no swing, every 1.0 idea number gives
 exactly the 1.0 idea; `test_idea` holds
 thirty, hashed by the 1.0 code in sorted order - a Measure without the 1.0
 drums, since 1.3 has none
@@ -127,7 +127,10 @@ everywhere means strength >= 2.
 2. **plan** ([0004](docs/decisions/0004-ideas-are-built-from-units.md)) -
    the idea is cut into units from `I.PLANS` (Motif, Phrase, by bars) or
    `I.FORMS` (Measure, by form and bars). A unit is `letter:bars[:cadence]`:
-   a letter's first appearance is new; `a` again repeats it, `a'` answers it,
+   a letter's first appearance is new; cadences are PAC, IAC, HC, open and
+   (1.8) **DC**, the deceptive V-vi (`T.progression`; the tune lands on vi
+   preferring do); the 1.8 forms (Hybrid 1-4, Ternary, Extended - 0020) are
+   outside Any; `a` again repeats it, `a'` answers it,
    `a~` sequences it (`u.shift`: up a step, down a step, up a fifth), `f`
    fragments the basic idea, `c` is a cadential unit. Cadence `X` is the
    idea's ending, drawn from `ENDINGS`. A repeat with a different cadence
@@ -156,6 +159,15 @@ everywhere means strength >= 2.
      `sl.key` to that scale and `sl.borrowed` to its name, its numeral
      against the home key (bVI) and its source. Only major or minor chords
      with a note outside the key.
+   - **applied** ([0020](docs/decisions/0020-applied-chords-cadences-and-forms.md)):
+     `I.applied`, after borrowing - the chord before a major or minor chord
+     (not the tonic) becomes its V/V7 or (one in four, `I.APPLIED_LEADING`)
+     viio/viio7, made by `I.appliedKey` from the home scale with notes bent
+     a semitone (`sl.key` is that scale, so the tune bends with it);
+     `I.APPLIED_CHANCE` per chord; never first, last, cadence, borrowed, two
+     running, or with no bent note; only where the chord after is the same
+     every time round (copies follow their original). `sl.applied`; `>` in
+     the chord line; `idea.applied` for the window.
    - **push** ([0010](docs/decisions/0010-figures-push-and-swing.md)):
      `I.push` moves a chord change on a beat back an eighth (`sl.s - 2`,
      `sl.pushed`), cutting the chord before. Quarter-note beats or longer
@@ -404,7 +416,7 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | | |
 | --- | --- |
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition, and the low interval limit. |
-| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 583,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), Common against Rare, and part-writing by the book against Free (doubling, sevenths, the bass's spacing, the chords under the tune, parallels, half closes) and shaped velocity. The sweep plays every idea in one of the seven voicings, every third on Common, every fifth with Free part-writing, and checks by the book on the rest. `GOOD_IDEA_SAY=1` prints passing checks too, with their numbers. |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 583,000 checks); then by name: the same number is the same idea, 1.0's ideas unchanged, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), Common against Rare, part-writing by the book against Free (doubling, sevenths, the bass's spacing, the chords under the tune, parallels, half closes), shaped velocity, applied chords (rates, bent notes, D7 in C and the tune's F#, Loops, hidden) and the 1.8 forms and deceptive close. The sweep plays every idea in one of the seven voicings, every third on Common, every fifth with Free part-writing, every fourth Measure in a 1.8 form, and checks by the book on the rest. `GOOD_IDEA_SAY=1` prints passing checks too, with their numbers. |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
 | `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (shown only with Mixed), the seven voicings, inversions, a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
@@ -440,7 +452,12 @@ like any other, a diminished 6/4, Common no more than Rare, two borrowed
 chords side by side, Common borrowing only one; in 1.7 a doubled bass, a
 seventh not wanted, the bass not spaced, the chords not under the tune,
 parallels allowed, a half close keeping its seventh, chords as loud as the
-tune, Free not being 1.6 - and watching it fail. Separate dice were not covered at first:
+tune, Free not being 1.6; in 1.8 an applied chord with no bent note,
+two running, copies deciding afresh, the tune not bending, a deceptive
+close going home, Any rolling the new forms, the tune ignoring do at a
+deceptive close, a wrong leading-tone chord - and watching it fail.
+(`tools/bite.sh` says "BIT (crashed)" when the sabotage crashes the suite:
+then make a cleaner sabotage, so a check, not the crash, does the catching.) Separate dice were not covered at first:
 nothing compared the bass or drums under two chord styles. A test does now,
 and chords and bass drawing from one stream fails it.
 
@@ -454,7 +471,7 @@ hash, so a release is: commit the code, then add a new `<version>` block
 pointing at that commit. Never edit an existing one. ReaPack keys a package by
 its name, so do not rename `Good Idea.lua`.
 
-Every change the user asks for has been a release (1.0 to 1.7 so far), in
+Every change the user asks for has been a release (1.0 to 1.8 so far), in
 this order:
 
 1. Read the demo before; make the change; read the demo after.

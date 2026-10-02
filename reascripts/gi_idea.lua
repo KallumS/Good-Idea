@@ -67,7 +67,7 @@ end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
-                  pull = 11, kit = 12, colour = 13, invert = 14 }
+                  pull = 11, kit = 12, colour = 13, invert = 14, applied = 15 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -260,9 +260,19 @@ function M.buildSettings()
       } },
 
     { id = "form", label = "Form", step = "Arrangement",
-      values = { "Period", "Sentence", "Song", "Loop" }, any = true, default = "Any",
+      values = { "Period", "Sentence", "Song", "Loop", "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4",
+                 "Ternary", "Extended" }, any = true, default = "Any",
+      -- (Any rolls the four 1.0 had, so a 1.0 idea number keeps its form;
+      -- the 1.8 forms are there to choose.)
+      anyValues = { "Period", "Sentence", "Song", "Loop" },
       when = function(st) return st.kind == "Measure" end,
       hints = {
+        ["Hybrid 1"] = "Antecedent + continuation (Caplin's first hybrid): an idea and a contrasting idea to a half close, then breaking it up and speeding to a full close. (Chosen, not rolled by Any.)",
+        ["Hybrid 2"] = "Antecedent + cadential: an idea and a contrasting idea to a half close, then one long cadential phrase home. (Chosen, not rolled by Any.)",
+        ["Hybrid 3"] = "Compound basic idea + continuation: an idea and a contrasting one with no cadence between, then breaking it up to a full close. (Chosen, not rolled by Any.)",
+        ["Hybrid 4"] = "Compound basic idea + consequent: an idea and a contrasting one, then both again, the second time to a full close. (Chosen, not rolled by Any.)",
+        Ternary = "A B A (the small ternary): a theme closed in the key, a contrasting middle standing on the dominant, the theme again to finish. (Chosen, not rolled by Any.)",
+        Extended = "A sentence stretched by a deceptive cadence: it reaches V and goes to vi instead of home, so the end is played 'one more time' to a full close. (Chosen, not rolled by Any.)",
         Period = "A question and its answer: the same opening twice, ending open and then closed.",
         Sentence = "An idea, the idea again on another chord, then breaking it up and speeding to the cadence.",
         Song = "A A B A: a tune, the tune again, something different, the tune to finish.",
@@ -399,6 +409,15 @@ function M.buildSettings()
         ["By the book"] = "As the harmony and orchestration books have it: an inverted chord does not double its bass note (G/B plays no B above the bass), a seventh falls a step into the next chord, a half close with Mixed is a plain V, the chords sit just under the tune, the bass no more than an octave and a fifth below the chords and never in among them, and no parallel fifths or octaves between the tune and the bass.",
         Free = "As Good Idea did before 1.7: every chord note in every chord, the chords under the whole tune's lowest note, the bass where it falls.",
       } },
+
+    -- Added in 1.8, last for the same reason. Off draws nothing.
+    { id = "applied", label = "Applied", step = "Key", values = { "Off", "Rare", "Common" }, default = "Rare",
+      when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
+      hints = {
+        Off = "No chord borrowed from another key.",
+        Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. The window says which, and where. Seven-note scales only.",
+        Common = "The same, on more of the chords that can take one, and in most ideas.",
+      } },
   }
   M.BY_ID = {}
   for _, s in ipairs(M.SETTINGS) do M.BY_ID[s.id] = s end
@@ -519,6 +538,27 @@ M.FORMS = {
   Loop     = { [8] = "a:4:open a':4:open",
                [12] = "a:4:open a':4:open a:4:open",
                [16] = "a:4:open a':4:open a:4:open a'':4:open" },
+  -- Added in 1.8 (Caplin's hybrid themes and small ternary, and a sentence
+  -- stretched by a deceptive cadence; Open Music Theory, "Hybrid themes",
+  -- "The Small Ternary", "Internal Expansions").
+  ["Hybrid 1"] = { [8] = "a:2 b:2:HC f:1 f:1 c:2:PAC",
+                   [12] = "a:3 b:3:HC f:2 f:1 c:3:PAC",
+                   [16] = "a:4 b:4:HC f:4 c:4:PAC" },
+  ["Hybrid 2"] = { [8] = "a:2 b:2:HC c:4:PAC",
+                   [12] = "a:3 b:3:HC c:6:PAC",
+                   [16] = "a:4 b:4:HC c:8:PAC" },
+  ["Hybrid 3"] = { [8] = "a:2 b:2 f:1 f:1 c:2:PAC",
+                   [12] = "a:3 b:3 f:2 f:1 c:3:PAC",
+                   [16] = "a:4 b:4 f:4 c:4:PAC" },
+  ["Hybrid 4"] = { [8] = "a:2 b:2 a:2 b':2:PAC",
+                   [12] = "a:3 b:3 a:3 b':3:PAC",
+                   [16] = "a:4 b:4 a:4 b':4:PAC" },
+  Ternary  = { [8] = "a:2:HC a':2:PAC b:2:HC a':2:PAC",
+               [12] = "a:4:PAC b:4:HC a:4:PAC",
+               [16] = "a:4:HC a':4:PAC b:4:HC a':4:PAC" },
+  Extended = { [8] = "a:2 a~:2 c:2:DC c:2:PAC",
+               [12] = "a:2 a~:2 f:2 c:2:DC f:2 c:2:PAC",
+               [16] = "a:4 a~:4 f:2 c:2:DC f:2 c:2:PAC" },
 }
 
 -- How an idea that is not a Measure ends. A motif is a hook, so mostly it
@@ -606,7 +646,7 @@ local function countFor(meter, len, r, kind, cad, first)
   -- ending too - as long as the chords still fall evenly on the beats, line
   -- up with the bars, and come no faster than two a bar.
   if first and cad ~= "none" then
-    local tail = (cad == "PAC" or cad == "IAC") and 2 or 1
+    local tail = (cad == "PAC" or cad == "IAC" or cad == "DC") and 2 or 1
     if n <= tail then
       for m = tail + 1, math.max(tail + 1, round(2 * bars)) do
         local per = beats // m
@@ -655,7 +695,7 @@ local function unitChords(u, units, key, r, meter, rnd, prevLast)
     for _, sl in ipairs(src.rel) do out[#out + 1] = moved(sl) end
     return out
   end
-  local need = (u.cad == "PAC" or u.cad == "IAC") and 2 or ((u.cad ~= "none") and 1 or 0)
+  local need = (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC") and 2 or ((u.cad ~= "none") and 1 or 0)
   local cut = src and M.cutFor(meter, src, u)
   -- (When the second half is too short for the ending's chords - half a bar
   -- of 4/4 has two beats, a full close needs a chord on each, and so on -
@@ -879,10 +919,119 @@ local function cadenceSlots(plan, timeline)
   for _, u in ipairs(plan.units) do
     if u.cad ~= "none" and u.slots and #u.slots > 0 then
       keep[u.slots[#u.slots]] = true
-      if (u.cad == "PAC" or u.cad == "IAC") and #u.slots > 1 then keep[u.slots[#u.slots - 1]] = true end
+      if (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC") and #u.slots > 1 then keep[u.slots[#u.slots - 1]] = true end
     end
   end
   return keep
+end
+
+------------------------------------------------------------------------------
+-- Applied chords (1.8; docs/decisions/0020-applied-chords-cadences-and-forms.md)
+--
+-- The chord before a major or minor chord becomes that chord's own dominant
+-- (V, or V7 with Sevenths or Mixed) or its leading-tone chord (viio, viio7):
+-- "a chromatically altered chord that also functions as a dominant chord in
+-- the key of the chord that follows it" (Open Music Theory, "Applied
+-- chords"; Hutchinson, chs. 17-18). It is made from the home scale with the
+-- notes it needs bent a semitone - V/V in C is the C scale with F#, V/vi the
+-- C scale with G# - so the tune keeps its positions and, while the chord
+-- sounds, bends with it (`I.keyAt`). Never the tonic's (that is just V),
+-- never the first chord or a cadence's, never a borrowed or flavoured one,
+-- never two running; a copied chord does as its original did, where the
+-- chord after it is the same.
+------------------------------------------------------------------------------
+
+M.APPLIED_CHANCE = { Rare = 0.15, Common = 0.4 }
+M.APPLIED_LEADING = 0.25   -- how often it is the leading-tone chord, not V
+
+-- The home scale with the notes of the dominant (`kind` "V") or the
+-- leading-tone chord ("vii") of degree `x` bent to fit, and that chord's
+-- degree; nil if it needs more than a semitone's bend, or bends nothing.
+function M.appliedKey(key, x, kind)
+  local n = T.scaleLen(key)
+  if n ~= 7 then return nil end
+  local iv = {}
+  for i, v in ipairs(T.ivOf(key)) do iv[i] = v end
+  local target = T.pc(key, x)
+  local tonic = T.rootPc(key)
+  -- Each chord note: its degree, and its distance above the target's root.
+  local spec = (kind == "V") and { { x + 4, 7 }, { x + 6, 11 }, { x + 1, 2 }, { x + 3, 5 } }
+                              or { { x + 6, 11 }, { x + 1, 2 }, { x + 3, 5 }, { x + 5, 8 } }
+  local bent = false
+  for _, sp in ipairs(spec) do
+    local d = sp[1] % 7
+    local want = (target + sp[2] - tonic) % 12
+    if iv[d + 1] ~= want then
+      local diff = (want - iv[d + 1] + 6) % 12 - 6
+      if math.abs(diff) ~= 1 then return nil end
+      iv[d + 1] = want
+      bent = true
+    end
+  end
+  for i = 2, n do if iv[i] <= iv[i - 1] then return nil end end
+  if not bent then return nil end
+  return { root = key.root, scale = key.scale, iv = iv }, spec[1][1] % 7
+end
+
+function M.applied(timeline, plan, key, r, rnd, colour)
+  local chance = M.APPLIED_CHANCE[r.applied]
+  if not chance or T.scaleLen(key) ~= 7 or #timeline < 3 then return {} end
+  local keep = cadenceSlots(plan, timeline)
+  local decided = {}
+  local out = {}
+  local lastDone
+  -- (Only where the chord after is the same every time the passage comes
+  -- round - a repeat, a Loop, an answer's first half - so it does too.)
+  local nextOf, same = {}, {}
+  for i, sl in ipairs(timeline) do
+    local o = sl.origin or sl
+    local nx = timeline[i + 1] and timeline[i + 1].degree or -1
+    if nextOf[o] == nil then nextOf[o], same[o] = nx, true
+    elseif nextOf[o] ~= nx then same[o] = false end
+  end
+  -- (The first chord and the last are never changed: nor are their copies.)
+  for _, sl in ipairs({ timeline[1], timeline[#timeline] }) do decided[sl.origin or sl] = false end
+  for i = 2, #timeline - 1 do
+    local sl, before, after = timeline[i], timeline[i - 1], timeline[i + 1]
+    local was = sl.origin and decided[sl.origin]
+    local x1, x2 = rnd(), rnd()
+    local x = after.degree
+    local q = T.degreeQuality(key, x)
+    local can = not keep[sl] and not sl.borrowed and not after.borrowed and lastDone ~= i - 1
+                and same[sl.origin or sl]
+                and x ~= 0 and (q == "major" or q == "minor")
+    local go, kind
+    if was ~= nil then
+      go = was ~= false and was.target == x
+      kind = go and was.kind
+    else
+      go = x1 < chance
+      kind = (x2 < M.APPLIED_LEADING) and "vii" or "V"
+    end
+    local done = false
+    if go and can then
+      local akey, deg = M.appliedKey(key, x, kind)
+      local ch = akey and T.chord(akey, deg, (colour == "Triads") and "Triads" or "Sevenths")
+      -- (A chord with no bent note in it - V/IV as a plain triad is I - is
+      -- not an applied chord.)
+      local bent = false
+      if ch then
+        local home = {}
+        for d = 0, 6 do home[T.pc(key, d)] = true end
+        for _, pc in ipairs(ch.pcs) do if not home[pc] then bent = true end end
+      end
+      if bent and deg ~= before.degree then
+        sl.chord, sl.key, sl.degree = ch, akey, deg
+        local numeral = (kind == "V" and "V" or "viio") .. ((#ch.pcs > 3) and "7" or "") .. "/" ..
+                        T.degreeNumeral(key, x)
+        sl.applied = { name = ch.name, numeral = numeral, to = after.chord.name, kind = kind, target = x }
+        out[#out + 1] = sl
+        lastDone, done = i, true
+      end
+    end
+    if sl.origin and was == nil then decided[sl.origin] = done and { kind = kind, target = x } or false end
+  end
+  return out
 end
 
 -- With Mixed, now and then a chord takes another colour (`T.flavourChord`):
@@ -903,7 +1052,10 @@ function M.flavour(timeline, plan, key, r, rnd)
     local go
     if was ~= nil then go = was ~= false
     else go = not keep[sl] and not sl.borrowed and rnd() < chance end
-    if go and not keep[sl] and not sl.borrowed then
+    -- (Nor the chord an applied chord leads to: it must stay the chord it
+    -- is the dominant of.)
+    local target = timeline[i - 1] and timeline[i - 1].applied
+    if go and not keep[sl] and not sl.borrowed and not sl.applied and not target then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
       local before, after = timeline[i - 1], timeline[i + 1]
@@ -995,7 +1147,7 @@ function M.invert(timeline, plan, key, r, rnd, meter)
       go = x < chance or (dimTriad and x < M.DIM_FIRST)
     end
     if sl.inversion then go = false end
-    if go and not keep[sl] and not sl.flavour then
+    if go and not keep[sl] and not sl.flavour and not sl.applied then
       local ch = sl.chord
       local pb, nb = bassPcOf(before), after.chord.rootPc
       local k = sl.key or key
@@ -1395,6 +1547,19 @@ local function goalFor(ctx, u, prev, target, step)
   if u.cad == "PAC" then ok = function(p) return p % n == 0 end
   elseif u.cad == "IAC" then ok = function(p) return T.onChord(key, tonic, p) and p % n ~= 0 end
   elseif u.cad == "HC" then ok = function(p) return T.onChord(key, ch, p) end
+  elseif u.cad == "DC" then
+    -- The tune lands where the tonic was due - do, which vi also has - and
+    -- the harmony goes elsewhere under it.
+    ok = function(p) return T.onChord(key, ch, p) end
+    local okBase = ok
+    local best, bestCost
+    for p = ctx.lo - 2, ctx.hi + 2 do
+      if okBase(p) then
+        local cost = math.abs(p - prev) + 0.4 * math.abs(p - target) + ((p % n == 0) and 0 or 3)
+        if not bestCost or cost < bestCost then best, bestCost = p, cost end
+      end
+    end
+    return best
   elseif u.cad == "open" then
     -- Back toward where the idea started, without landing on it, so it
     -- loops.
@@ -1715,8 +1880,8 @@ end
 -- and stand a fifth (or an octave, or a unison) apart both times, contrary
 -- motion included. `bassPcAt(step)` is the bass sounding at a step.
 --
--- Of the two, the later note moves (the first and last notes of the idea,
--- and the last note of each unit that closes - its cadence - stay); failing that, the earlier one. A note on
+-- Of the two, the later note moves (a full or imperfect close's last note
+-- stays; the idea's first note moves only as a last resort); failing that, the earlier one. A note on
 -- the beat moves to another chord tone, one off it a step - whichever is
 -- nearest and keeps every rule `untangle` keeps.
 function M.parallel(ctx, bassPcAt, a, ap, b, bp)
@@ -1730,12 +1895,12 @@ end
 
 function M.noParallels(ctx, notes, bassPcAt)
   local function P(note, pos) return T.pitch(M.keyAt(ctx, note.step), pos or note.pos) end
-  local function try(i, wide)
+  local function try(i, wide, first)
     local a, b, c = notes[i - 1], notes[i], notes[i + 1]
     -- (A full or imperfect close's last note is its goal and stays; a half
     -- close's or an open ending's may move to another note of its chord.)
     local goal = b and (b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC")
-    if not b or goal or i == 1 or (i == #notes and not b.closes) then return false end
+    if not b or goal or (i == 1 and not first) or (i == #notes and not b.closes) then return false end
     local ch = M.chordAt(ctx.timeline, b.step).chord
     local key = M.keyAt(ctx, b.step)
     local strong = M.strength(ctx.meter, b.step) >= 2 or b.closes
@@ -1748,7 +1913,9 @@ function M.noParallels(ctx, notes, bassPcAt)
       local good = fits and p >= ctx.lo - slack and p <= ctx.hi + slack
       if good then
         local pp = P(b, p)
-        for _, x in ipairs({ a, c }) do
+        -- (Not ipairs: with no note before, `a` is nil and ipairs would stop.)
+        for k = 1, 2 do
+          local x = (k == 1) and a or c
           if x then
             local gap = math.abs(P(x) - pp)
             if gap == 6 or (gap > 12 and not (x == c and c.first) and not (x == a and b.first)) then good = false end
@@ -1772,6 +1939,9 @@ function M.noParallels(ctx, notes, bassPcAt)
           -- note before that moves first, then this one.)
           local keep = notes[i - 2].pos
           if try(i - 2) and not (try(i - 1) or try(i - 1, true)) then notes[i - 2].pos = keep end
+        elseif i == 2 and M.parallel(ctx, bassPcAt, notes[1], nil, notes[2], nil) then
+          -- (At the very start, the idea's first note may move as a last resort.)
+          try(1, true, true)
         end
       end
     end
@@ -2530,7 +2700,7 @@ function M.chordLine(timeline, meter)
     -- An inverted chord is written over its bass note: C/E.
     local slash = sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or ""
     table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name .. slash ..
-                          (sl.borrowed and "*" or ""))
+                          (sl.borrowed and "*" or "") .. (sl.applied and ">" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
       bars[x] = bars[x] or {}
@@ -2570,6 +2740,7 @@ function M.make(st, meter, seed)
   local colour = r.colour
   local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
+  local applied = M.applied(timeline, plan, key, r, M.stream(seed, "applied"), colour)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"))
   -- By the book, a half close with Mixed stands on a plain V: "almost
   -- invariably a triad, rather than a seventh chord" (Open Music Theory,
@@ -2579,7 +2750,7 @@ function M.make(st, meter, seed)
     for _, u in ipairs(plan.units) do
       if u.cad == "HC" then
         local sl = M.chordAt(timeline, u.start + u.len - 1)
-        if sl and #sl.chord.pcs > 3 and not sl.flavour and not sl.borrowed then
+        if sl and #sl.chord.pcs > 3 and not sl.flavour and not sl.borrowed and not sl.applied then
           sl.chord = T.chord(sl.key or key, sl.degree, "Triads")
           sl.halfTriad = true
         end
@@ -2696,7 +2867,24 @@ function M.make(st, meter, seed)
     notes[#notes + 1] = b
   end
 
+  -- Each applied chord, said in full for the window.
+  local appliedNotes = {}
+  for _, sl in ipairs(applied) do
+    local a = sl.applied
+    -- (Named as the chord after it now is: flavoured or inverted, say.)
+    for i, x in ipairs(timeline) do
+      if x == sl and timeline[i + 1] then
+        local nx = timeline[i + 1]
+        a.to = nx.chord.name .. (nx.bassPos and ("/" .. T.noteName(nx.key, nx.bassPos)) or "")
+      end
+    end
+    a.bar = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
+    a.text = ("%s (%s) in bar %d, leading to %s"):format(a.name, a.numeral, a.bar, a.to)
+    appliedNotes[#appliedNotes + 1] = a
+  end
+
   local cadNames = { PAC = "closes on the tonic", IAC = "closes on the third or fifth",
+                     DC = "a deceptive close (V to vi)",
                      HC = "ends on the dominant (open)", open = "ends open, to loop", none = "" }
   return {
     seed = seed, r = r, key = key, plan = plan, timeline = timeline, melody = melody,
@@ -2707,6 +2895,7 @@ function M.make(st, meter, seed)
     shape = plan.shape,
     ending = cadNames[plan.ending] or "",
     borrowed = notes,
+    applied = appliedNotes,
   }
 end
 

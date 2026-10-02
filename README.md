@@ -21,7 +21,9 @@ change, or throw away and roll again.
   line, laid out in a form - a **Period** (a question and its
   answer), a **Sentence** (an idea, the idea again, broken up and driven to a
   close), a **Song** (A A B A) or a **Loop** (one progression round and round
-  with the tune varied over it).
+  with the tune varied over it) - and, to choose, Caplin's four **hybrid**
+  themes, the small **Ternary** (A B A) and an **Extended** sentence, which
+  reaches a deceptive cadence (V to vi) and plays its ending again to close.
 - **Drums** - **1 to 16 bars** of drums on General MIDI notes: a groove - a
   backbeat, half-time, four on the floor or a breakbeat, on the hi-hats or
   the ride - whose every second bar answers the first, with fills at the end,
@@ -61,6 +63,10 @@ that make music sound like music:
   or the bVI in a major key, the major IV in a minor one. The tune bends to
   it, and the window always tells you which chord it is, where, and which
   scale it came from.
+- **Applied chords.** Now and then the chord before a major or minor chord
+  becomes that chord's own dominant - D7 before G in C major (V7/V), E before
+  Am (V/vi) - or its leading-tone chord. The tune bends with it, and the
+  window says which chord it is, where, and what it leads to.
 
 So there is chance in it - **New Idea** picks which rhythm, which chords,
 which notes - but only among choices that make musical sense.
@@ -77,7 +83,8 @@ Each idea has an **idea number**. The same number with the same settings is
 
 A number written down from version 1.0 still gives the same idea with
 Figures on Plain, Push and Pull on None, Borrowed, Flavours and Inversions
-on Off, Voicing on Close, Part-writing on Free, Velocity on Flat and no swing.
+on Off, Voicing on Close, Part-writing on Free, Velocity on Flat, Applied on
+Off and no swing.
 
 ## The settings
 
@@ -94,7 +101,9 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
    out underneath. **Borrowed** - Off, Rare (the default) or Common: whether
-   an idea may borrow a chord (seven-note scales only).
+   an idea may borrow a chord (seven-note scales only). **Applied** - Off,
+   Rare (the default) or Common: whether a chord may become the next chord's
+   own V or leading-tone chord (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated); the **figures** (Plain, Dotted, Triplets, or Mixed: dotted
    and triplet rhythms now and then, in the tune and the chords together -
@@ -162,7 +171,8 @@ Press **New Idea**. The idea appears in the roll - the tune in yellow, chords
 and bass in grey - with its chords written
 out underneath, bar by bar. A drum idea fills the roll, a lane for each
 drum. A chord marked **^** is pushed an eighth early, **_** pulled an eighth
-late; a chord marked **\*** is borrowed, and a line underneath says which chord, in
+late; a chord marked **>** is applied (the next chord's own dominant), one
+marked **\*** is borrowed, and a line underneath says which chord, in
 which bar, from which scale: "Borrowed chord: Ab (bVI) in bar 3, from C
 Minor".
 

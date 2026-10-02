@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.7
+ * Version:        1.8
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -441,6 +441,7 @@ local function drawKey(n)
   local rolled = ui.idea and (ui.idea.r.rolled.root or ui.idea.r.rolled.scale)
   local summary = rootName .. " " .. scaleName .. (rolled and ("  (this idea: " .. I.keyName(key) .. ")") or "")
   if I.shows(I.BY_ID.borrowed, st) then summary = summary .. "  /  borrowed " .. st.borrowed end
+  if I.shows(I.BY_ID.applied, st) then summary = summary .. "  /  applied " .. st.applied end
   fold(n, "Key", summary, function()
     settingRow({ "root" }, 36)
     settingRow({ "scale" }, 84)
@@ -448,6 +449,7 @@ local function drawKey(n)
     for d = 0, T.scaleLen(key) - 1 do names[#names + 1] = T.noteName(key, d) end
     dim((rolled and ("This idea: " .. I.keyName(key) .. "  -  ") or "") .. table.concat(names, "  "))
     settingRow({ "borrowed" }, 52)
+    settingRow({ "applied" }, 52)
   end)
 end
 
@@ -572,6 +574,7 @@ local function drawResult()
     if idea.chords:find("^", 1, true) then marks[#marks + 1] = "^ pushed an eighth early" end
     if idea.chords:find("_", 1, true) then marks[#marks + 1] = "_ pulled an eighth late" end
     if idea.chords:find("*", 1, true) then marks[#marks + 1] = "* borrowed" end
+    if idea.chords:find(">", 1, true) then marks[#marks + 1] = "> applied" end
     if idea.chords ~= "" then
       dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords ..
                  (#marks > 0 and ("   (" .. table.concat(marks, ", ") .. ")") or ""))
@@ -582,6 +585,12 @@ local function drawResult()
       ImGui.TextWrapped(ctx, "Borrowed chord: " .. b.text)
       tip("A chord from another scale on the same key note. While it sounds, the tune and the bass " ..
           "use that scale's notes, the way a player bends to a borrowed chord.")
+    end
+    -- So is an applied chord: which, where, and the chord it leads to.
+    for _, a in ipairs(idea.applied or {}) do
+      ImGui.TextWrapped(ctx, "Applied chord: " .. a.text)
+      tip("The next chord's own dominant (or leading-tone chord), borrowed from the key that chord " ..
+          "is home in. While it sounds, the tune bends with it.")
     end
     local parts = {}
     for _, p in ipairs(block.parts) do parts[#parts + 1] = p.name end
