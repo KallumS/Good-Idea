@@ -2534,7 +2534,14 @@ do
       for _, p in ipairs(v) do if p % 12 ~= ch.rootPc and (p - ch.rootPc) % 12 ~= 7 then bad = bad + 1 end end
     end
   end
-  for seed = 1, 300 do if make({ kind = "Measure" }, seed).r.voicing == "Power" then rolled = true end end
+  -- (Voicing is Close unless left to Any.)
+  local anyRolled = {}
+  for seed = 1, 300 do
+    local v = make({ kind = "Measure", voicing = "Any" }, seed).r.voicing
+    anyRolled[v] = true
+    if v == "Power" then rolled = true end
+  end
+  rolled = rolled or not anyRolled.Rootless
   ok(bad == 0 and not rolled, ("power chords are root and fifth on the root (%d not), and only when chosen"):format(bad))
 end
 
