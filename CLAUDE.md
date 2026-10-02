@@ -23,6 +23,7 @@ in doubt, do what Midi Catalogue does.
 | `tools/demo.lua` | Ideas printed as note names. **Read this before and after any musical change.** |
 | `tools/bite.sh` | Breaks the code on purpose in a copy and runs a suite: proves a test bites. |
 | `docs/HANDOVER.md` | The prompt to start a fresh session with. |
+| `docs/READING.md` | Notes on every source in the Educational Materials zip: what each says, where Good Idea agrees, its gaps and ideas. **Read its first section before a musical change.** |
 | `docs/decisions/` | Why things are the way they are, one file per decision. |
 | `docs/sessions/` | What happened in a session, written at the end of it. |
 
@@ -458,9 +459,10 @@ in the reply can settle - e.g. "0.5 a bar" already existed as Slow, so it
 was relabelled and the user told; "drop 4" alone is not a standard voicing,
 so Drop 2 & 4 stands for it and the user was told it can be added. Say
 plainly what changed for old idea numbers. The user values checking against
-sources: the Educational Materials zip (Open Music Theory pages - its
-"Inversion" page is the twelve-tone kind; "Harmonic syntax - prolongation"
-is the chords one) and, when asked, the web.
+sources: the Educational Materials zip (Hutchinson's textbook, 100 Open
+Music Theory pages - its "Inversion" page is the twelve-tone kind;
+"Harmonic syntax - prolongation" is the chords one - and nine orchestration
+sources), all summarised in `docs/READING.md`, and, when asked, the web.
 
 **Keeping old ideas.** Settings are appended, never removed (retire them);
 new values of an Any-rolled setting stay outside Any; every new feature has

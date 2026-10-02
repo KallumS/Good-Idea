@@ -42,11 +42,19 @@ How I like the work done:
   decide.
 - Keep new settings at the end of the settings list, off or neutral by
   default where they would change old ideas, with their own dice.
-- I've uploaded Educational Materials (Open Music Theory pages) before; if
-  a question is about how music works, check them or the web, and tell me
-  your sources.
+- I've uploaded Educational Materials (a theory textbook, Open Music
+  Theory pages and orchestration books) before; `docs/READING.md` has notes
+  on all of them. If a question is about how music works, check those notes,
+  the materials or the web, and tell me your sources.
 
-Things left open that we might pick up (none of them asked for yet): trying
+Things the reading found Good Idea doing against the textbooks (listed at
+the top of `docs/READING.md`; none fixed yet): an inverted chord doubling
+its own bass note (G/B doubles B), a seventh on a half cadence's V, the
+bass and chords spacing and the tune sitting inside the chords (not yet
+measured), every note at one velocity. And the biggest thing they suggest
+adding: secondary (applied) dominants.
+
+Other things left open that we might pick up (none of them asked for yet): trying
 it inside REAPER; a separate Drop 4 voicing; out-of-key colour chords;
 flavours for Triads or Sevenths; ghost notes in drum ideas; a drum groove
 matched to a Measure's bass; pull for the bass.
