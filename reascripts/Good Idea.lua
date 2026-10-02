@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.9
+ * Version:        1.10
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -488,8 +488,9 @@ local function drawFeel(n)
 end
 
 local function drawMelody(n)
-  fold(n, "Melody", summaryOf({ "contour", "register" }), function()
+  fold(n, "Melody", summaryOf({ "contour", "register", "tension", "secondVoice" }), function()
     settingRow({ "contour", "register" }, 56)
+    settingRow({ "tension", "secondVoice" }, 84)
   end)
 end
 

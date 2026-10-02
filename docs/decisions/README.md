@@ -32,3 +32,4 @@ the standing rules; this holds the decisions behind them.
 | [0019](0019-part-writing-by-the-book.md) | Part-writing by the book (Hutchinson, Rimsky-Korsakov, Open Music Theory), and shaped velocity |
 | [0020](0020-applied-chords-cadences-and-forms.md) | Applied chords, the deceptive cadence, and six more forms (hybrids, ternary, extended) |
 | [0021](0021-named-progressions.md) | Named progressions: doo-wop, Pachelbel, the lament, the blues, the galant Meyer and Prinner, and others, with their basses |
+| [0022](0022-tension-and-a-second-voice.md) | Tension (suspensions, appoggiaturas, anticipations) and a second voice in thirds or sixths |

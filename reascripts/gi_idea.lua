@@ -67,7 +67,8 @@ end
 
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
-                  pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16 }
+                  pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16,
+                  tension = 17 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -436,6 +437,23 @@ function M.buildSettings()
         ["Double plagal"] = "I bVII IV I - two plagal steps home (the coda of 'Hey Jude'). Major keys.",
         Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. Major keys.",
         Blues = "The 12-bar blues - I I I I IV IV I I V IV I I - and its 8- and 16-bar cousins, a chord a bar. Measures only.",
+      } },
+
+    -- Added in 1.10, last for the same reason. Off draws nothing, and the
+    -- tension notes have dice of their own.
+    { id = "tension", label = "Tension", step = "Melody", values = { "Off", "Rare", "Common" },
+      default = "Rare", when = hasMelody,
+      hints = {
+        Off = "Every note on the beat is a note of the chord, as Good Idea's tunes were before 1.10.",
+        Rare = "Now and then the tune leans on the beat and falls a step to the chord: a suspension (the note before held over the chord change, then falling), an appoggiatura (leapt up to, a step above the chord's note), or, at a close, the last note arriving an eighth early (an anticipation). The textbooks' most expressive notes.",
+        Common = "The same, on more of the beats where one can go.",
+      } },
+    { id = "secondVoice", label = "Second voice", step = "Melody", values = { "Off", "Thirds", "Sixths" },
+      default = "Off", when = hasMelody,
+      hints = {
+        Off = "The tune alone.",
+        Thirds = "A second part a third under the tune, moving with it - a fourth or a sixth under where a third would not be a note of the chord on the beat. Its own channel (or track).",
+        Sixths = "A second part a sixth under the tune, moving with it - a third or a fourth under where a sixth would not be a note of the chord on the beat. Its own channel (or track).",
       } },
   }
   M.BY_ID = {}
@@ -1893,9 +1911,17 @@ function M.melody(plan, ctx, r, rnd)
   -- Into the timeline: each note lasts until the next (never longer than a
   -- half note, unless it is the last of its unit, which is held).
   local all = {}
-  for _, u in ipairs(units) do
+  -- (Where each note came from: an exact repeat's notes are its source's,
+  -- so a tension decided once comes round again.)
+  local origin = {}
+  for ui, u in ipairs(units) do
+    local src = u.of and units[u.of]
+    origin[ui] = (u.kind == "repeat" and src and src.len == u.len and src.cad == u.cad) and origin[u.of] or ui
+  end
+  for ui, u in ipairs(units) do
     for i, nt in ipairs(u.notes) do
       all[#all + 1] = { order = #all, step = u.start + nt.at, pos = nt.pos, last = (i == #u.notes),
+                        from = origin[ui] .. ":" .. nt.at,
                         closes = (i == #u.notes) and u.cad ~= "none" and u.cad,
                         unitEnd = u.start + u.len, first = (i == 1) or nt.fresh or false }
     end
@@ -1925,15 +1951,183 @@ function M.melody(plan, ctx, r, rnd)
     end
   end
   if ctx.bassPcAt then M.noParallels(ctx, notes, ctx.bassPcAt) end
+  notes = M.tension(ctx, notes, r, ctx.tensionRnd, plan.total)
   for i, nt in ipairs(notes) do
     local nextStep = notes[i + 1] and notes[i + 1].step or plan.total
     local len = nextStep - nt.step
-    if not nt.last then len = math.min(len, 8) end
+    if not nt.last and not nt.held then len = math.min(len, 8) end
     nt.len = math.max(1, len)
     nt.pitch = T.pitch(M.keyAt(ctx, nt.step), nt.pos)
     nt.accent = nt.first or nt.pushed or nt.step % ctx.meter.bar == 0
   end
+  -- (What each dissonance falls to: the note after it.)
+  for i, nt in ipairs(notes) do
+    if nt.dissonance and notes[i + 1] then nt.dissonance.res = notes[i + 1].pitch % 12 end
+  end
   return notes
+end
+
+------------------------------------------------------------------------------
+-- Tension (1.10; docs/decisions/0022-tension-and-a-second-voice.md)
+--
+-- The accented non-chord tones the books call the most expressive
+-- (Hutchinson, ch. 10; Open Music Theory, "Embellishing tones"):
+--
+--   - a suspension: the note before a chord change, a step above a note of
+--     the new chord, is held over the change and falls to it - prepared,
+--     dissonant on the beat, resolved down a step (4-3, 9-8, 7-6);
+--   - an appoggiatura: on the beat, a note a step above the chord's note,
+--     leapt up to, falling to it;
+--   - an anticipation: a close's last note arriving an eighth early, over
+--     the chord before, and struck again on the beat.
+--
+-- The note on the beat must last a quarter (in 4/4) or more, so the
+-- dissonance can have its eighth (or quarter) and the chord's note the
+-- rest; the chord must stay put until then. Never a minor ninth against the
+-- bass, nor a note that falls onto the bass's own note but for the root
+-- (the 9-8). Never on a pushed note, in a triplet, or on a close's goal
+-- (but for the anticipation, which is the goal early). An exact repeat does
+-- what its source did, and draws nothing.
+------------------------------------------------------------------------------
+
+-- (The suspension needs the tune to step down over a chord change, which
+-- is rarer than a leap up to a beat, so it is taken more often when it can be.)
+M.TENSION_CHANCE = { Rare = 0.1, Common = 0.25 }
+M.SUSPEND_CHANCE = { Rare = 0.35, Common = 0.7 }
+M.ANTICIPATE_CHANCE = { Rare = 0.25, Common = 0.5 }
+
+function M.tension(ctx, notes, r, rnd, total)
+  local chance = M.TENSION_CHANCE[r.tension]
+  if not chance or not rnd then return notes end
+  local meter = ctx.meter
+  local function P(step, pos) return T.pitch(M.keyAt(ctx, step), pos) end
+  local function chordOf(step) return M.chordAt(ctx.timeline, step) end
+  -- (By the book, the bass the tune keeps clear of; free, the chord's root,
+  -- so an inversion still leaves the tune alone.)
+  local function bassAt(step)
+    if ctx.bassPcAt then return ctx.bassPcAt(step) end
+    local sl = chordOf(step)
+    return sl and sl.chord.rootPc
+  end
+  -- The dissonance at `step` (pitch `d`) falling to `res` (a note of the
+  -- chord there, pitch `rp`): not a minor ninth on the bass, and not onto
+  -- the bass's own note unless it is the root.
+  local function againstBass(step, d, rp)
+    local b = bassAt(step)
+    if not b then return true end
+    local sl = chordOf(step)
+    if (d - b) % 12 == 1 then return false end
+    if rp % 12 == b and b ~= sl.chord.rootPc then return false end
+    return true
+  end
+  local decided = {}
+  local out = {}
+  local i = 1
+  while i <= #notes do
+    local a, b, c = out[#out], notes[i], notes[i + 1]
+    local nextStep = c and c.step or total
+    local len = nextStep - b.step
+    local strong = not M.offGrid(b.step) and M.strength(meter, b.step) >= 2
+    local kind
+    if a and strong and not b.pushed and not M.offGrid(a.step) and not (c and M.offGrid(c.step)) then
+      local was = decided[b.from]
+      local x = (was == nil) and rnd() or nil
+      local sl = chordOf(b.step)
+      local delay = (len >= 8) and 4 or 2
+      local still = len >= 4 and chordOf(b.step + delay) == sl
+      local key = M.keyAt(ctx, b.step)
+      local onIt = T.onChord(key, sl.chord, b.pos)
+      local goal = b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC"
+      local pa, pb = P(a.step, a.pos), P(b.step, b.pos)
+      -- An anticipation: a close's goal, an eighth early.
+      local antic = b.closes and b.last and pa ~= pb and not (c and P(c.step, c.pos) == pb)
+                    and b.step - 2 > a.step and P(b.step - 2, b.pos) == pb
+                    and not M.offGrid(b.step - 2) and M.strength(meter, b.step - 2) < 2
+      -- A suspension: the note before, a step above, held over a change.
+      local before = chordOf(a.step)
+      local sus = not goal and still and onIt and before ~= sl and a.pos == b.pos + 1
+                  and P(b.step, a.pos) == pa and not T.onChord(key, sl.chord, a.pos)
+                  and T.onChord(M.keyAt(ctx, a.step), before.chord, a.pos)
+                  and againstBass(b.step, pa, pb)
+      -- An appoggiatura: leapt up to, a step above the chord's note.
+      local app = b.pos + 1
+      local pApp = P(b.step, app)
+      local appo = not goal and still and onIt and a.pos <= app - 2 and app <= ctx.hi + 1
+                   and not T.onChord(key, sl.chord, app) and math.abs(pApp - pa) ~= 6
+                   and math.abs(pApp - pa) <= 12 and againstBass(b.step, pApp, pb)
+                   and not (ctx.bassPcAt and (M.parallel(ctx, ctx.bassPcAt, a, nil, { step = b.step, pos = app })))
+      if was ~= nil then
+        kind = (was == "anticipation" and antic and was) or (was == "suspension" and sus and was)
+               or (was == "appoggiatura" and appo and was) or nil
+      elseif antic and x < M.ANTICIPATE_CHANCE[r.tension] then kind = "anticipation"
+      elseif sus and x < M.SUSPEND_CHANCE[r.tension] then kind = "suspension"
+      elseif appo and x < chance then kind = "appoggiatura" end
+      if was == nil then decided[b.from] = kind or false end
+      if kind == "anticipation" then
+        out[#out + 1] = { step = b.step - 2, pos = b.pos, tension = "anticipation", from = b.from .. "^" }
+      elseif kind == "suspension" then
+        -- (The note before rings on over the change; the chord's note comes
+        -- in late.)
+        a.held, a.tension = true, "suspension"
+        a.dissonance = { s = b.step, e = b.step + delay }
+        b.step, b.resolves = b.step + delay, true
+      elseif kind == "appoggiatura" then
+        out[#out + 1] = { step = b.step, pos = app, tension = "appoggiatura", first = b.first, from = b.from .. "^",
+                          dissonance = { s = b.step, e = b.step + delay } }
+        b.first = false
+        b.step, b.resolves = b.step + delay, true
+      end
+    elseif decided[b.from] == nil then
+      -- (Nothing can lean here - the idea's first note, say - so nothing
+      -- does when it comes round again either.)
+      decided[b.from] = false
+    end
+    out[#out + 1] = b
+    i = i + 1
+  end
+  return out
+end
+
+------------------------------------------------------------------------------
+-- The second voice (1.10): the tune harmonised a third or a sixth under -
+-- "melodies in octaves, double octaves, in thirds and sixths"
+-- (Rimsky-Korsakov), "parallel doubling in thirds or sixths, adjusted to
+-- the harmony" (Belkin). Each note of the tune gets one under it, in the
+-- scale sounding then: on the beat a note of the chord (the third or sixth
+-- if it is one, else a fourth, else the nearest note of the chord a third
+-- to a sixth under, a fifth at the last), off the beat the interval as it
+-- comes. Under a tension note it moves with the tune.
+------------------------------------------------------------------------------
+
+M.SECOND = { Thirds = { -2, -3, -5 }, Sixths = { -5, -2, -3 } }
+local SWEET = { [3] = true, [4] = true, [5] = true, [8] = true, [9] = true }
+
+function M.secondVoice(ctx, melody, r)
+  local order = M.SECOND[r.secondVoice]
+  if not order then return nil end
+  local out = {}
+  for _, nt in ipairs(melody) do
+    local key = M.keyAt(ctx, nt.step)
+    local ch = M.chordAt(ctx.timeline, nt.step).chord
+    local strong = not M.offGrid(nt.step) and M.strength(ctx.meter, nt.step) >= 2
+    local free = not strong or nt.tension
+    local function gap(p) return nt.pitch - T.pitch(key, p) end
+    local pick
+    for _, d in ipairs(order) do
+      local p = nt.pos + d
+      if SWEET[gap(p)] and (free or T.onChord(key, ch, p)) then pick = p; break end
+    end
+    if not pick then
+      for _, want in ipairs({ SWEET, { [7] = true } }) do
+        for p = nt.pos - 1, nt.pos - 6, -1 do
+          if not pick and want[gap(p)] and T.onChord(key, ch, p) then pick = p end
+        end
+      end
+    end
+    pick = pick or (nt.pos + order[1])
+    out[#out + 1] = { step = nt.step, len = nt.len, pos = pick, pitch = T.pitch(key, pick), accent = nt.accent }
+  end
+  return out
 end
 
 -- Is a step between the sixteenths (part of a triplet)?
@@ -2387,6 +2581,33 @@ end
 -- Korsakov: "rarely more than an octave"; Belkin: no hole in the middle),
 -- inside the bass's range, each note the octave nearest the one before.
 -- Only octaves move: the notes are the same.
+-- By the book, while a suspension or an appoggiatura sounds, the chords do
+-- not play the note it falls to: "the note of resolution should not be
+-- doubled" (Hutchinson, ch. 10) - the tune brings it. A chord struck then
+-- leaves it out (but keeps two notes, and a Phrase's own bass).
+function M.clearResolutions(list, tune, keepBass)
+  local spans = {}
+  for _, nt in ipairs(tune or {}) do
+    if nt.dissonance and nt.dissonance.res then spans[#spans + 1] = nt.dissonance end
+  end
+  if #spans == 0 then return list end
+  local at, low = {}, {}
+  for _, n in ipairs(list) do
+    at[n.step] = (at[n.step] or 0) + 1
+    low[n.step] = math.min(low[n.step] or 999, n.pitch)
+  end
+  local out = {}
+  for _, n in ipairs(list) do
+    local drop = false
+    for _, d in ipairs(spans) do
+      if n.step < d.e and n.step + n.len > d.s and n.pitch % 12 == d.res then drop = true end
+    end
+    if drop and (at[n.step] <= 2 or (keepBass and n.pitch == low[n.step])) then drop = false end
+    if drop then at[n.step] = at[n.step] - 1 else out[#out + 1] = n end
+  end
+  return out
+end
+
 function M.spaceBass(bass, timeline, lows)
   local function slotOf(step)
     local idx = 1
@@ -2814,7 +3035,7 @@ local function whole(x) return math.abs(x - math.floor(x + 0.5)) < 1e-9 end
 -- the tune (their inner notes under their top), the bass just under it. An
 -- accented note (a push, the start of a statement) leans in a little.
 M.SHAPE = { [3] = 104, [2.5] = 98, [2] = 94, [1] = 86, [0] = 80 }
-M.SHAPE_PART = { Melody = 0, Chords = -10, Bass = -4, Drums = 0 }
+M.SHAPE_PART = { Melody = 0, Chords = -10, Bass = -4, Drums = 0, ["Second voice"] = -6 }
 M.SHAPE_INNER, M.SHAPE_ACCENT = -4, 6
 
 function M.shapedVelocity(meter, step, part, accent, inner)
@@ -2841,7 +3062,7 @@ local function toBlockNotes(list, chan, vel, warp, meter, part)
       v = M.shapedVelocity(meter, n.step, part, n.accent, top[n.step] and n.pitch < top[n.step])
     end
     out[#out + 1] = { start = s / 4, len = (e - s) / 4, pitch = n.pitch, chan = chan,
-                      accent = n.accent, vel = v }
+                      accent = n.accent, vel = v, tension = n.tension }
   end
   table.sort(out, function(a, b)
     if a.start ~= b.start then return a.start < b.start end
@@ -2929,7 +3150,7 @@ function M.make(st, meter, seed)
 
   local lo, hi = M.melodyRange(key, r.register)
   local ctx = { key = key, meter = meter, lo = lo, hi = hi, timeline = timeline,
-                rhythmRnd = M.stream(seed, "rhythm") }
+                rhythmRnd = M.stream(seed, "rhythm"), tensionRnd = M.stream(seed, "tension") }
   local contour = CONTOURS[r.contour] or CONTOURS.Arch
   ctx.target = function(step)
     local t = step / math.max(1, plan.total)
@@ -2955,20 +3176,30 @@ function M.make(st, meter, seed)
     parts[#parts + 1] = { name = "Melody", list = melody }
   end
 
+  -- The second voice (1.10), under the tune; the chords go under both.
+  local second = melody and M.secondVoice(ctx, melody, r)
+  local front = melody
+  if second then
+    front = {}
+    for _, n in ipairs(melody) do front[#front + 1] = n end
+    for _, n in ipairs(second) do front[#front + 1] = n end
+  end
+
   local arpName, lows
   if r.chords then
     -- The chords sit under the tune, so a tune in a low register pushes them
     -- down, but never into the mud below C3.
     local top = 69
-    if melody then
+    if front then
       local low = 127
-      for _, n in ipairs(melody) do low = math.min(low, n.pitch) end
+      for _, n in ipairs(front) do low = math.min(low, n.pitch) end
       top = math.max(57, math.min(69, low - 1))
     end
     local list
     list, arpName, lows = M.chordsPart(ctx, chordTl, r, M.stream(seed, "chords"),
                                  { lo = math.max(43, top - 16), hi = top, bass = r.kind ~= "Measure",
-                                   book = book, tune = melody, beatTl = timeline })
+                                   book = book, tune = front, beatTl = timeline })
+    if book then list = M.clearResolutions(list, melody, r.kind ~= "Measure") end
     parts[#parts + 1] = { name = "Chords", list = list }
   end
 
@@ -2981,6 +3212,8 @@ function M.make(st, meter, seed)
     if book then M.spaceBass(bassList, timeline, lows) end
     parts[#parts + 1] = { name = "Bass", list = bassList }
   end
+  -- (Last, so the other parts keep their channels.)
+  if second then parts[#parts + 1] = { name = "Second voice", list = second } end
 
   -- Channels: in one item each part has its own; on tracks of their own
   -- every part is on 1. (A drum idea, on 10, makes its own block: makeDrums.)

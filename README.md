@@ -67,6 +67,9 @@ that make music sound like music:
   becomes that chord's own dominant - D7 before G in C major (V7/V), E before
   Am (V/vi) - or its leading-tone chord. The tune bends with it, and the
   window says which chord it is, where, and what it leads to.
+- **Tension.** Now and then the tune leans on a beat with a note that is
+  not in the chord and falls a step into it - a suspension, an
+  appoggiatura - or arrives at a close an eighth early.
 - **Named progressions.** Instead of the walk, the chords can play a
   progression you know: doo-wop, Pachelbel, the lament, the blues, the
   circle of fifths, and others - with their basses as written (Pachelbel's
@@ -88,7 +91,7 @@ Each idea has an **idea number**. The same number with the same settings is
 A number written down from version 1.0 still gives the same idea with
 Figures on Plain, Push and Pull on None, Borrowed, Flavours and Inversions
 on Off, Voicing on Close, Part-writing on Free, Velocity on Flat, Applied on
-Off and no swing.
+Off, Tension on Off and no swing.
 
 ## The settings
 
@@ -124,7 +127,15 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    is kept between sessions. In 6/8 and 12/8 there is no slider (they are in
    threes already), nor in 7/8. These shape every part.
 4. **Melody** - the **contour** (Arch, Rise, Fall, Wave, Valley) and the
-   **register** (Low, Middle, High).
+   **register** (Low, Middle, High). **Tension** - Off, Rare (the default)
+   or Common: now and then the tune leans on the beat and falls a step to
+   the chord - a suspension (the note before held over the chord change),
+   an appoggiatura (leapt up to, a step above the chord's note), or, at a
+   close, the last note arriving an eighth early (an anticipation). By the
+   book, the chords leave out the note it falls to while it sounds.
+   **Second voice** - Off (the default), Thirds or Sixths: a second part
+   moving under the tune, a third (or a sixth) below, on a note of the
+   chord on every beat; on its own channel, or its own track.
 5. **Chords**:
    - **Colour** - Triads; Sevenths; or Mixed: sevenths where they pull,
      added ninths elsewhere.

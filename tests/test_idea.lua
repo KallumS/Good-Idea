@@ -174,19 +174,20 @@ local function audit(idea, tag)
 
   if r.kind == "Drums" then return auditDrums(idea, tag) end
 
-  -- What the parts are.
+  -- What the parts are (and a second voice, last, when there is a tune and
+  -- one is asked for: 1.10).
+  local sv2 = (r.secondVoice ~= "Off" and r.melody) and " Second voice" or ""
+  local got = {}
+  for _, p in ipairs(b.parts) do got[#got + 1] = p.name end
+  got = table.concat(got, " ")
   if r.kind == "Motif" then
-    rule("a motif is a tune only", #b.parts == 1 and b.parts[1].name == "Melody", tag)
+    rule("a motif is a tune only", got == "Melody" .. sv2, tag)
   elseif r.kind == "Phrase" then
     local want = ({ Melody = "Melody", Chords = "Chords", Both = "Melody Chords" })[r.content]
-    local got = {}
-    for _, p in ipairs(b.parts) do got[#got + 1] = p.name end
-    rule("a phrase is what its content says", table.concat(got, " ") == want, tag)
+    rule("a phrase is what its content says", got == want .. sv2, tag)
     rule("a phrase is one item", b.layout == "one", tag)
   else
-    local got = {}
-    for _, p in ipairs(b.parts) do got[#got + 1] = p.name end
-    rule("a measure is melody, chords and bass", table.concat(got, " ") == "Melody Chords Bass", tag)
+    rule("a measure is melody, chords and bass", got == "Melody Chords Bass" .. sv2, tag)
     rule("a measure's layout is what it says",
          b.layout == (r.layout == "Tracks" and "tracks" or "one"), tag)
   end
@@ -258,10 +259,46 @@ local function audit(idea, tag)
     local lo, hi = 127, 0
     for i, n in ipairs(mel) do
       lo, hi = math.min(lo, n.pitch), math.max(hi, n.pitch)
-      if I.strength(meter, n.step) >= 2 then
+      -- (But for an appoggiatura, which is off the chord on purpose: 1.10.)
+      if I.strength(meter, n.step) >= 2 and n.tension ~= "appoggiatura" then
         local ch = I.chordAt(tl, n.step).chord
         rule("a note on the beat is on the chord", T.onChord(I.keyAt(tlctx, n.step), ch, n.pos),
              ("%s step %d %s over %s"):format(tag, n.step, T.pitchName(n.pitch, key), ch.name))
+      end
+      -- Tension (1.10): each does what the books say it does.
+      if n.tension then
+        local nx, pv = mel[i + 1], mel[i - 1]
+        local what = ("%s step %g %s %s"):format(tag, n.step, n.tension, idea.chords)
+        rule("a tension note is not the tune's last", nx ~= nil, what)
+        if nx then
+          local nsl = I.chordAt(tl, nx.step)
+          local nkey = I.keyAt(tlctx, nx.step)
+          if n.tension == "anticipation" then
+            rule("an anticipation is a close's last note early, struck again on the beat",
+                 nx.pitch == n.pitch and nx.closes and I.strength(meter, nx.step) >= 2
+                 and I.strength(meter, n.step) < 2 and nx.step - n.step == 2, what)
+          else
+            rule("a suspension or an appoggiatura falls a step to a note of the chord",
+                 nx.pos == n.pos - 1 and T.onChord(nkey, nsl.chord, nx.pos), what)
+            rule("a suspension or an appoggiatura is a dissonance", not T.onChord(nkey, nsl.chord, n.pos), what)
+            local bass = nsl.chord.rootPc
+            if r.partWriting == "By the book" and r.chords then
+              bass = I.bassPcOf(I.chordAt((r.kind == "Measure") and tl or idea.chordTimeline, nx.step))
+            end
+            rule("a tension note is never a minor ninth over the bass", (n.pitch - bass) % 12 ~= 1, what)
+            rule("a tension note falls onto the bass's note only for the root (9-8)",
+                 nx.pitch % 12 ~= bass or bass == nsl.chord.rootPc, what)
+          end
+          if n.tension == "appoggiatura" then
+            rule("an appoggiatura is on the beat, leapt up to",
+                 I.strength(meter, n.step) >= 2 and pv ~= nil and n.pos - pv.pos >= 2, what)
+          elseif n.tension == "suspension" then
+            local here = I.chordAt(tl, n.step)
+            rule("a suspension is prepared: a note of the chord before, held over the change",
+                 here ~= nsl and T.onChord(I.keyAt(tlctx, n.step), here.chord, n.pos)
+                 and nsl.s < nx.step and n.step + n.len >= nx.step - 1e-9, what)
+          end
+        end
       end
       if i > 1 then
         local p = mel[i - 1]
@@ -303,6 +340,33 @@ local function audit(idea, tag)
     end
   end
 
+  -- The second voice (1.10): under every note of the tune, a third, a fourth
+  -- or a sixth (a fifth at most rarely), on the chord on the beat.
+  local sv = part(idea, "Second voice")
+  rule("a second voice is there only when asked for", (sv ~= nil) == (r.secondVoice ~= "Off" and mel ~= nil), tag)
+  if sv and mel then
+    local mp = part(idea, "Melody")
+    rule("the second voice has a note under each of the tune's", #sv.notes == #mp.notes, tag)
+    if #sv.notes == #mp.notes then
+      for i, n in ipairs(sv.notes) do
+        local t = mp.notes[i]
+        local gap = t.pitch - n.pitch
+        rule("the second voice is a third to a sixth under the tune",
+             n.start == t.start and (gap == 3 or gap == 4 or gap == 5 or gap == 7 or gap == 8 or gap == 9), tag)
+      end
+    end
+    for _, t in ipairs(mel) do
+      if I.strength(meter, t.step) >= 2 and not t.tension and not I.offGrid(t.step) then
+        for _, n in ipairs(sv.notes) do
+          if math.abs(n.start * 4 - t.step) < 1e-6 then
+            rule("on the beat the second voice is on the chord",
+                 I.chordAt(tl, t.step).chord.has[n.pitch % 12] == true, tag .. " " .. idea.chords)
+          end
+        end
+      end
+    end
+  end
+
   -- The chords part: every note a chord tone of the chord it sounds over.
   local cp = part(idea, "Chords")
   if cp then
@@ -337,6 +401,28 @@ local function audit(idea, tag)
           local dbl = false
           for _, p in ipairs(v) do if p % 12 == sl.bassPc then dbl = true end end
           if #v > 0 then rule("by the book, an inverted chord does not double its bass", not dbl, tag .. " " .. idea.chords) end
+        end
+      end
+    end
+    -- While a suspension or an appoggiatura sounds, the chords leave out
+    -- the note it falls to (1.10), but keep two notes, and a Phrase's bass.
+    if idea.melody then
+      local at, low = {}, {}
+      for _, n in ipairs(cp.notes) do
+        at[n.start] = (at[n.start] or 0) + 1
+        low[n.start] = math.min(low[n.start] or 999, n.pitch)
+      end
+      for _, t in ipairs(idea.melody) do
+        local d = t.dissonance
+        if d and d.res then
+          for _, n in ipairs(cp.notes) do
+            local s, e = n.start * 4, (n.start + n.len) * 4
+            if s < d.e and e > d.s and n.pitch % 12 == d.res and at[n.start] > 2
+               and not (r.kind ~= "Measure" and n.pitch == low[n.start]) then
+              rule("by the book, the chords do not double a suspension's resolution", false, tag .. " " .. idea.chords)
+            end
+          end
+          rule("by the book, the chords do not double a suspension's resolution", true, tag)
         end
       end
     end
@@ -417,6 +503,10 @@ for mi, sig in ipairs(METERS) do
                    colour = (seed % 5 == 0) and "Mixed" or "Any" }
       -- Every third idea borrows, flavours and inverts on Common.
       if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions, st.applied = "Common", "Common", "Common", "Common" end
+      -- Tension (1.10) on Common with the others, off now and then; a
+      -- second voice every fourth idea.
+      if seed % 3 == 2 then st.tension = "Common" elseif seed % 7 == 3 then st.tension = "Off" end
+      if seed % 4 == 3 then st.secondVoice = (seed % 8 == 3) and "Thirds" or "Sixths" end
       -- Every fourth Measure in one of the 1.8 forms (Any rolls only 1.0's).
       local NEWFORMS = { "Hybrid 1", "Hybrid 2", "Hybrid 3", "Hybrid 4", "Ternary", "Extended" }
       if seed % 4 == 1 then st.form = NEWFORMS[(seed // 4) % #NEWFORMS + 1] end
@@ -925,7 +1015,7 @@ do
   for _, v in ipairs(V10) do
     local b = make({ kind = v[1], figures = "Plain", push = "None", pull = "None", borrowed = "Off", swing = 0,
                      flavours = "Off", inversions = "Off", velocity = "Flat", partWriting = "Free",
-                     applied = "Off" }, v[2]).block
+                     applied = "Off", tension = "Off" }, v[2]).block
     local f = {}
     for _, n in ipairs(b.notes) do f[#f + 1] = ("%g:%g:%d:%d:%d"):format(n.start, n.len, n.pitch, n.chan, n.vel) end
     table.sort(f)
@@ -1122,7 +1212,9 @@ do
                         borrowed = "Rare", push = "Lots" }, seed)
     local tl = { timeline = idea.timeline, key = idea.key }
     for _, n in ipairs(idea.melody) do
-      if I.strength(idea.meter or M44, n.step) >= 2 and not T.onChord(I.keyAt(tl, n.step), I.chordAt(idea.timeline, n.step).chord, n.pos) then
+      -- (An appoggiatura is off the chord on purpose: 1.10.)
+      if I.strength(idea.meter or M44, n.step) >= 2 and not n.tension
+         and not T.onChord(I.keyAt(tl, n.step), I.chordAt(idea.timeline, n.step).chord, n.pos) then
         off = off + 1
       end
     end
@@ -1483,7 +1575,9 @@ do
   local function check(good, what) if not good then bad[#bad + 1] = what end end
   for _, style in ipairs(T.VOICINGS) do
     for seed = 1, 12 do
-      local idea = make({ kind = "Measure", voicing = style, chordStyle = "Block", figures = "Plain",
+      -- (Tension off: by the book a chord struck under a suspension leaves
+      -- out the note it falls to, which the 1.10 tests check.)
+      local idea = make({ kind = "Measure", voicing = style, chordStyle = "Block", figures = "Plain", tension = "Off",
                           push = "None", pull = "None", colour = (seed % 2 == 0) and "Sevenths" or "Triads" }, seed)
       local stacks = {}
       for _, n in ipairs(part(idea, "Chords").notes) do
@@ -2066,6 +2160,133 @@ do
     if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then hidden = hidden + 1 end
   end
   eq(hidden, 0, "Progression, hidden under a Motif, changes nothing")
+end
+
+------------------------------------------------------------------------------
+-- 1.10: tension, and a second voice
+------------------------------------------------------------------------------
+
+do
+  local function tally(t, kind)
+    local c, with = { suspension = 0, appoggiatura = 0, anticipation = 0 }, 0
+    for seed = 1, 200 do
+      local idea = make({ kind = kind or "Measure", tension = t }, seed)
+      local has = false
+      for _, n in ipairs(idea.melody or {}) do
+        if n.tension then c[n.tension] = c[n.tension] + 1; has = true end
+      end
+      if has then with = with + 1 end
+    end
+    return c, with
+  end
+  local off, offWith = tally("Off")
+  eq(offWith, 0, "Tension Off: every note on the beat is a note of the chord")
+  local rare, rareWith = tally("Rare")
+  local common, commonWith = tally("Common")
+  ok(rareWith >= 40 and rareWith <= 110, ("Tension Rare leans in some ideas, not most: %d of 200 Measures"):format(rareWith))
+  ok(commonWith > rareWith * 1.3, ("Common, in more: %d of 200 against %d"):format(commonWith, rareWith))
+  ok(rare.suspension > 0 and rare.appoggiatura > 0 and rare.anticipation > 0,
+     ("all three on Rare: %d suspensions, %d appoggiaturas, %d anticipations"):format(
+       rare.suspension, rare.appoggiatura, rare.anticipation))
+  -- Common only adds to Rare: every tension Rare makes, Common makes too.
+  local lost, made = 0, 0
+  for seed = 1, 60 do
+    local a = make({ kind = "Measure", tension = "Rare" }, seed)
+    local b = make({ kind = "Measure", tension = "Common" }, seed)
+    local at = {}
+    for _, n in ipairs(b.melody) do if n.tension then at[n.tension .. n.step] = true end end
+    for _, n in ipairs(a.melody) do
+      if n.tension then made = made + 1 end
+      if n.tension and not at[n.tension .. n.step] then lost = lost + 1 end
+    end
+  end
+  -- (A few go where Common has leant on the note before instead.)
+  ok(made > 20 and lost <= made / 6, ("Common keeps Rare's tension notes (%d of %d lost to an earlier change)"):format(lost, made))
+  -- An exact repeat leans where its source did: a Loop's first and last
+  -- statements alike.
+  local differ, seen = 0, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", form = "Loop", tension = "Common", borrowed = "Off",
+                        applied = "Off", push = "None", pull = "None" }, seed)
+    local units = idea.plan.units
+    local u1, u3 = units[1], units[#units]
+    if u3.kind == "repeat" then
+      local function marks(u)
+        local out = {}
+        for _, n in ipairs(idea.melody) do
+          if n.tension and n.step >= u.start and n.step < u.start + u.len then
+            out[#out + 1] = n.tension .. ":" .. (n.step - u.start)
+          end
+        end
+        return table.concat(out, " ")
+      end
+      if marks(u1) ~= "" then seen = seen + 1 end
+      if marks(u1) ~= marks(u3) then differ = differ + 1 end
+    end
+  end
+  ok(seen >= 10 and differ <= seen / 10, ("a Loop leans the same way each time round (%d of %d differ)"):format(differ, seen))
+  -- By the book the chords leave out what a suspension falls to; free, they
+  -- may sound it against it.
+  local function doubled(pw)
+    local n = 0
+    for seed = 1, 120 do
+      local idea = make({ kind = "Measure", tension = "Common", partWriting = pw, chordStyle = "Block" }, seed)
+      local cp = part(idea, "Chords")
+      for _, t in ipairs(idea.melody) do
+        local d = t.dissonance
+        if d and d.res then
+          for _, c in ipairs(cp.notes) do
+            if c.start * 4 < d.e and (c.start + c.len) * 4 > d.s and c.pitch % 12 == d.res then n = n + 1 end
+          end
+        end
+      end
+    end
+    return n
+  end
+  local book, free = doubled("By the book"), doubled("Free")
+  ok(free > 20 and book < free / 4, ("the chords leave out a suspension's resolution by the book: %d against %d free"):format(book, free))
+  -- Hidden (no tune), Tension and Second voice change nothing.
+  local hidden = 0
+  for seed = 1, 20 do
+    local a = make({ kind = "Phrase", content = "Chords", tension = "Off", secondVoice = "Off" }, seed)
+    local b = make({ kind = "Phrase", content = "Chords", tension = "Common", secondVoice = "Thirds" }, seed)
+    if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then hidden = hidden + 1 end
+    local c = make({ kind = "Drums", tension = "Off", secondVoice = "Off" }, seed)
+    local d = make({ kind = "Drums", tension = "Common", secondVoice = "Sixths" }, seed)
+    if fingerprint(c.block.notes) ~= fingerprint(d.block.notes) then hidden = hidden + 1 end
+  end
+  eq(hidden, 0, "Tension and Second voice, hidden, change nothing")
+end
+
+do
+  -- A second voice: under the tune, on its own channel or track, and the
+  -- tune itself is unchanged.
+  local thirds, sixths, n3, n6, tuneMoved = 0, 0, 0, 0, 0
+  for seed = 1, 60 do
+    local plain = make({ kind = "Measure", secondVoice = "Off" }, seed)
+    for _, sv in ipairs({ "Thirds", "Sixths" }) do
+      local idea = make({ kind = "Measure", secondVoice = sv, layout = "One item" }, seed)
+      if fingerprint(part(idea, "Melody").notes) ~= fingerprint(part(plain, "Melody").notes) then tuneMoved = tuneMoved + 1 end
+      local mp, vp = part(idea, "Melody"), part(idea, "Second voice")
+      for i, v in ipairs(vp.notes) do
+        local gap = mp.notes[i].pitch - v.pitch
+        if sv == "Thirds" then n3 = n3 + 1; if gap == 3 or gap == 4 then thirds = thirds + 1 end
+        else n6 = n6 + 1; if gap == 8 or gap == 9 then sixths = sixths + 1 end end
+      end
+    end
+  end
+  eq(tuneMoved, 0, "a second voice leaves the tune as it was")
+  ok(thirds / n3 > 0.7, ("Thirds is mostly thirds: %.0f%%"):format(100 * thirds / n3))
+  ok(sixths / n6 > 0.7, ("Sixths is mostly sixths: %.0f%%"):format(100 * sixths / n6))
+  local one = make({ kind = "Measure", secondVoice = "Thirds", layout = "One item" }, 7)
+  local chans = {}
+  for _, p in ipairs(one.block.parts) do chans[#chans + 1] = p.name .. "=" .. (p.chan + 1) end
+  eq(table.concat(chans, " "), "Melody=1 Chords=2 Bass=3 Second voice=4",
+     "in one item the second voice is on channel 4, the others where they were")
+  local tracks = make({ kind = "Measure", secondVoice = "Thirds", layout = "Tracks" }, 7)
+  ok(#tracks.block.parts == 4 and tracks.block.layout == "tracks", "on tracks, a fourth track")
+  local motif = make({ kind = "Motif", secondVoice = "Sixths" }, 7)
+  ok(#motif.block.parts == 2 and motif.block.parts[2].chan == 1, "a Motif with a second voice: channel 2")
 end
 
 C.done()
