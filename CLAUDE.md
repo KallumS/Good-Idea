@@ -584,7 +584,25 @@ triad, the minor v left, no evaded close, an evaded close on I or landing
 on do, a named applied chord ignored or kept when cut off, a named bass
 read in the home key, a wrong dembow, a reggaeton in 3/4, the progression
 not half and half, the forms not even, a six-four undoubled, an open hat
-on the ride, the hidden rows shown; in 1.9 a progression
+on the ride, the hidden rows shown; in 1.14 Drop 4 dropping the wrong
+voice, flavours with Mixed only, a diminished seventh with Triads, the row
+hidden with Triads, ghost notes loud, on any step, in fills, with the kick,
+from the kit's dice, Common not keeping Rare's, the bass pull ignored,
+holding nothing, on the beat too, shown, not half and half, a named Loop
+drawn afresh, a flavour the cadence copy cannot follow, no minor Galant,
+the minor Romanesca's raised ti falling, the minor Fonte to i, the truck
+driver not made, its V flavoured, an applied chord kept at a gear change
+(the first test missed it: a short chord's place, 3/4, was needed); "the
+truck driver eats a close" was missed and is harmless - its own V makes
+the close; in 1.15 the Neapolitan undoubled or in root position, fi not
+rising (missed at first: the voicer alone gives 72%, the bar was 70%;
+now 85%), a German sixth straight to V or at a half close, chromatic
+chords before any cadence chord, with Borrowed off, four-note with Triads,
+after their own degree, copies choosing afresh, an applied chord's target
+made chromatic, a passing chord off the semitone, its neighbours inverted,
+flavoured or moved by a third inversion, a seventh with Triads, with
+Applied off, the second voice on the augmented sixth, no window line, Open
+not spreading an Italian sixth; in 1.9 a progression
 ignored, Any named ignoring the key, the blues wrong, inversions on named
 chords, a silent fallback, the named bass ignored, a sus4 over a named bass
 (missed by the quick sweep at first: a named test now covers it), a blues close

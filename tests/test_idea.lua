@@ -3147,6 +3147,30 @@ do
     end
   end
   eq(same, 0, "a chromatic chord never follows a chord on its own degree")
+  -- A copy does what its original did: a Period's answer opens on its
+  -- question's chords, chromatic or not.
+  local differ = 0
+  for seed = 1, 200 do
+    -- (Eight bars: the question and its answer. A borrowed chord is one
+    -- occurrence's, by design: such a pair is not compared.)
+    local idea = make({ kind = "Measure", form = "Period", measureBars = 8, borrowed = "Common", applied = "Off",
+                        flavours = "Off", scale = (seed % 2 == 0) and 2 or 1, push = "None", pull = "None" }, seed)
+    local q, a = idea.plan.units[1], idea.plan.units[2]
+    local cut = I.cutFor(I.meter(4, 4), q, a)
+    local lent = false
+    local function names(u)
+      local out = {}
+      for _, sl in ipairs(u.slots) do
+        if sl.s < u.start + cut then
+          out[#out + 1] = (sl.s - u.start) .. sl.chord.name
+          if sl.borrowed then lent = true end
+        end
+      end
+      return table.concat(out, " ")
+    end
+    if names(q) ~= names(a) and not lent then differ = differ + 1 end
+  end
+  eq(differ, 0, "a Period's answer opens on its question's chords, chromatic or not")
   eq(gerHC, 0, "a German sixth never at a half close")
   ok(counts.Rare >= 20 and counts.Common >= 1.3 * counts.Rare,
      ("chromatic chords now and then, Common more than Rare: %d against %d in 300 Measures"):format(counts.Common, counts.Rare))
