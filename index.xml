@@ -123,6 +123,21 @@ What changes for idea numbers you have kept: with the default settings, some tun
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.13" author="kallums" time="2026-10-03T12:00:00Z">
+        <changelog><![CDATA[A tidier window: the Progression, the Part-writing and the Form are no longer settings - Good Idea decides them. Every idea walks its chords or plays a named progression that suits its key, half and half; always writes its parts by the book; and picks its form, each of the ten about one time in ten. The summary line says which.
+Two leaps the same way in the tune only where they outline a chord (C E G, not B D F), as counterpoint teaches.
+Minor keys close on a major V, its third the raised leading note (G7 with B natural in C minor), and the tune takes the B too; the modes keep their own minor v.
+An evaded cadence: the Extended form's stretch is now half the time V to I6 instead of home, the tune leaping up instead of resolving, then the ending again to a full close.
+More galant schemata among the named progressions: the Do-Re-Mi, the Romanesca, the Fonte (A7 Dm G7 C) and the Monte (C7 F D7 G).
+A Reggaeton drum beat: the dembow, the kick on every beat under the snare's 3+3+2.
+Fixed: a six-four chord keeps its doubled bass, as Hutchinson teaches (it had been taken out since 1.7); a drum idea's second bar always answers its first, even on the ride.
+Idea numbers from earlier versions now give different ideas.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
