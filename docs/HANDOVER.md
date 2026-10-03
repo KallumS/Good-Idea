@@ -25,7 +25,8 @@ bass lying back with pulled chords, the galant schemata in minor, a truck
 driver that nearly always changes gear, chromatic chords - the
 Neapolitan, the augmented sixths (Swiss too), a passing and a common-tone
 diminished seventh - and the galant Aprile, Pastorella and Ponte, the
-schemata singing their tunes). In 1.13 the
+schemata singing their tunes - the chromatic chords come under the
+existing Borrowed and Applied rows rather than new buttons). In 1.13 the
 engine took over three choices to keep the window simple: the progression
 (walk or a named one, half and half), the part-writing (always by the book)
 and the form (each about one idea in ten) are decided under the hood and not
