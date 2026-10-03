@@ -71,7 +71,9 @@ How I like the work done:
   Music Theory pages and orchestration books); `docs/READING.md` has notes
   on all of them (everything in its first section is now done). If a
   question is about how music works, check those notes, the materials or
-  the web, quote the source's own words, and tell me where they're from.
+  the web, quote the source's own words, and tell me where they're from. If
+  I attach the Educational Materials zip again, extract its texts into
+  your scratchpad first, so you can quote them.
 
 Things left open that we might pick up (none of them asked for yet; the
 full list is at the end of CLAUDE.md): trying it inside REAPER; the
