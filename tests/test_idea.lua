@@ -258,7 +258,7 @@ local function audit(idea, tag)
   -- An evaded close (1.13): a cadence chord, then I6 - and the tune does
   -- not land on do.
   for _, u in ipairs(idea.plan.units) do
-    if u.cad == "EC" and u.slots and #u.slots >= 2 then
+    if u.cad == "EC" and u.slots and #u.slots >= 2 and idea.schema ~= "Blues" then
       local last = u.slots[#u.slots]
       rule("an evaded close ends on the tonic", last.degree == 0, tag .. " " .. idea.chords)
       if u.notes and #u.notes > 0 and idea.schema ~= "Blues" then

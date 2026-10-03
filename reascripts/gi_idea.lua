@@ -791,7 +791,15 @@ function M.schemaFor(r, key, rnd)
   local function fits(n)
     local p = M.PROGRESSIONS[n]
     if not seven then return false end
-    if p.blues then return r.kind == "Measure" and p.blues[r.bars] ~= nil end
+    if p.blues then
+      -- (Only where I, IV and V are major or minor chords: not Lydian's
+      -- diminished IV, nor Locrian's I.)
+      for _, d in ipairs({ 0, 3, 4 }) do
+        local q = T.degreeQuality(key, d)
+        if q ~= "major" and q ~= "minor" then return false end
+      end
+      return r.kind == "Measure" and p.blues[r.bars] ~= nil
+    end
     return mode ~= nil and p[mode] ~= nil
   end
   if name == "Any named" then
@@ -1213,6 +1221,15 @@ function M.keyChange(plan, timeline, key, r, meter, colour, at)
   local semis = M.KEY_CHANGE[r.keyChange]
   if not semis or not at then return nil end
   local newKey = T.transpose(key, semis)
+  -- (A named applied chord just before the change - its chord now in the
+  -- new key - is plain again.)
+  for i, sl in ipairs(timeline) do
+    local nx = timeline[i + 1]
+    if sl.s < at and nx and nx.s >= at and sl.applied and sl.applied.named then
+      sl.key, sl.applied = key, nil
+      sl.chord = T.chord(key, sl.degree, colour)
+    end
+  end
   for _, sl in ipairs(timeline) do
     if sl.s >= at then
       local was = sl.chord
@@ -1244,14 +1261,11 @@ function M.keyChange(plan, timeline, key, r, meter, colour, at)
                   spec = { 4, truck = true }, truck = true }
       local cut = sl.s + snap(meter, (sl.e - sl.s) / 2)
       if sl.e - sl.s >= 2 * meter.beat and cut > sl.s and cut < sl.e then
+        -- (The V is the gear change, not part of the passage before: that
+        -- passage's close stays its own - 1.13.)
         V.s, V.e, V.beat = cut, sl.e, cut
         sl.e = cut
         table.insert(timeline, idx + 1, V)
-        for _, u in ipairs(plan.units) do
-          for j, x in ipairs(u.slots or {}) do
-            if x == sl and cut < u.start + u.len then table.insert(u.slots, j + 1, V); break end
-          end
-        end
       else
         V.s, V.e, V.beat = sl.s, sl.e, sl.beat
         timeline[idx] = V
@@ -1575,6 +1589,18 @@ function M.invert(timeline, plan, key, r, rnd, meter)
             end
           end
         end
+      end
+      -- (Never the same chord on the same bass as the one beside it - a
+      -- named V6/5 next to it, say: 1.13.)
+      do
+        local keepO, keepW = {}, {}
+        for k, o in ipairs(opts) do
+          local b = ch.pcs[o.idx]
+          local twin = (before and before.degree == sl.degree and bassPcOf(before) == b)
+                       or (after and after.degree == sl.degree and bassPcOf(after) == b)
+          if not twin then keepO[#keepO + 1] = o; keepW[#keepW + 1] = weights[k] end
+        end
+        opts, weights = keepO, keepW
       end
       if was ~= nil then
         local same = {}
@@ -2336,6 +2362,8 @@ function M.tension(ctx, notes, r, rnd, total)
                     and b.step - 2 > a.step and P(b.step - 2, b.pos) == pb
                     and not M.offGrid(b.step - 2) and M.strength(meter, b.step - 2) < 2
                     and clear({ a, { step = b.step - 2, pos = b.pos } })
+                    and not M.leapsBad(out[#out - 1] and { pos = out[#out - 1].pos, pitch = P(out[#out - 1].step, out[#out - 1].pos), first = out[#out - 1].first },
+                                       { pos = a.pos, pitch = pa, first = a.first }, { pos = b.pos, pitch = pb })
       -- A suspension: the note before, a step above, held over a change.
       local before = chordOf(a.step)
       local sus = not goal and still and onIt and before ~= sl and a.pos == b.pos + 1
@@ -2499,7 +2527,9 @@ function M.untangle(ctx, notes)
       local function at(x, pos) return x and { pos = pos or x.pos, pitch = P(x, pos), first = x.first } end
       local nb = at(b, p)
       local leaps = strict and (M.leapsBad(at(z), at(a), nb) or M.leapsBad(at(a), nb, at(c)) or M.leapsBad(nb, at(c), at(y)))
-      if fits and inRange and not clash and not triple and not leaps and p ~= b.pos then
+      -- (Nor a leap wider than an octave inside a statement.)
+      local wide12 = (a and not b.first and apart(a, nil, b, p) > 12) or (c and not c.first and apart(b, p, c, nil) > 12)
+      if fits and inRange and not clash and not triple and not leaps and not wide12 and p ~= b.pos then
         b.pos = p
         return true
       end
@@ -2530,7 +2560,13 @@ function M.untangle(ctx, notes)
       -- which can make one): the middle note moves, or the last, or the first.
       local function at(x) return x and { pos = x.pos, pitch = P(x), first = x.first } end
       if c and M.leapsBad(at(a), at(b), at(c)) then
-        if not (tryMove(i, false) or tryMove(i + 1, false)) and not a.first then tryMove(i - 1, false) end
+        -- (Not a close's goal, nor the idea's last note: they stay.)
+        local function free(k)
+          local x = notes[k]
+          return x and k < #notes and not (x.closes == "PAC" or x.closes == "IAC" or x.closes == "DC" or x.closes == "EC")
+        end
+        if not ((free(i) and tryMove(i, false)) or (free(i + 1) and tryMove(i + 1, false)))
+           and not a.first and free(i - 1) then tryMove(i - 1, false) end
       end
     end
   end
@@ -2607,7 +2643,7 @@ function M.noParallels(ctx, notes, bassPcAt)
           -- (Boxed in - the way out would be a third note the same: the
           -- note before that moves first, then this one.)
           local keep = notes[i - 2].pos
-          if try(i - 2) and not (try(i - 1) or try(i - 1, true)) then notes[i - 2].pos = keep end
+          if (try(i - 2) or try(i - 2, true)) and not (try(i - 1) or try(i - 1, true)) then notes[i - 2].pos = keep end
         elseif i == 2 and M.parallel(ctx, bassPcAt, notes[1], nil, notes[2], nil) then
           -- (At the very start, the idea's first note may move as a last resort.)
           try(1, true, true)
