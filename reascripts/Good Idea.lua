@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.14
+ * Version:        1.15
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -576,7 +576,7 @@ local function drawResult()
     local marks = {}
     if idea.chords:find("^", 1, true) then marks[#marks + 1] = "^ pushed an eighth early" end
     if idea.chords:find("_", 1, true) then marks[#marks + 1] = "_ pulled an eighth late" end
-    if idea.chords:find("*", 1, true) then marks[#marks + 1] = "* borrowed" end
+    if idea.chords:find("*", 1, true) then marks[#marks + 1] = "* from outside the key" end
     if idea.chords:find(">", 1, true) then marks[#marks + 1] = "> applied" end
     if idea.chords ~= "" then
       dimWrapped((idea.r.chords and "Chords  " or "Under the tune  ") .. idea.chords ..
@@ -588,6 +588,12 @@ local function drawResult()
       ImGui.TextWrapped(ctx, "Borrowed chord: " .. b.text)
       tip("A chord from another scale on the same key note. While it sounds, the tune and the bass " ..
           "use that scale's notes, the way a player bends to a borrowed chord.")
+    end
+    -- (1.15) And a chromatic chord before a close's V.
+    for _, c in ipairs(idea.chromatic or {}) do
+      ImGui.TextWrapped(ctx, "Chromatic chord: " .. c.text)
+      tip("A chord from outside the key that leads to the V: the Neapolitan (the major chord on the flat 2nd, " ..
+          "over its third) or an augmented sixth (le in the bass, fi above it, both moving out to sol).")
     end
     -- So is an applied chord: which, where, and the chord it leads to.
     for _, a in ipairs(idea.applied or {}) do

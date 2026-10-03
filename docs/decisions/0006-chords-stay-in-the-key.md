@@ -3,7 +3,10 @@
 Taken 2026-10-01. Stands, widened by [0011](0011-borrowed-chords-rarely-and-named.md): rare
 borrowed chords from scales on the same key note. Since [0018](0018-flavours-voicings-and-inversions.md) a
 Mixed chord may take a flavour (sus, 6, 9, add2, the diminished seventh a
-third up) - every one built from the scale, so still in key.
+third up) - every one built from the scale, so still in key. Widened again
+by [0020](0020-applied-chords-cadences-and-forms.md) (applied chords) and
+[0027](0027-chromatic-chords.md) (the Neapolitan, the augmented sixths, the
+passing diminished seventh).
 
 ## Context
 

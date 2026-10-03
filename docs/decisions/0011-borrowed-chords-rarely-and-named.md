@@ -2,7 +2,9 @@
 
 Taken 2026-10-01. Stands. Widens [0006](0006-chords-stay-in-the-key.md). Since 1.6 there is Common too
 ([0018](0018-flavours-voicings-and-inversions.md)): about two ideas in three,
-and a second chord in a longer idea.
+and a second chord in a longer idea. Since 1.15
+([0027](0027-chromatic-chords.md)) the Borrowed row also brings the
+Neapolitan and the augmented sixths, before a close's V.
 
 ## Context
 

@@ -69,7 +69,14 @@ that make music sound like music:
 - **Applied chords.** Now and then the chord before a major or minor chord
   becomes that chord's own dominant - D7 before G in C major (V7/V), E before
   Am (V/vi) - or its leading-tone chord. The tune bends with it, and the
-  window says which chord it is, where, and what it leads to.
+  window says which chord it is, where, and what it leads to. And where the
+  bass climbs a tone (F to G), a **passing diminished seventh** on the note
+  between (F F#dim7 G), the bass climbing by semitones.
+- **Chromatic chords.** Now and then, before a close's V, the ii or IV
+  becomes the **Neapolitan** (Db/F in C: the major chord on the flat 2nd,
+  over its third) or an **augmented sixth** (Ab in the bass, F# above it,
+  both moving out to G: the Italian, French and German sixths - Ab7 on a
+  lead sheet), the German through the I6/4. The window says which.
 - **Tension.** Now and then the tune leans on a beat with a note that is
   not in the chord and falls a step into it - a suspension, an
   appoggiatura - or arrives at a close an eighth early.
@@ -114,9 +121,11 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
    out underneath. **Borrowed** - Off, Rare (the default) or Common: whether
-   an idea may borrow a chord (seven-note scales only). **Applied** - Off,
+   an idea may borrow a chord, and whether a close may take the Neapolitan
+   or an augmented sixth (seven-note scales only). **Applied** - Off,
    Rare (the default) or Common: whether a chord may become the next chord's
-   own V or leading-tone chord (seven-note scales only).
+   own V or leading-tone chord, or a passing diminished seventh come in
+   where the bass climbs a tone (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated; or, to choose, a named rhythm - Tresillo, Habanera, Clave
    or 3+3+3+3+2+2 - which in 4/4 the pulsing chords, the pulsing bass and

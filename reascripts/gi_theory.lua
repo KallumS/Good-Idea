@@ -986,9 +986,13 @@ local function shapes(ch, style)
     local order = { ch.rootPc }
     local fifth = find(ch, pcs, "5")
     if fifth then order[#order + 1] = fifth end
+    -- (No fifth - an Italian sixth, 1.15: the seventh next, then the third
+    -- an octave up, the root-seventh-tenth spread.)
+    local seventh = not fifth and find(ch, pcs, "7")
+    if seventh then order[#order + 1] = seventh end
     for _, role in ipairs({ "3", "4", "6", "7", "9" }) do
       for _, pc in ipairs(pcs) do
-        if roleOf(ch, pc) == role and pc ~= fifth then order[#order + 1] = pc end
+        if roleOf(ch, pc) == role and pc ~= fifth and pc ~= seventh then order[#order + 1] = pc end
       end
     end
     out[1] = { order = order }

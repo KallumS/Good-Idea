@@ -37,3 +37,4 @@ the standing rules; this holds the decisions behind them.
 | [0024](0024-sixnine-power-and-key-change.md) | The 6/9, power chords, and a key change for the last section (step up, half step, truck driver) |
 | [0025](0025-the-engine-decides-more.md) | The engine decides the progression, the part-writing and the form; old idea numbers let go; two leaps outline a triad, the minor V, the evaded cadence, more galant schemata, the dembow, the six-four's bass |
 | [0026](0026-flavours-ghosts-bass-pull-minor-schemata.md) | Flavours with every colour, Drop 4, ghost notes, the bass lying back with pulled chords, the galant schemata in minor, the truck driver into the tonic |
+| [0027](0027-chromatic-chords.md) | Chromatic chords: the Neapolitan and the augmented sixths before a close's V (with Borrowed), the passing diminished seventh (with Applied) |

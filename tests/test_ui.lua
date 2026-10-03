@@ -838,9 +838,29 @@ do
   frame(nil, nil, found.seed)
   frame()
   ok(has(g.texts, "Borrowed chord: " .. found.b.text), "the window says: Borrowed chord: " .. found.b.text)
-  ok(has(g.texts, "* borrowed"), "and the chord line marks it")
+  ok(has(g.texts, "* from outside the key"), "and the chord line marks it")
   clickIn("borrowed", "Off")
   ok(not has(g.texts, "Borrowed chord:"), "with Borrowed off, nothing is flagged")
+end
+
+-- (1.15) A Measure with a chromatic chord flags it too.
+do
+  local found
+  for seed = 1, 400 do
+    local st = I.newState()
+    st.kind = "Measure"
+    I.clampState(st)
+    local idea = I.make(st, I.meter(4, 4), seed)
+    if #idea.chromatic > 0 then found = { seed = seed, c = idea.chromatic[1] }; break end
+  end
+  ok(found, "some Measure in the first 400 has a chromatic chord")
+  fresh()
+  clickIn("kind", "Measure")
+  frame(nil, nil, found.seed)
+  frame()
+  ok(has(g.texts, "Chromatic chord: " .. found.c.text), "the window says: Chromatic chord: " .. found.c.text)
+  clickIn("borrowed", "Off")
+  ok(not has(g.texts, "Chromatic chord:"), "with Borrowed off, none")
 end
 
 -- Pushed chords are marked in the chord line.

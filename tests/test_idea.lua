@@ -262,6 +262,43 @@ local function audit(idea, tag)
       end
     end
   end
+  -- Chromatic chords (1.15): the Neapolitan (ra fa le over fa) and the
+  -- augmented sixths (le in the bass, fi above, with do; re for the French,
+  -- me for the German) go to V - the German through the cadential six-four.
+  -- A passing diminished seventh sits on the semitone between its
+  -- neighbours' bass notes.
+  local do0 = T.pc(key, 0)
+  for i, sl in ipairs(tl) do
+    local c = sl.chromatic
+    if c then
+      local nx, nx2 = tl[i + 1], tl[i + 2]
+      local function V(x) return x and x.degree == 4 and x.chord.quality == "major" end
+      if c.kind == "N6" then
+        rule("the Neapolitan is ra fa le, over fa",
+             sl.chord.has[(do0 + 1) % 12] and sl.chord.has[(do0 + 5) % 12] and sl.chord.has[(do0 + 8) % 12]
+             and #sl.chord.pcs == 3 and I.bassPcOf(sl) == (do0 + 5) % 12, tag .. " " .. idea.chords)
+      else
+        local want = { (do0 + 8) % 12, do0, (do0 + 6) % 12 }
+        if c.kind == "Fr+6" then want[4] = (do0 + 2) % 12 elseif c.kind == "Ger+6" then want[4] = (do0 + 3) % 12 end
+        local okNotes = #sl.chord.pcs == #want and I.bassPcOf(sl) == (do0 + 8) % 12
+        for _, pc in ipairs(want) do if not sl.chord.has[pc] then okNotes = false end end
+        rule("an augmented sixth is le do fi (and re or me), le in the bass", okNotes, tag .. " " .. idea.chords)
+      end
+      if c.kind == "Ger+6" then
+        rule("a German sixth goes through the cadential six-four to V",
+             nx and nx.degree == 0 and nx.inversion == 2 and I.bassPcOf(nx) == T.pc(key, 4) and V(nx2), tag .. " " .. idea.chords)
+      else
+        rule("a Neapolitan or an augmented sixth goes to V", V(nx), tag .. " " .. idea.chords)
+      end
+    end
+    if sl.applied and sl.applied.passing then
+      local pv, nx = tl[i - 1], tl[i + 1]
+      local b = I.bassPcOf(sl)
+      rule("a passing diminished chord climbs by semitones in the bass",
+           pv and nx and (b - I.bassPcOf(pv)) % 12 == 1 and (I.bassPcOf(nx) - b) % 12 == 1
+           and sl.chord.quality == "diminished", tag .. " " .. idea.chords)
+    end
+  end
   -- In a key on the Minor scale the V is major, its third the raised
   -- seventh (1.13; Hutchinson, Figure 7.3.1) - but for a named chord.
   if T.SCALES[key.scale].name == "Minor" then
@@ -412,8 +449,16 @@ local function audit(idea, tag)
       if I.strength(meter, t.step) >= 2 and not t.tension and not I.offGrid(t.step) then
         for _, n in ipairs(sv.notes) do
           if math.abs(n.start * 4 - t.step) < 1e-6 then
-            rule("on the beat the second voice is on the chord",
-                 I.chordAt(tl, t.step).chord.has[n.pitch % 12] == true, tag .. " " .. idea.chords)
+            -- (Unless no note of the chord is consonant within a sixth under
+            -- the tune: fi over an Italian sixth, 1.15.)
+            local ch = I.chordAt(tl, t.step).chord
+            local any = false
+            for g = 3, 9 do
+              if g ~= 6 and g ~= 7 and ch.has[(t.pitch - g) % 12] then any = true end
+            end
+            if any then
+              rule("on the beat the second voice is on the chord", ch.has[n.pitch % 12] == true, tag .. " " .. idea.chords)
+            end
           end
         end
       end
@@ -502,7 +547,9 @@ local function audit(idea, tag)
       for _, sl in ipairs(ctl) do
         -- (A two-note chord - a pentatonic scale's - keeps what it has.)
         -- (Nor a six-four, which doubles its bass: Hutchinson, 26.12.)
-        if sl.inversion and sl.inversion ~= 2 and #sl.chord.pcs >= 3 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) then
+        -- (Nor the Neapolitan, which doubles its bass: Hutchinson 29.3, 1.15.)
+        if sl.inversion and sl.inversion ~= 2 and #sl.chord.pcs >= 3 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3)
+           and not (sl.chromatic and sl.chromatic.kind == "N6") then
           local v = {}
           for _, n in ipairs(cp.notes) do if math.abs(n.start * 4 - sl.s) < 1e-6 then v[#v + 1] = n.pitch end end
           table.sort(v)
@@ -951,7 +998,8 @@ end
 do
   local bad = 0
   for seed = 1, 20 do
-    local i7 = make({ kind = "Phrase", content = "Chords", colour = "Sevenths", chordStyle = "Block", flavours = "Off" }, seed)
+    local i7 = make({ kind = "Phrase", content = "Chords", colour = "Sevenths", chordStyle = "Block", flavours = "Off",
+                      borrowed = "Off" }, seed)
     for _, sl in ipairs(i7.timeline) do if #sl.chord.pcs ~= 4 then bad = bad + 1 end end
     local it = make({ kind = "Phrase", content = "Chords", colour = "Triads", chordStyle = "Block", flavours = "Off" }, seed)
     for _, sl in ipairs(it.timeline) do if #sl.chord.pcs ~= 3 then bad = bad + 1 end end
@@ -1891,7 +1939,8 @@ do
         local v = {}
         for _, x in ipairs(ch) do if math.abs(x.start * 4 - sl.s) < 1e-6 then v[#v + 1] = x.pitch end end
         table.sort(v)
-        if sl.inversion and sl.inversion ~= 2 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) and #sl.chord.pcs >= 3 then
+        if sl.inversion and sl.inversion ~= 2 and not (sl.chord.quality == "diminished" and #sl.chord.pcs == 3) and #sl.chord.pcs >= 3
+           and not (sl.chromatic and sl.chromatic.kind == "N6") then
           c.inv = c.inv + 1
           for _, p in ipairs(v) do if p % 12 == sl.bassPc then c.dbl = c.dbl + 1; break end end
         end
@@ -3025,6 +3074,118 @@ do
   end
   ok(n >= 160 and n <= 240, ("the engine has the bass lie back in about half the ideas: %d of 400"):format(n))
   ok(not I.shows(I.BY_ID.bassPull, { kind = "Measure" }), "and it is not shown")
+end
+
+------------------------------------------------------------------------------
+-- 1.15: the Neapolitan, the augmented sixths, the passing diminished seventh
+------------------------------------------------------------------------------
+
+do
+  -- With Borrowed, now and then a close's pre-dominant becomes one of the
+  -- four; Common more than Rare; Off, none; with Triads only the three-note
+  -- ones. By the book the Neapolitan doubles its bass, and fi rises to sol.
+  local kinds, counts, off, triadWrong = {}, { Rare = 0, Common = 0 }, 0, 0
+  local n6, n6dbl, fi, fiUp = 0, 0, 0, 0
+  for seed = 1, 300 do
+    local scale = (seed % 2 == 0) and 2 or 1
+    for _, lv in ipairs({ "Rare", "Common" }) do
+      local idea = make({ kind = "Measure", borrowed = lv, scale = scale, chordStyle = "Block", voicing = "Close",
+                          tension = "Off", push = "None", pull = "None" }, seed)
+      counts[lv] = counts[lv] + #idea.chromatic
+      for _, c in ipairs(idea.chromatic) do kinds[c.kind] = true end
+      if lv == "Common" then
+        local chords = part(idea, "Chords").notes
+        local tl = idea.timeline
+        for i, sl in ipairs(tl) do
+          local function at(x)
+            local out = {}
+            for _, nt in ipairs(chords) do if math.abs(nt.start * 4 - x.s) < 1e-6 then out[#out + 1] = nt.pitch end end
+            return out
+          end
+          if sl.chromatic and sl.chromatic.kind == "N6" then
+            n6 = n6 + 1
+            for _, p in ipairs(at(sl)) do if p % 12 == sl.bassPc then n6dbl = n6dbl + 1; break end end
+          elseif sl.chromatic and tl[i + 1] then
+            -- fi, wherever the chords play it, a semitone up in the next.
+            local fiPc = T.pc(idea.key, 3) + 1
+            local nxt = {}
+            for _, p in ipairs(at(tl[i + 1])) do nxt[p] = true end
+            for _, p in ipairs(at(sl)) do
+              if p % 12 == fiPc % 12 then
+                fi = fi + 1
+                if nxt[p + 1] then fiUp = fiUp + 1 end
+              end
+            end
+          end
+        end
+      end
+    end
+    off = off + #make({ kind = "Measure", borrowed = "Off", scale = scale }, seed).chromatic
+    for _, c in ipairs(make({ kind = "Measure", borrowed = "Common", colour = "Triads", scale = scale }, seed).chromatic) do
+      if c.kind == "Fr+6" or c.kind == "Ger+6" then triadWrong = triadWrong + 1 end
+    end
+  end
+  for _, k in ipairs({ "N6", "It+6", "Fr+6", "Ger+6" }) do ok(kinds[k], "the " .. k .. " turns up") end
+  -- Never straight after a chord on its own degree (VI then the sixth on
+  -- le), and a German sixth never at a half close (whose last chord is the V
+  -- its six-four would take half of).
+  local same, gerHC = 0, 0
+  for seed = 1, 300 do
+    for _, kind in ipairs({ "Measure", "Phrase" }) do
+      local idea = make({ kind = kind, content = "Both", borrowed = "Common", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+      local tl = idea.timeline
+      for i, sl in ipairs(tl) do
+        if sl.chromatic then
+          if tl[i - 1] and tl[i - 1].degree == sl.degree then same = same + 1 end
+          if sl.chromatic.kind == "Ger+6" then
+            for _, u in ipairs(idea.plan.units) do
+              if u.cad == "HC" and u.slots[#u.slots] == tl[i + 2] then gerHC = gerHC + 1 end
+            end
+          end
+        end
+      end
+    end
+  end
+  eq(same, 0, "a chromatic chord never follows a chord on its own degree")
+  eq(gerHC, 0, "a German sixth never at a half close")
+  ok(counts.Rare >= 20 and counts.Common >= 1.3 * counts.Rare,
+     ("chromatic chords now and then, Common more than Rare: %d against %d in 300 Measures"):format(counts.Common, counts.Rare))
+  eq(off, 0, "with Borrowed off, none")
+  eq(triadWrong, 0, "with Triads, only the Neapolitan and the Italian sixth: three notes")
+  ok(n6 >= 10 and n6dbl == n6, ("by the book the Neapolitan doubles its bass: %d of %d"):format(n6dbl, n6))
+  ok(fi >= 10 and fiUp >= fi * 0.7, ("and an augmented sixth's fi rises to sol: %d of %d"):format(fiUp, fi))
+end
+
+do
+  -- With Applied, now and then a passing diminished seventh where the bass
+  -- climbs a tone: the bass by semitones, the window says "passing to";
+  -- with Triads a diminished triad; with Applied off, none.
+  local seen, sevenths, triads, off, said, climb = 0, 0, 0, 0, 0, 0
+  for seed = 1, 200 do
+    local idea = make({ kind = "Measure", applied = "Common", colour = (seed % 2 == 0) and "Triads" or "Sevenths",
+                        scale = (seed % 3 == 0) and 2 or 1 }, seed)
+    for _, a in ipairs(idea.applied) do
+      if a.passing then
+        seen = seen + 1
+        if a.text:find("passing to", 1, true) then said = said + 1 end
+      end
+    end
+    for i, sl in ipairs(idea.timeline) do
+      if sl.applied and sl.applied.passing then
+        local pv, nx = idea.timeline[i - 1], idea.timeline[i + 1]
+        local b = I.bassPcOf(sl)
+        if not ((b - I.bassPcOf(pv)) % 12 == 1 and (I.bassPcOf(nx) - b) % 12 == 1) then climb = climb + 1 end
+        if #sl.chord.pcs == 4 and idea.r.colour == "Sevenths" then sevenths = sevenths + 1 end
+        if #sl.chord.pcs == 3 and idea.r.colour == "Triads" then triads = triads + 1 end
+      end
+    end
+    for _, a in ipairs(make({ kind = "Measure", applied = "Off" }, seed).applied) do off = off + 1 end
+  end
+  ok(seen >= 20, "passing diminished chords turn up: " .. seen .. " in 200 Measures")
+  eq(sevenths + triads, seen, "a diminished seventh, or with Triads a diminished triad")
+  eq(said, seen, "and the window says what it passes to")
+  eq(climb, 0, "the bass climbing by semitones through it, its neighbours on their roots")
+  eq(off, 0, "with Applied off, none")
 end
 
 C.done()

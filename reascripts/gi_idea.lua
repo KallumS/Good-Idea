@@ -68,7 +68,7 @@ end
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
                   pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16,
-                  tension = 17, sixnine = 18, ghost = 19 }
+                  tension = 17, sixnine = 18, ghost = 19, chroma = 20, passing = 21 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -343,8 +343,8 @@ function M.buildSettings()
       when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
       hints = {
         Off = "Every chord from the scale.",
-        Rare = "About one idea in four borrows one chord from another scale on the same key note - a minor iv or a bVI in a major key, a major IV in a minor one. The window says which chord, and where it is from. Seven-note scales only.",
-        Common = "About two ideas in three borrow a chord, and a longer one (eight chords or more) sometimes two.",
+        Rare = "About one idea in four borrows one chord from another scale on the same key note - a minor iv or a bVI in a major key, a major IV in a minor one. And now and then, before a close's V, the ii or IV becomes a chromatic chord: the Neapolitan (Db/F in C) or an augmented sixth (Ab7 in C: Italian, French, or German, which goes through the I6/4). The window says which chord, and where it is from. Seven-note scales only.",
+        Common = "About two ideas in three borrow a chord, and a longer one (eight chords or more) sometimes two; about half the closes that can take a chromatic chord do.",
       } },
 
     -- Added in 1.2, last for the same reason.
@@ -437,7 +437,7 @@ function M.buildSettings()
       when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
       hints = {
         Off = "No chord borrowed from another key.",
-        Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. The window says which, and where. Seven-note scales only.",
+        Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. And where the bass climbs a tone (F to G), now and then a passing diminished seventh on the note between (F F#dim7 G). The window says which, and where. Seven-note scales only.",
         Common = "The same, on more of the chords that can take one, and in most ideas.",
       } },
 
@@ -1485,6 +1485,270 @@ function M.applied(timeline, plan, key, r, rnd, colour)
   return out
 end
 
+------------------------------------------------------------------------------
+-- Chromatic chords (1.15; docs/decisions/0027-...)
+--
+-- The chromatic pre-dominants: "the most common chromatically altered
+-- subdominant chords (aside from the applied dominant of V) are the
+-- Neapolitan chord and the various augmented-sixth chords" (Open Music
+-- Theory, "Chromatically altered subdominant chords"). At a close, the ii or
+-- IV before its V may become one (with Borrowed on; dice of their own):
+--
+--   N6    the Neapolitan: the major chord on the flat 2nd (ra fa le), with
+--         fa in the bass - Db/F in C. "Being a chromatically altered ii
+--         chord, the Neapolitan has pre-dominant harmonic function"
+--         (Hutchinson, 20.1). From the Phrygian on the same key note.
+--   It+6  le do fi: Ab C F# in C (Ab7 without its fifth, on a lead sheet).
+--   Fr+6  le do re fi: Ab C D F# (Ab7(b5)).
+--   Ger+6 le do me fi: Ab C Eb F# (Ab7). "Almost always ... followed by a
+--         cadential 6/4" (Open Music Theory): it takes the first half of
+--         the V for the I6/4, or is not chosen.
+--
+-- Le in the bass; le and fi move out to sol (Hutchinson, 21.1). The tune
+-- under one uses the home scale with those notes bent. Only before a major
+-- V (one with a leading tone), never on a named progression's chord, a
+-- borrowed or applied one, or after a key change. A copy does what its
+-- original did.
+------------------------------------------------------------------------------
+
+M.CHROMATIC_CHANCE = { Rare = 0.35, Common = 0.8 }
+M.CHROMATIC_WEIGHT = { N6 = 2, ["It+6"] = 1, ["Fr+6"] = 1, ["Ger+6"] = 1 }
+local CHROMATIC_KINDS = { "N6", "It+6", "Fr+6", "Ger+6" }
+
+local function scaleNamed(name)
+  for i, sc in ipairs(T.SCALES) do if sc.name == name then return i end end
+end
+
+-- The home scale with fa raised and la lowered (and mi lowered, for the
+-- German sixth): the notes the tune hears under an augmented sixth. Nil if
+-- the scale cannot take it.
+local function aug6Key(key, kind)
+  local iv = {}
+  for i, v in ipairs(T.ivOf(key)) do iv[i] = v end
+  iv[4], iv[6] = 6, 8
+  if kind == "Ger+6" then iv[3] = 3 end
+  for i = 2, 7 do if iv[i] <= iv[i - 1] then return nil end end
+  return { root = key.root, scale = key.scale, iv = iv }
+end
+
+-- The augmented sixth chord, named as a lead sheet names it (Hutchinson,
+-- 21.4): the dominant seventh on le it sounds like.
+local function aug6Chord(k6, kind)
+  local pos = { 5, 7 }
+  if kind == "Fr+6" then pos[#pos + 1] = 8 elseif kind == "Ger+6" then pos[#pos + 1] = 9 end
+  pos[#pos + 1] = 10
+  local ch = { degree = 5, pos = pos, pcs = {}, has = {}, colour = "Sevenths", quality = "major",
+               aug6 = kind, numeral = kind }
+  for i, p in ipairs(pos) do
+    ch.pcs[i] = T.pc(k6, p)
+    ch.has[ch.pcs[i]] = true
+  end
+  ch.rootPc = ch.pcs[1]
+  ch.name = T.noteName(k6, 5) .. ({ ["It+6"] = "7(no5)", ["Fr+6"] = "7(b5)", ["Ger+6"] = "7" })[kind]
+  return ch
+end
+
+function M.chromatic(timeline, plan, key, r, rnd, meter)
+  local chance = M.CHROMATIC_CHANCE[r.borrowed]
+  if not chance or T.scaleLen(key) ~= 7 then return {} end
+  local PHRYG = scaleNamed("Phrygian")
+  local out, decided = {}, {}
+  -- (A copy of an earlier chord - a Period's answer opening as its question
+  -- did - does only what its original did, and its original did nothing if
+  -- it was not before a V.)
+  local first = {}
+  for i, sl in ipairs(timeline) do
+    if sl.origin and not first[sl.origin] then first[sl.origin] = sl end
+  end
+  for _, u in ipairs(plan.units) do
+    -- (Two draws for every close, taken or not: Common keeps Rare's.)
+    local closes = u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC" or u.cad == "EC" or u.cad == "HC"
+    local x1, x2 = 1, 0
+    if closes then x1, x2 = rnd(), rnd() end
+    local V = closes and u.slots and u.slots[#u.slots - ((u.cad == "HC") and 0 or 1)]
+    local at
+    for i, sl in ipairs(timeline) do if sl == V then at = i end end
+    local pre = at and timeline[at - 1]
+    -- (Where the tonic comes straight before the V, its second half may
+    -- take the chromatic chord: i N6 V, as both books show it.)
+    local split
+    if pre and pre.degree == 0 then
+      split = pre.s + snap(meter, (pre.e - pre.s) / 2)
+      if not (pre.e - pre.s >= 2 * meter.beat and split > pre.s and split < pre.e) then split = nil end
+    end
+    -- (Not a chord an applied chord leads to: it must stay its target.)
+    local led = pre and not split and timeline[at - 2] and timeline[at - 2].applied
+    if pre and not led and at - 1 > 1 and V.degree == 4 and V.chord.quality == "major" and not V.spec and not V.moved
+       and not V.applied and not V.borrowed and pre.e == V.s
+       and (pre.degree == 1 or pre.degree == 3 or split) and not pre.spec and not pre.borrowed and not pre.applied
+       and not pre.moved and not pre.truck and not pre.flavour and not pre.bassPc and (pre.key or key) == key then
+      local origin = pre.origin
+      local was = origin and decided[origin]
+      if was == nil and origin and first[origin] ~= pre then was = false end
+      local kinds, weights = {}, {}
+      -- (Not the same root as the chord before - VI then the augmented
+      -- sixth on le, ii then the Neapolitan's: the chord would seem to
+      -- follow itself.)
+      local before = not split and timeline[at - 2]
+      for _, k in ipairs(CHROMATIC_KINDS) do
+        local fits = (k == "N6" and PHRYG ~= nil) or (k ~= "N6" and aug6Key(key, k) ~= nil)
+        -- (With Triads, three notes: the Neapolitan and the Italian sixth.)
+        if r.colour == "Triads" and (k == "Fr+6" or k == "Ger+6") then fits = false end
+        if before and before.degree == ((k == "N6") and 1 or 5) then fits = false end
+        -- (The German sixth needs room for the I6/4: half of a V two beats
+        -- long or more, on a beat.)
+        -- (Not at a half close, whose V is its last chord: the tune comes
+        -- home on it, not on the six-four.)
+        if k == "Ger+6" then
+          local cut = V.s + snap(meter, (V.e - V.s) / 2)
+          fits = fits and V.e - V.s >= 2 * meter.beat and cut > V.s and cut < V.e and u.cad ~= "HC"
+        end
+        if fits and (was == nil or was == k) then kinds[#kinds + 1] = k; weights[#weights + 1] = M.CHROMATIC_WEIGHT[k] end
+      end
+      local kind
+      if was ~= nil then kind = was and kinds[1] or nil
+      elseif x1 < chance and #kinds > 0 then kind = pickAt(x2, kinds, weights) end
+      if kind and split then
+        -- The tonic keeps the first half; the second is the new chord's.
+        local tonic = {}
+        for kk, v in pairs(pre) do tonic[kk] = v end
+        tonic.e = split
+        pre.s, pre.beat = split, split
+        pre.origin = { of = pre.origin }
+        table.insert(timeline, at - 1, tonic)
+        for _, w in ipairs(plan.units) do
+          for j, x in ipairs(w.slots or {}) do
+            if x == pre then w.slots[j] = tonic; table.insert(w.slots, j + 1, pre); break end
+          end
+        end
+        at = at + 1
+      end
+      if kind == "N6" then
+        local k = T.key(key.root, PHRYG)
+        pre.key, pre.degree = k, 1
+        pre.chord = T.chord(k, 1, "Triads")
+        pre.bassPc, pre.bassPos, pre.inversion = T.pc(k, 3), 3, 1
+        pre.spec = { 1, from = PHRYG, bass = 3, chromatic = true }
+      elseif kind then
+        local k = aug6Key(key, kind)
+        pre.key, pre.degree = k, 5
+        pre.chord = aug6Chord(k, kind)
+        pre.bassPc, pre.bassPos, pre.inversion = nil, nil, nil
+        pre.spec = { 5, chromatic = true }
+        if kind == "Ger+6" then
+          -- The cadential six-four: the tonic over sol, then V.
+          local cut = V.s + snap(meter, (V.e - V.s) / 2)
+          local six = { s = V.s, e = cut, beat = V.beat or V.s, degree = 0, key = key,
+                        chord = T.chord(key, 0, "Triads"), spec = { 0, bass = 4, cadential = true } }
+          six.bassPc, six.bassPos, six.inversion = T.pc(key, 4), 4, 2
+          six.origin = six
+          V.s, V.beat = cut, cut
+          table.insert(timeline, at, six)
+          for j, x in ipairs(u.slots) do
+            if x == V then table.insert(u.slots, j, six); break end
+          end
+        end
+      end
+      if kind then
+        -- (The chord before keeps its root in the bass: an inversion there
+        -- would be judged against the chord that was.)
+        local before = timeline[at - 2]
+        if before then before.rootHeld = true end
+        pre.chromatic = { kind = kind, name = pre.chord.name ..
+                          (pre.bassPos and ("/" .. T.noteName(pre.key, pre.bassPos)) or ""),
+                          numeral = kind }
+        out[#out + 1] = pre
+      end
+      if origin and was == nil then decided[origin] = kind or false end
+    end
+  end
+  return out
+end
+
+------------------------------------------------------------------------------
+-- The passing diminished seventh (1.15)
+--
+-- Where the bass rises a whole tone from one chord to the next - IV to V,
+-- I to ii, V to vi - the second half of the first chord may become the
+-- diminished seventh on the note between: F F#dim7 G, the bass climbing by
+-- semitones. It is the next chord's own leading-tone seventh (viio7/V), a
+-- passing chord ("a passing chord ... will fill in the third with stepwise
+-- motion" - Open Music Theory, "Harmonic syntax - prolongation"; Hutchinson's
+-- I6 ii6 viio7/V I6/4). With Applied on; dice of their own. Only where the
+-- next chord is major or minor and in root position, the chord split is two
+-- beats or more and not a close's, and the next chord is the same each time
+-- round.
+------------------------------------------------------------------------------
+
+M.PASSING_CHANCE = { Rare = 0.25, Common = 0.6 }
+
+function M.passing(timeline, plan, key, r, rnd, meter)
+  local chance = M.PASSING_CHANCE[r.applied]
+  if not chance or T.scaleLen(key) ~= 7 or #timeline < 2 then return {} end
+  local keep = cadenceSlots(plan, timeline)
+  local home = {}
+  for d = 0, 6 do home[T.pc(key, d)] = true end
+  local nextOf, same = {}, {}
+  for i, sl in ipairs(timeline) do
+    local o = sl.origin or sl
+    local nx = timeline[i + 1] and timeline[i + 1].degree or -1
+    if nextOf[o] == nil then nextOf[o], same[o] = nx, true
+    elseif nextOf[o] ~= nx then same[o] = false end
+  end
+  local out, decided = {}, {}
+  local i = 1
+  while i < #timeline do
+    local sl, nx = timeline[i], timeline[i + 1]
+    local x = rnd()
+    local was = sl.origin and decided[sl.origin]
+    local q = T.degreeQuality(key, nx.degree)
+    local cut = sl.s + snap(meter, (sl.e - sl.s) / 2)
+    local can = not keep[sl] and not sl.spec and not sl.borrowed and not sl.applied and not sl.moved
+                and not sl.chromatic and not nx.spec and not nx.borrowed and not nx.applied and not nx.moved
+                and not nx.truck and not nx.chromatic and ((nx.key or key) == key or nx.raised)
+                and (q == "major" or q == "minor") and not nx.bassPc
+                and (T.pc(key, nx.degree) - M.bassPcOf(sl)) % 12 == 2
+                and sl.e - sl.s >= 2 * meter.beat and cut > sl.s and cut < sl.e and cut % meter.beat == 0
+                and same[sl.origin or sl]
+    local go
+    if was ~= nil then go = was == nx.degree else go = x < chance end
+    local done = false
+    if go and can then
+      local akey, deg = M.appliedKey(key, nx.degree, "vii")
+      -- (With Triads, the diminished triad: three notes, as the Colour says.)
+      local triads = r.colour == "Triads"
+      local ch = akey and T.chord(akey, deg, triads and "Triads" or "Sevenths")
+      local full = ch and #ch.pcs == (triads and 3 or 4)
+      if full then
+        for k = 2, #ch.pcs do if (ch.pcs[k] - ch.pcs[k - 1]) % 12 ~= 3 then full = false end end
+      end
+      local bent = false
+      if full then for _, pc in ipairs(ch.pcs) do if not home[pc] then bent = true end end end
+      if full and bent then
+        local P = { s = cut, e = sl.e, beat = cut, degree = deg, key = akey, chord = ch,
+                    spec = { deg, passing = true } }
+        P.origin = P
+        P.applied = { name = ch.name, numeral = (triads and "viio/" or "viio7/") .. T.degreeNumeral(key, nx.degree), kind = "vii",
+                      target = nx.degree, passing = true, to = nx.chord.name }
+        sl.e = cut
+        sl.rootHeld, nx.rootHeld = true, true
+        table.insert(timeline, i + 1, P)
+        for _, u in ipairs(plan.units) do
+          for j, y in ipairs(u.slots or {}) do
+            if y == sl then table.insert(u.slots, j + 1, P); break end
+          end
+        end
+        out[#out + 1] = P
+        done = true
+        i = i + 1
+      end
+    end
+    if sl.origin and was == nil then decided[sl.origin] = done and nx.degree or false end
+    i = i + 1
+  end
+  return out
+end
+
 -- Now and then a chord takes another colour (`T.flavourChord`): about one
 -- chord in five that may. (With Mixed until 1.14; now with every colour -
 -- the diminished chord a third up, a seventh chord, not with Triads.)
@@ -1516,8 +1780,10 @@ function M.flavour(timeline, plan, key, r, rnd, sixRnd)
     -- (Nor the chord an applied chord leads to: it must stay the chord it
     -- is the dominant of.)
     local target = timeline[i - 1] and timeline[i - 1].applied
-    -- (Nor the truck driver's V: the gear change is a dominant seventh.)
-    if go and not keep[sl] and not sl.borrowed and not sl.applied and not target and not sl.truck then
+    -- (Nor the truck driver's V: the gear change is a dominant seventh. Nor
+    -- a chromatic chord or the six-four a German sixth goes to, 1.15.)
+    if go and not keep[sl] and not sl.borrowed and not sl.applied and not target and not sl.truck
+       and not sl.chromatic and not (sl.spec and sl.spec.cadential) then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
       local before, after = timeline[i - 1], timeline[i + 1]
@@ -1625,7 +1891,9 @@ function M.invert(timeline, plan, key, r, rnd, meter)
       go = x < chance or (dimTriad and x < M.DIM_FIRST)
     end
     if sl.inversion then go = false end
-    if go and not keep[sl] and not sl.flavour and not sl.applied and not sl.spec then
+    -- (Nor either side of a passing diminished seventh, 1.15: the bass must
+    -- climb by semitones through it.)
+    if go and not keep[sl] and not sl.flavour and not sl.applied and not sl.spec and not sl.rootHeld then
       local ch = sl.chord
       local pb, nb = bassPcOf(before), after.chord.rootPc
       local k = sl.key or key
@@ -1649,7 +1917,7 @@ function M.invert(timeline, plan, key, r, rnd, meter)
             opts[#opts + 1] = { idx = idx, inv = 2 }
             weights[#weights + 1] = 1
           end
-        elseif role == "7" and not keep[after] and not after.flavour then
+        elseif role == "7" and not keep[after] and not after.flavour and not after.rootHeld then
           -- (Onto the next chord's root or third - V4/2 to I6 - never its
           -- seventh, which would want resolving in turn.)
           for _, t in ipairs(after.chord.pcs) do
@@ -2528,6 +2796,14 @@ function M.secondVoice(ctx, melody, r)
         end
       end
     end
+    -- (Where no note of the chord is consonant under it - fi over an
+    -- Italian sixth has only the augmented sixth and the tritone, 1.15 - a
+    -- consonant note of the scale.)
+    if not pick then
+      for p = nt.pos - 1, nt.pos - 6, -1 do
+        if not pick and SWEET[gap(p)] then pick = p end
+      end
+    end
     pick = pick or (nt.pos + order[1])
     out[#out + 1] = { step = nt.step, len = nt.len, pos = pick, pitch = T.pitch(key, pick), accent = nt.accent }
   end
@@ -2922,6 +3198,8 @@ function M.seventhTarget(ch, prevV, prevCh)
   local p7
   for _, p in ipairs(prevV) do if p % 12 == s7 then p7 = p end end
   if not p7 then return nil end
+  -- (An augmented sixth's "seventh" is fi, which rises to sol: 1.15.)
+  if prevCh.aug6 then return ch.has[(p7 + 1) % 12] and p7 + 1 or nil end
   for _, t in ipairs({ p7 - 1, p7 - 2 }) do
     if ch.has[t % 12] then return t end
   end
@@ -3014,7 +3292,10 @@ function M.chordsPart(ctx, timeline, r, rnd, win)
       local dimTriad = sl.chord.quality == "diminished" and #sl.chord.pcs == 3
       -- (Not a six-four: "when a triad is in second inversion, double the
       -- fifth (the bass note)" - Hutchinson, 26.9 and 26.12. 1.13.)
-      if sl.inversion and sl.inversion ~= 2 and not dimTriad then v = M.undouble(v, sl.chord, sl.bassPc, r.voicing) end
+      -- (Nor the Neapolitan: "double the bass (the third)" - Hutchinson,
+      -- 29.3; Open Music Theory likewise. 1.15.)
+      local n6 = sl.chromatic and sl.chromatic.kind == "N6"
+      if sl.inversion and sl.inversion ~= 2 and not dimTriad and not n6 then v = M.undouble(v, sl.chord, sl.bassPc, r.voicing) end
     end
     prev, prevCh = v, sl.chord
     lows[idx] = v[1]
@@ -3703,7 +3984,7 @@ function M.chordLine(timeline, meter)
     -- An inverted chord is written over its bass note: C/E.
     local slash = sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or ""
     table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name .. slash ..
-                          (sl.borrowed and "*" or "") .. (sl.applied and ">" or ""))
+                          ((sl.borrowed or sl.chromatic) and "*" or "") .. (sl.applied and ">" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
       bars[x] = bars[x] or {}
@@ -3774,6 +4055,13 @@ function M.make(st, meter, seed)
   M.raiseDominant(timeline, key, colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
   local applied = M.applied(timeline, plan, key, r, M.stream(seed, "applied"), colour)
+  -- (1.15) At a close, the Neapolitan or an augmented sixth before the V
+  -- (with Borrowed); a passing diminished seventh where the bass climbs a
+  -- tone (with Applied).
+  local chromatic = M.chromatic(timeline, plan, key, r, M.stream(seed, "chroma"), meter)
+  for _, sl in ipairs(M.passing(timeline, plan, key, r, M.stream(seed, "passing"), meter)) do
+    applied[#applied + 1] = sl
+  end
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"), M.stream(seed, "sixnine"))
   -- By the book, a half close with Mixed stands on a plain V: "almost
   -- invariably a triad, rather than a seventh chord" (Open Music Theory,
@@ -3928,8 +4216,20 @@ function M.make(st, meter, seed)
       end
     end
     a.bar = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
-    a.text = ("%s (%s) in bar %d, leading to %s"):format(a.name, a.numeral, a.bar, a.to)
+    a.text = ("%s (%s) in bar %d, %s %s"):format(a.name, a.numeral, a.bar,
+                                                  a.passing and "passing to" or "leading to", a.to)
     appliedNotes[#appliedNotes + 1] = a
+  end
+
+  -- (1.15) Each chromatic chord, said in full for the window.
+  local chromaticNotes = {}
+  local CHROMATIC_SAID = { N6 = "the Neapolitan", ["It+6"] = "an Italian augmented sixth",
+                           ["Fr+6"] = "a French augmented sixth", ["Ger+6"] = "a German augmented sixth" }
+  for _, sl in ipairs(chromatic) do
+    local c = sl.chromatic
+    c.bar = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
+    c.text = ("%s (%s, %s) in bar %d, before the V"):format(c.name, c.numeral, CHROMATIC_SAID[c.kind], c.bar)
+    chromaticNotes[#chromaticNotes + 1] = c
   end
 
   local cadNames = { PAC = "closes on the tonic", IAC = "closes on the third or fifth",
@@ -3945,6 +4245,7 @@ function M.make(st, meter, seed)
     ending = cadNames[plan.ending] or "",
     borrowed = notes,
     applied = appliedNotes,
+    chromatic = chromaticNotes,
     keyChange = keyChange and {
       at = keyChange.at, key = keyChange.key, truck = keyChange.truck,
       text = ("%s to %s at bar %d%s"):format(
@@ -3976,7 +4277,7 @@ function M.makeDrums(st, meter, seed, r)
     seed = seed, r = r, key = T.key(1, 1), meter = meter,
     plan = { units = {}, total = total, shape = "", ending = "" },
     timeline = {}, chordTimeline = {}, melody = nil,
-    block = block,
+    block = block, chromatic = {}, applied = {},
     summary = table.concat(said, "  /  "),
     chords = "",
     shape = "",

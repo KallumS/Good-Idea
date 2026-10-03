@@ -32,6 +32,8 @@ local function show(idea)
   end
   if idea.chords ~= "" then print("   " .. idea.chords) end
   for _, b in ipairs(idea.borrowed) do print("   borrowed: " .. b.text) end
+  for _, c in ipairs(idea.chromatic or {}) do print("   chromatic: " .. c.text) end
+  for _, a in ipairs(idea.applied or {}) do if a.passing then print("   passing: " .. a.text) end end
   for _, part in ipairs(idea.block.parts) do
     local out, lastBar = {}, -1
     for _, n in ipairs(part.notes) do
