@@ -75,17 +75,21 @@ that make music sound like music:
 - **Chromatic chords.** Now and then, before a close's V, the ii or IV
   becomes the **Neapolitan** (Db/F in C: the major chord on the flat 2nd,
   over its third) or an **augmented sixth** (Ab in the bass, F# above it,
-  both moving out to G: the Italian, French and German sixths - Ab7 on a
-  lead sheet), the German through the I6/4. The window says which.
+  both moving out to G: the Italian, French, German and - in major - Swiss
+  sixths, Ab7 on a lead sheet), the German and Swiss through the I6/4. And
+  a held I or V may be coloured by the **common-tone diminished seventh**
+  (C D#dim7/C C), its root held in the bass. The window says which.
 - **Tension.** Now and then the tune leans on a beat with a note that is
   not in the chord and falls a step into it - a suspension, an
   appoggiatura - or arrives at a close an eighth early.
 - **Named progressions.** Half the time, instead of the walk, the chords
   play a progression you know that suits the key: doo-wop, Pachelbel, the
   lament, the blues, the circle of fifths, the galant Meyer and Prinner,
-  Do-Re-Mi, Romanesca, Fonte and Monte (in major and minor keys), and
-  others - with their basses as written (Pachelbel's G/B, the Prinner's
-  C/E). The summary line says which.
+  Do-Re-Mi, Romanesca, Fonte, Monte, Aprile, Pastorella and Ponte (in
+  major and minor keys), and others - with their basses as written
+  (Pachelbel's G/B, the Prinner's C/E), and the galant ones with their tunes
+  where the books give them (the Meyer's do ti fa mi, the Aprile's do ti re
+  do). The summary line says which.
 - **Minor keys** close on a major V, its third the raised leading note
   (G B D in C minor), and the tune takes the B natural with it; the modes
   keep their own minor v.
@@ -125,7 +129,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    or an augmented sixth (seven-note scales only). **Applied** - Off,
    Rare (the default) or Common: whether a chord may become the next chord's
    own V or leading-tone chord, or a passing diminished seventh come in
-   where the bass climbs a tone (seven-note scales only).
+   where the bass climbs a tone, or a common-tone diminished seventh colour
+   a held I or V (seven-note scales only).
 3. **Feel** - the **pace** (Calm, Flowing, Busy) and the **groove** (Straight,
    Syncopated; or, to choose, a named rhythm - Tresillo, Habanera, Clave
    or 3+3+3+3+2+2 - which in 4/4 the pulsing chords, the pulsing bass and
