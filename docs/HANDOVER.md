@@ -13,13 +13,17 @@ calculated from the rules of music and put into the project as MIDI. I'm a
 musician, not a programmer, so please explain everything in musical terms
 (what I'll hear, which bars, which chords), with numbers you've measured.
 
-Where we are: **version 1.13**, published in `index.xml`. Since 1.6 it has
+Where we are: **version 1.15**, published in `index.xml`. Since 1.6 it has
 been brought in line with the theory books I uploaded (part-writing by the
 book, shaped velocity, applied chords, deceptive and evaded cadences, more
 forms, named progressions and galant schemata, suspensions and
 appoggiaturas, a second voice in thirds or sixths, Pedal/Offbeat/Fill chord
 styles, clave and tresillo rhythms, 6/9 and power chords, a key change for
-the last section, the minor key's major V, a reggaeton beat). In 1.13 the
+the last section, the minor key's major V, a reggaeton beat; and since 1.13
+flavours with every colour, a Drop 4 voicing, ghost notes in the drums, the
+bass lying back with pulled chords, the galant schemata in minor, a truck
+driver that nearly always changes gear, and chromatic chords - the
+Neapolitan, the augmented sixths, a passing diminished seventh). In 1.13 the
 engine took over three choices to keep the window simple: the progression
 (walk or a named one, half and half), the part-writing (always by the book)
 and the form (each about one idea in ten) are decided under the hood and not
@@ -33,7 +37,7 @@ Before you change anything, please:
    idea is a number), "Releasing" (the order every change is done in) and
    "What has been learned" (mistakes already made once - it is long
    because each of them cost time).
-2. Skim `docs/decisions/README.md` (latest: 0025) and the end of the latest
+2. Skim `docs/decisions/README.md` (latest: 0027) and the end of the latest
    session log in `docs/sessions/` to see where we left off.
 3. Install Lua if it is missing (`apt-get install -y lua5.4`), run
    `tools/test.sh` and confirm everything passes before you start.
@@ -70,12 +74,10 @@ How I like the work done:
   the web, quote the source's own words, and tell me where they're from.
 
 Things left open that we might pick up (none of them asked for yet; the
-full list is at the end of CLAUDE.md): trying it inside REAPER; out-of-key
-colour chords (the Neapolitan, augmented sixths, a passing diminished
-seventh); a separate Drop 4 voicing; flavours for Triads or Sevenths; ghost
-notes in drum ideas; a drum groove matched to a Measure's bass; pull for the
-bass; minor-key versions of the galant schemata; the truck-driver key change
-falling back to a plain step up in about a third of Measures; bringing the
-Form row back if I want to pick a form myself.
+full list is at the end of CLAUDE.md): trying it inside REAPER; the
+common-tone diminished seventh and the Swiss sixth; a drum groove matched
+to a Measure's bass; per-drum choices in drum ideas; the Ponte, Aprile and
+Pastorella schemata; bringing the Form row back if I want to pick a form
+myself.
 
 What I'd like to do next: **[describe it here]**
