@@ -1634,8 +1634,8 @@ function M.chromatic(timeline, plan, key, r, rnd, meter)
           local cut = V.s + snap(meter, (V.e - V.s) / 2)
           fits = fits and V.e - V.s >= 2 * meter.beat and cut > V.s and cut < V.e and u.cad ~= "HC"
         end
-        -- (The Swiss in major keys only: ri goes up to mi.)
-        if k == "Sw+6" then fits = fits and T.degreeQuality(key, 0) == "major" and T.pc(key, 2) == (T.rootPc(key) + 4) % 12 end
+        -- (The Swiss only in major keys: in minor, ri would be me, which
+        -- `aug6Key` refuses - the scale would not climb.)
         local w = M.CHROMATIC_WEIGHT[k]
         if k == "Ger+6" and T.degreeQuality(key, 0) == "major" then w = 0.5 end
         if fits and (was == nil or was == k) then kinds[#kinds + 1] = k; weights[#weights + 1] = w end

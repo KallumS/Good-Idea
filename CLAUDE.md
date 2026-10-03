@@ -615,7 +615,16 @@ after their own degree, copies choosing afresh, an applied chord's target
 made chromatic, a passing chord off the semitone, its neighbours inverted,
 flavoured or moved by a third inversion, a seventh with Triads, with
 Applied off, the second voice on the augmented sixth, no window line, Open
-not spreading an Italian sixth; in 1.9 a progression
+not spreading an Italian sixth; in 1.16 schema stages not sung by the walk
+or by a copy, the Aprile singing the Meyer (missed at first: minor-key
+Aprile tunes hid it), no Ponte in Any named (missed at first: no test asked
+what Any named rolls), the Pastorella's V not held, no common-tone
+sevenths, their root not in the bass, with Triads, with Applied off, their
+neighbours inverted, the Swiss sixth straight to V, the German gone from
+major, no Swiss sixth, a flavour repeating the chord before on its bass
+(found only in Mixolydian, whose iii is diminished); "the Swiss sixth in
+minor" changed nothing - the major-only line was dead (aug6Key already
+refuses ri in minor) and was removed; in 1.9 a progression
 ignored, Any named ignoring the key, the blues wrong, inversions on named
 chords, a silent fallback, the named bass ignored, a sus4 over a named bass
 (missed by the quick sweep at first: a named test now covers it), a blues close

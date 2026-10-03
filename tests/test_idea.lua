@@ -3341,7 +3341,7 @@ do
               local key = I.keyAt({ key = idea.key, timeline = idea.timeline }, first.step)
               if first.pitch % 12 == T.pc(key, st[2]) then
                 sung = sung + 1
-                if name == "Aprile" and st[2] == 1 then aprileRe = aprileRe + 1 end
+                if name == "Aprile" and st[2] == 1 and T.SCALES[idea.key.scale].name == "Major" then aprileRe = aprileRe + 1 end
                 if name == "Galant" and st[2] == 3 and sl.degree == 4 then meyerFa = meyerFa + 1 end
               end
             end
@@ -3364,6 +3364,13 @@ do
     end
   end
   eq(twice, 0, "a flavour never puts the same chord on the same bass twice running")
+  -- And Any named rolls the three new ones with the rest.
+  local rolled = {}
+  for seed = 1, 600 do
+    local idea = make({ kind = "Measure", progression = "Any named", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+    if idea.schema then rolled[idea.schema] = true end
+  end
+  ok(rolled.Aprile and rolled.Pastorella and rolled.Ponte, "Any named rolls the Aprile, the Pastorella and the Ponte")
   ok(aprileRe > 20 and meyerFa > 20, ("the Aprile's re and the Meyer's fa over the same V6/5: %d and %d"):format(aprileRe, meyerFa))
 end
 
