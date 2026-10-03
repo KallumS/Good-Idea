@@ -138,6 +138,21 @@ Idea numbers from earlier versions now give different ideas.]]></changelog>
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.14" author="kallums" time="2026-10-03T15:00:00Z">
+        <changelog><![CDATA[Flavours now come with every Colour, not only Mixed: with Triads a chord may become a sus4, sus2, add2, add9, 6 or 6/9; with Sevenths a 7sus4, a 9th, a 6th, or the diminished chord on its third.
+A new voicing to choose: Drop 4 - the lowest of four close notes dropped an octave.
+Ghost notes in drum ideas (Drums step: Off, Rare - the default - or Common): the snare tapped very quietly on the sixteenths, mostly just before or after the backbeat, the same every bar.
+Where the chords are pulled late, the bass now lies back with them in about half the ideas (Good Idea decides); otherwise it stays on the beat with the tune.
+The galant schemata in minor keys too: the Meyer and Prinner, the Romanesca (the bass falling do te le me), the Monte, and the Fonte (from iv down to III, since the minor key's ii cannot be a key of its own).
+The truck-driver key change now changes gear in nearly every Measure (12 in 13, from 6 in 10): where no section starts on the tonic, one is made to.
+Fixed: a Loop of a named progression plays the same flavoured chords each time round; a Period's answer opens as its question did; the truck driver's V is always a plain dominant seventh.
+Idea numbers from 1.13 may give different ideas: most ideas with chords can now take a flavour, and drum ideas have ghost notes.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
