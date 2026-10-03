@@ -3153,7 +3153,7 @@ do
   eq(off, 0, "with Borrowed off, none")
   eq(triadWrong, 0, "with Triads, only the Neapolitan and the Italian sixth: three notes")
   ok(n6 >= 10 and n6dbl == n6, ("by the book the Neapolitan doubles its bass: %d of %d"):format(n6dbl, n6))
-  ok(fi >= 10 and fiUp >= fi * 0.7, ("and an augmented sixth's fi rises to sol: %d of %d"):format(fiUp, fi))
+  ok(fi >= 10 and fiUp >= fi * 0.85, ("and an augmented sixth's fi rises to sol: %d of %d"):format(fiUp, fi))
 end
 
 do
@@ -3185,6 +3185,20 @@ do
   eq(sevenths + triads, seen, "a diminished seventh, or with Triads a diminished triad")
   eq(said, seen, "and the window says what it passes to")
   eq(climb, 0, "the bass climbing by semitones through it, its neighbours on their roots")
+  -- (Its neighbours take no flavour: the diminished chord on a V's third
+  -- would move the bass. With Flavours on Common, where it would.)
+  local moved, n = 0, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", applied = "Common", flavours = "Common", colour = "Sevenths", scale = 1 }, seed)
+    local tl = idea.timeline
+    for i, sl in ipairs(tl) do
+      if sl.applied and sl.applied.passing then
+        n = n + 1
+        if tl[i - 1].flavour or tl[i + 1].flavour then moved = moved + 1 end
+      end
+    end
+  end
+  ok(n >= 30 and moved == 0, ("and its neighbours take no flavour: %d of %d do"):format(moved, n))
   eq(off, 0, "with Applied off, none")
 end
 
