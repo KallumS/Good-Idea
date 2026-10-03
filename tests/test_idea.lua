@@ -345,7 +345,9 @@ local function audit(idea, tag)
         -- Two leaps the same way outline a consonant triad (1.13; inside a
         -- statement).
         local q = mel[i - 2]
-        if q and not n.first and not p.first then
+        -- (Not in the whole-tone and diminished scales, whose own chords are
+        -- augmented and diminished: outlining them is the idiom.)
+        if q and not n.first and not p.first and r.scale < 14 then
           local i1, i2 = p.pos - q.pos, n.pos - p.pos
           if math.abs(i1) >= 2 and math.abs(i2) >= 2 and i1 * i2 > 0 then
             rule("two leaps the same way outline a triad", I.outlinesTriad(q.pitch, p.pitch, n.pitch),
