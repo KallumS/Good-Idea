@@ -3,6 +3,8 @@
 Taken 2026-10-03. Stands. Widens [0015](0015-chord-rhythm-figures-and-one-and-a-half.md)
 (more ways for the chords to play) and the Euclidean grooves of
 [0003](0003-calculated-from-the-maths-of-music.md) (rhythms by name).
+The reggaeton beat, left out here, came in 1.13 as a Drums Beat
+([0025](0025-the-engine-decides-more.md)).
 
 ## Context
 

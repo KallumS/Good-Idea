@@ -4,6 +4,9 @@ Taken 2026-10-02. Stands. Widens [0006](0006-chords-stay-in-the-key.md)
 (a second kind of chord from outside the key, after
 [0011](0011-borrowed-chords-rarely-and-named.md)'s borrowed chords) and
 [0004](0004-ideas-are-built-from-units.md) (a new cadence and new forms).
+Widened by [0025](0025-the-engine-decides-more.md): the evaded cadence, left
+out here, is in (half of Extended's stretches), and the Form is no longer
+shown - every form is rolled, about one idea in ten each.
 
 ## Context
 

@@ -4,7 +4,9 @@ Taken 2026-10-02. Stands. Changes [0008](0008-velocity-100-accents-above-it.md)
 (Shaped is now the default; Flat and Accents stay). Extends
 [0018](0018-flavours-voicings-and-inversions.md) (how an inverted chord is
 voiced) and [0006](0006-chords-stay-in-the-key.md) (the V of a half close
-with Mixed).
+with Mixed). Changed by [0025](0025-the-engine-decides-more.md): a
+six-four keeps its doubled bass (Hutchinson 26.12), and Part-writing is no
+longer shown - always by the book.
 
 ## Context
 

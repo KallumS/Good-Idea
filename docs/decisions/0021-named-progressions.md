@@ -4,7 +4,10 @@ Taken 2026-10-02. Stands. Widens [0006](0006-chords-stay-in-the-key.md)
 (a named progression may take a chord from the parallel scale, as the
 lament's VII and the double plagal's bVII do) and
 [0004](0004-ideas-are-built-from-units.md) (a unit's chords may come from a
-list rather than the walk).
+list rather than the walk). Widened by
+[0025](0025-the-engine-decides-more.md): the Do-Re-Mi, Romanesca, Fonte and
+Monte, and the Progression row is no longer shown - half the ideas walk,
+half take a named progression that suits the key.
 
 ## Context
 

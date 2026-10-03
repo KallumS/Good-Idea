@@ -2,6 +2,8 @@
 
 Taken 2026-10-01. Stands, widened by [0014](0014-pull-the-chords-lie-back.md) (pull)
 and [0015](0015-chord-rhythm-figures-and-one-and-a-half.md) (figures on every chord style).
+Its promise that every 1.0 idea number stays the 1.0 idea was given up in
+1.13 ([0025](0025-the-engine-decides-more.md)).
 
 ## Context
 

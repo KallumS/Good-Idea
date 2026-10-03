@@ -36,6 +36,18 @@ chords, the ReaScript page. Skimmed for what bears on Good Idea: the
 instrument-by-instrument pages (ACTOR, the User's Manual), Berlioz's
 excerpts, Singleton's history, the JSFX reference. Each section says which.
 
+**Status (1.13, 2026-10-03): everything in this section is done.** Items 1
+to 5 were fixed in 1.7 (decision 0019: by the book, the default, now not
+shown), 6 in 1.7 (Shaped velocity), 7 in 1.13 (0025); the additions came in
+1.8 (applied chords, the deceptive cadence, the hybrid forms and ternary:
+0020), 1.9 (named progressions: 0021), 1.10 (tension, the second voice:
+0022), 1.11 (Pedal, Offbeat, Fill, the named rhythms: 0023), 1.12 (6/9,
+Power, the key change: 0024) and 1.13 (the evaded cadence, four more galant
+schemata, the reggaeton beat, the minor V, the six-four's doubled bass:
+0025). The "*Good Idea:*" lines in the sections below were written before
+any of that, and describe 1.6; the decisions say what changed. What the
+books suggest that is still not done is in CLAUDE.md, "Left open".
+
 **Where Good Idea goes against the books** (each found in more than one):
 
 1. **Doubling an inverted chord's bass.** G/B in Close plays B in the
