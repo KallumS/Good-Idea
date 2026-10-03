@@ -1944,16 +1944,22 @@ local function nearestOn(ctx, key, ch, target, avoid)
 end
 
 -- (1.13) Do three pitches outline a consonant triad - major or minor, in
--- any position, inside an octave? "No consecutive leaps in the same
--- direction" but where they do (Open Music Theory, "Composing a cantus
+-- any position and spacing (E C G is C major)? "No consecutive leaps in the
+-- same direction" but where they do (Open Music Theory, "Composing a cantus
 -- firmus").
-local TRIADS = { ["0,3,7"] = true, ["0,4,7"] = true, ["0,3,8"] = true, ["0,4,9"] = true,
-                 ["0,5,8"] = true, ["0,5,9"] = true }
 function M.outlinesTriad(a, b, c)
-  local lo = math.min(a, b, c)
-  local x = { a - lo, b - lo, c - lo }
-  table.sort(x)
-  return TRIADS[x[1] .. "," .. x[2] .. "," .. x[3]] == true
+  local pcs, seen = {}, {}
+  for _, x in ipairs({ a, b, c }) do
+    local pc = x % 12
+    if not seen[pc] then seen[pc] = true; pcs[#pcs + 1] = pc end
+  end
+  if #pcs ~= 3 then return false end
+  for _, root in ipairs(pcs) do
+    for _, third in ipairs({ 3, 4 }) do
+      if seen[(root + third) % 12] and seen[(root + 7) % 12] then return true end
+    end
+  end
+  return false
 end
 
 -- Three notes running (each { pos, pitch, first }): two leaps the same way
@@ -2594,11 +2600,14 @@ end
 
 function M.noParallels(ctx, notes, bassPcAt)
   local function P(note, pos) return T.pitch(M.keyAt(ctx, note.step), pos or note.pos) end
-  local function try(i, wide, first)
+  local function try(i, wide, first, iac)
     local a, b, c = notes[i - 1], notes[i], notes[i + 1]
     -- (A full or imperfect close's last note is its goal and stays; a half
-    -- close's or an open ending's may move to another note of its chord.)
+    -- close's or an open ending's may move to another note of its chord.
+    -- As a last resort, `iac`, an imperfect close's goal may move between
+    -- the tonic's third and fifth: the same close. 1.13.)
     local goal = b and (b.closes == "PAC" or b.closes == "IAC" or b.closes == "DC" or b.closes == "EC")
+    if b and iac then goal = b.closes ~= "IAC" end
     if not b or goal or (i == 1 and not first) or (i == #notes and not b.closes) then return false end
     local ch = M.chordAt(ctx.timeline, b.step).chord
     local key = M.keyAt(ctx, b.step)
@@ -2609,6 +2618,7 @@ function M.noParallels(ctx, notes, bassPcAt)
     for _, d in ipairs(wide and { 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6 } or { 1, -1, 2, -2, 3, -3, 4, -4 }) do
       local p = b.pos + d
       local fits = (strong and T.onChord(key, ch, p)) or (not strong and (math.abs(d) == 1 or wide))
+      if iac then fits = T.onChord(key, T.chord(key, 0, "Triads"), p) and p % T.scaleLen(key) ~= 0 end
       local good = fits and p >= ctx.lo - slack and p <= ctx.hi + slack
       if good then
         local pp = P(b, p)
@@ -2644,6 +2654,7 @@ function M.noParallels(ctx, notes, bassPcAt)
           -- note before that moves first, then this one.)
           local keep = notes[i - 2].pos
           if (try(i - 2) or try(i - 2, true)) and not (try(i - 1) or try(i - 1, true)) then notes[i - 2].pos = keep end
+          if M.parallel(ctx, bassPcAt, notes[i - 1], nil, notes[i], nil) then try(i, true, nil, true) end
         elseif i == 2 and M.parallel(ctx, bassPcAt, notes[1], nil, notes[2], nil) then
           -- (At the very start, the idea's first note may move as a last resort.)
           try(1, true, true)
