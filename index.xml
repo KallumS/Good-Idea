@@ -153,6 +153,17 @@ Idea numbers from 1.13 may give different ideas: most ideas with chords can now 
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.15" author="kallums" time="2026-10-03T18:00:00Z">
+        <changelog><![CDATA[Chromatic chords, with Borrowed on (Rare by default): now and then, before a close's V, the ii or IV becomes the Neapolitan (Db/F in C - the major chord on the flat 2nd, over its third) or an augmented sixth - Italian, French or German (Ab in the bass, F# above it, both moving out to G; Ab7 on a lead sheet). The German goes through the I6/4 first, as the books say it almost always does. The window says which chord, where, and what it is.
+A passing diminished seventh, with Applied on: where the bass climbs a tone (F to G), the second half of the first chord becomes the diminished seventh on the note between (F F#dim7 G), the bass climbing by semitones. With Triads, the diminished triad.
+By the book, the Neapolitan doubles its bass, and an augmented sixth's F# rises to G in the next chord.
+About one Measure in eight now has a chromatic chord, and one in ten a passing diminished chord, with the defaults. Idea numbers from 1.14 may give different ideas where they do.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
