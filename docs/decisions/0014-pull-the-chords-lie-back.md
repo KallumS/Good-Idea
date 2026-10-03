@@ -1,6 +1,8 @@
 # 0014. Pull: the chords lie back an eighth; the tune, bass and drums stay on the beat
 
 Taken 2026-10-01. Stands. Partners [0010](0010-figures-push-and-swing.md)'s push.
+Widened by [0026](0026-flavours-ghosts-bass-pull-minor-schemata.md): in about
+half the ideas (the engine decides) the bass lies back with the chords.
 
 ## Context
 

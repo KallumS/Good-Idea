@@ -46,6 +46,8 @@ local function show(idea)
       -- A tension note (1.10) is marked: (s) a suspension held over the
       -- change, (a) an appoggiatura, (ant) an anticipation.
       local mark = ({ suspension = "(s)", appoggiatura = "(a)", anticipation = "(ant)" })[n.tension or ""] or ""
+      -- (A ghost note, 1.14, in brackets.)
+      if n.ghost then mark = mark .. "(g)" end
       out[#out + 1] = name .. (grid and ("@%.2f"):format(at + 1) or "") .. mark .. (n.vel > 100 and ">" or "")
     end
     print(("   %-7s %s"):format(part.name, table.concat(out, " ")))

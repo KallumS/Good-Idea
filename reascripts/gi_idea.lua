@@ -68,7 +68,7 @@ end
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
                   pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16,
-                  tension = 17, sixnine = 18 }
+                  tension = 17, sixnine = 18, ghost = 19 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -240,7 +240,7 @@ function M.buildSettings()
       hints = {
         Triads = "Three-note chords: C, Dm, G.",
         Sevenths = "Every chord with its seventh: Cmaj7, Dm7, G7.",
-        Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7 - and, with Flavours on Rare, now and then a sus, a 6th, a 9th or a diminished chord.",
+        Mixed = "Sevenths where they pull (ii, V), added ninths on the others: Cadd9, Dm7, G7.",
       } },
     { id = "chordPace", label = "Chord pace", step = "Chords",
       values = { "Slow", "One a bar", "1.5 a bar", "Two a bar", "4 a bar" }, any = true, default = "Any",
@@ -352,7 +352,7 @@ function M.buildSettings()
       any = true, default = "Any", weights = { 1.5, 1.5, 1 }, when = hasChords,
       hints = {
         None = "Every chord is played on the beat.",
-        Some = "Some chords are played an eighth late, laid back behind the beat; the tune and the bass stay on it.",
+        Some = "Some chords are played an eighth late, laid back behind the beat; the tune stays on it, and the bass either stays with the tune or lies back with the chords (the idea decides).",
         Lots = "Most chords lie back an eighth: a lazy, behind-the-beat feel.",
       } },
     { id = "drumBars", label = "Bars", step = "Idea", values = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
@@ -389,25 +389,26 @@ function M.buildSettings()
     -- 1.4 sound, and draw nothing from the dice.
     { id = "flavours", label = "Flavours", step = "Chords", values = { "Off", "Rare", "Common" }, default = "Rare",
       when = function(st)
-        return hasChords(st) and (st.colour == "Mixed" or st.colour == "Any")
-           and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7)
+        return hasChords(st) and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7)
       end,
       hints = {
-        Off = "Mixed is sevenths and added ninths only.",
-        Rare = "With Mixed, now and then a chord takes another colour: a sus4 or sus2, an added 2nd, a 6th, a 9th, or the diminished chord on its third (G7 becomes Bm7b5). Never the first chord or the cadence. Seven-note scales only.",
+        Off = "Every chord in the Colour chosen, and nothing else.",
+        Rare = "Now and then a chord takes another colour: a sus4 or sus2, an added 2nd or 9th, a 6th (or a 6/9) - and, where the chords have sevenths, a 7sus4, a 9th, or the diminished chord on its third (G7 becomes Bm7b5). Never the first chord or the cadence. Seven-note scales only.",
         Common = "The same colours, on about half the chords that can take one.",
       } },
     { id = "voicing", label = "Voicing", step = "Chords", values = T.VOICINGS, any = true, default = "Close",
-      -- (Any rolls the seven 1.5 had; Power, 1.12, is there to choose.)
+      -- (Any rolls the seven 1.5 had; Power, 1.12, and Drop 4, 1.14, are there
+      -- to choose.)
       anyValues = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless" },
       anyWeights = { 3, 1, 1, 1, 1, 1, 1 },
-      weights = { 3, 1, 1, 1, 1, 1, 1 }, when = hasChords,
+      weights = { 3, 1, 1, 1, 1, 1, 1, 1, 1 }, when = hasChords,
       hints = {
         Close = "Every note once, inside an octave, each chord nearest the one before.",
         Open = "Spread wide: the root, the fifth, then the third an octave up and the rest above it.",
         ["Drop 2"] = "Four notes in close position with the second from the top dropped an octave - the guitarist's and arranger's favourite.",
         ["Drop 3"] = "Four notes with the third from the top dropped an octave: a wide gap at the bottom.",
         ["Drop 2 & 4"] = "Four notes with the second and the fourth from the top dropped an octave: wide, like a big band's saxes.",
+        ["Drop 4"] = "Four notes in close position with the lowest dropped an octave: three close notes over a gap. (Chosen, not rolled by Any.)",
         Shell = "The root, the third and the seventh - the notes that say what the chord is, and nothing else.",
         Rootless = "No root - the bass has it: the third, fifth, seventh and ninth, the jazz pianist's left hand.",
         Power = "The root, the fifth and the root an octave up - no third: the rock guitarist's power chord (C5). A chord with no perfect fifth plays its root in octaves. (Chosen, not rolled by Any.)",
@@ -458,12 +459,12 @@ function M.buildSettings()
         Lament = "i VII VI V - the lament (the Andalusian cadence), the bass falling do te le sol. Minor keys.",
         Circle = "Round the circle of fifths: I IV vii iii vi ii V I, or in minor i iv VII III VI ii V i ('I Will Survive').",
         ["Double plagal"] = "I bVII IV I - two plagal steps home (the coda of 'Hey Jude'). Major keys.",
-        Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. Major keys.",
+        Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. In minor, i V4/3 V6/5 i, iv i6 vii°6 i.",
         Blues = "The 12-bar blues - I I I I IV IV I I V IV I I - and its 8- and 16-bar cousins, a chord a bar. Measures only.",
         ["Do-Re-Mi"] = "I V6/5 I - the bass do ti do under a tune rising do re mi: the galant Do-Re-Mi.",
-        Romanesca = "I V6 vi I6 - the bass do ti la mi: the galant Romanesca. Major keys.",
-        Fonte = "V7/ii ii V7 I - a pair stepped down: the galant Fonte ('fountain'). Major keys.",
-        Monte = "V7/IV IV V7/V V - a pair stepped up: the galant Monte ('mountain'). Major keys.",
+        Romanesca = "I V6 vi I6 - the bass do ti la mi: the galant Romanesca. In minor, i v6 VI i6, the bass do te le me.",
+        Fonte = "V7/ii ii V7 I - a pair stepped down: the galant Fonte ('fountain'). In minor, V7/iv iv V7/III III: the minor key's ii cannot be a key, so it falls from iv to III.",
+        Monte = "V7/IV IV V7/V V - a pair stepped up: the galant Monte ('mountain'). In minor, V7/iv iv V7/V V.",
       } },
 
     -- Added in 1.10, last for the same reason. Off draws nothing, and the
@@ -491,7 +492,26 @@ function M.buildSettings()
         None = "One key all the way.",
         ["Step up"] = "The last section a whole tone higher - the pop key change for a last chorus. Tune, chords and bass all go up.",
         ["Half step up"] = "The last section a semitone higher.",
-        ["Truck driver"] = "A whole tone up, with the new key's V7 squeezed in before it (C ... A7 | D) - the 'truck-driver' gear change, at the last section that starts on the tonic. Where none does (a Sentence's continuation, a Period's new phrase), and in scales other than the seven-note ones, a plain step up.",
+        ["Truck driver"] = "A whole tone up, with the new key's V7 squeezed in before it (C ... A7 | D) - the 'truck-driver' gear change - into the new key's tonic: the last section that starts on it, or one made to start on it. In scales other than the seven-note ones, a plain step up.",
+      } },
+
+    -- Added in 1.14, last for the same reason. Off draws nothing; the
+    -- ghost notes have dice of their own.
+    { id = "ghosts", label = "Ghost notes", step = "Drums", values = { "Off", "Rare", "Common" },
+      default = "Rare", when = function(st) return st.kind == "Drums" end,
+      hints = {
+        Off = "Only the groove's own snare.",
+        Rare = "Now and then a ghost note: the snare tapped very quietly on a sixteenth, mostly just before or after the backbeat - the funk and R&B drummer's in-between notes. The same in every bar, quiet at any Velocity.",
+        Common = "The same ghost notes, and more of them.",
+      } },
+    -- (1.14: not shown - the engine decides, half and half, whether the
+    -- bass lies back with pulled chords or holds the beat with the tune.)
+    { id = "bassPull", label = "Bass pull", step = "Arrangement", values = { "On the beat", "With the chords" },
+      any = true, default = "Any", hidden = true,
+      when = function(st) return st.kind == "Measure" end,
+      hints = {
+        ["On the beat"] = "Where the chords are pulled, the bass stays on the beat with the tune.",
+        ["With the chords"] = "Where the chords are pulled, the bass lies back with them: the new note an eighth late, the one before held to meet it.",
       } },
   }
   M.BY_ID = {}
@@ -761,16 +781,31 @@ M.PROGRESSIONS = {
   Circle = { major = { { 0 }, { 3 }, { 6 }, { 2 }, { 5 }, { 1 }, { 4 }, { 0 } },
              minor = { { 0 }, { 3 }, { 6, from = 2 }, { 2, from = 2 }, { 5, from = 2 }, { 1 }, { 4, from = 3 }, { 0 } } },
   ["Double plagal"] = { major = { { 0 }, { 6, from = 8 }, { 3 }, { 0 } } },
-  Galant = { major = { { 0 }, { 4, bass = 1 }, { 4, bass = 6 }, { 0 }, { 3 }, { 0, bass = 2 }, { 6, bass = 1 }, { 0 } } },
+  Galant = { major = { { 0 }, { 4, bass = 1 }, { 4, bass = 6 }, { 0 }, { 3 }, { 0, bass = 2 }, { 6, bass = 1 }, { 0 } },
+             -- (1.14) In minor, "converted directly" (Open Music Theory):
+             -- the V and the vii°6 from the harmonic minor, the iv from the
+             -- natural.
+             minor = { { 0 }, { 4, from = 3, bass = 1 }, { 4, from = 3, bass = 6 }, { 0 }, { 3, from = 2 },
+                       { 0, bass = 2 }, { 6, from = 3, bass = 1 }, { 0 } } },
   -- (1.13) More galant schemata (Open Music Theory, "Galant schemata"): the
   -- Do-Re-Mi (I V6/5 I, the bass do ti do), the Romanesca (I V6 vi I6, the
   -- bass do ti la mi), the Fonte (V7/ii ii V7 I, a step down) and the Monte
   -- (V7/IV IV V7/V V, a step up). `appliedTo`: the chord is that degree's own
   -- dominant, from the home scale bent (I.appliedKey).
   ["Do-Re-Mi"] = { major = { { 0 }, { 4, bass = 6 }, { 0 } }, minor = { { 0 }, { 4, from = 3, bass = 6 }, { 0 } } },
-  Romanesca = { major = { { 0 }, { 4, bass = 6 }, { 5 }, { 0, bass = 2 } } },
-  Fonte = { major = { { 5, appliedTo = 1 }, { 1 }, { 4 }, { 0 } } },
-  Monte = { major = { { 0, appliedTo = 3 }, { 3 }, { 1, appliedTo = 4 }, { 4 } } },
+  -- (1.14) And in minor. The Romanesca's bass falls do te le me - the
+  -- natural minor's v6, as a falling line in minor takes it (the raised ti
+  -- falling to le would be an augmented second). The Monte: V7/iv iv V7/V V.
+  -- The Fonte cannot go from ii to i - the minor key's ii is diminished, and
+  -- cannot be made a key of its own - so it tonicises iv, then III a step
+  -- below (Fm, then Eb, in C minor): minor, then major, a step down, as the
+  -- major key's ii to I.
+  Romanesca = { major = { { 0 }, { 4, bass = 6 }, { 5 }, { 0, bass = 2 } },
+                minor = { { 0 }, { 4, from = 2, bass = 6 }, { 5, from = 2 }, { 0, bass = 2 } } },
+  Fonte = { major = { { 5, appliedTo = 1 }, { 1 }, { 4 }, { 0 } },
+            minor = { { 0, appliedTo = 3 }, { 3, from = 2 }, { 6, from = 2, appliedTo = 2 }, { 2, from = 2 } } },
+  Monte = { major = { { 0, appliedTo = 3 }, { 3 }, { 1, appliedTo = 4 }, { 4 } },
+            minor = { { 0, appliedTo = 3 }, { 3, from = 2 }, { 1, appliedTo = 4 }, { 4, from = 3 } } },
   -- (A chord a bar, by the bar: not filled in order like the rest.)
   Blues = { blues = { [8] = { 0, 4, 3, 3, 0, 4, 0, 0 },
                       [12] = { 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 },
@@ -890,7 +925,17 @@ local function unitChords(u, units, key, r, meter, rnd, prevLast, sch)
   -- two four-bar statements of a Loop, then round again.
   if sch and not sch.blues and src and shift == 0 and src.schemaAt
      and sch.at % #sch.chords ~= src.schemaAt % #sch.chords then
-    src = nil
+    -- (1.14: and where an earlier passage of the same length and close
+    -- began at this point of the progression, it plays that one's chords -
+    -- the second time round a Loop is the first time again, flavours and
+    -- all.)
+    local twin
+    for _, w in ipairs(units) do
+      if w == u then break end
+      if w.rel and w.schemaAt and w.schemaAt % #sch.chords == sch.at % #sch.chords
+         and w.len == u.len and w.cad == u.cad then twin = w end
+    end
+    src = twin
   end
   if src and src.len == u.len and src.cad == u.cad and (u.kind ~= "seq" or u.cad == "none") then
     local out = {}
@@ -937,11 +982,17 @@ end
 -- Each unit's chords, and one timeline of { s, e, degree, chord } for the
 -- whole idea, in steps. The same chord twice running (where one unit ends on
 -- the chord the next begins with) is one chord, held.
-function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt)
+function M.harmony(plan, key, r, meter, rnd, colour, sch, breakAt, tonicAt)
   local timeline = {}
   local prevLast
   for _, u in ipairs(plan.units) do
     u.rel = unitChords(u, plan.units, key, r, meter, rnd, prevLast, sch)
+    -- (1.14) A section the truck driver needs on the tonic starts on it -
+    -- its first chord a new one, not a copy.
+    if tonicAt and u.start == tonicAt and u.rel[1] and u.rel[1].degree ~= 0 then
+      local f = u.rel[1]
+      u.rel[1] = { s = f.s, e = f.e, degree = 0 }
+    end
     u.degrees, u.slots = {}, {}
     for _, rs in ipairs(u.rel) do
       u.degrees[#u.degrees + 1] = rs.degree
@@ -1201,20 +1252,26 @@ M.KEY_CHANGE = { ["Step up"] = 2, ["Half step up"] = 1, ["Truck driver"] = 2 }
 -- `tonicAt(step)` (optional): whether the tonic sounds there. The truck
 -- driver wants a section that starts on it, so it takes the latest that
 -- does, if one does.
-function M.changeAt(plan, meter, tonicAt)
-  local best, home
+-- (1.14) `canTonic(u)` (optional): whether a section could be made to start
+-- on the tonic. Where none starts on it, the latest that could is taken,
+-- and the second value says so: the harmony then starts it there.
+function M.changeAt(plan, meter, tonicAt, canTonic)
+  local best, home, made
   for _, u in ipairs(plan.units) do
     if u.start > 0 and u.start * 2 >= plan.total and u.start % meter.bar == 0
        and plan.total - u.start >= 2 * meter.bar then
       best = u.start
       if tonicAt and tonicAt(u.start) then home = u.start end
+      if canTonic and canTonic(u) then made = u.start end
     end
   end
   if not best then
     local last = plan.units[#plan.units]
     if last.start > 0 then best = last.start end
   end
-  return home or best
+  if home then return home end
+  if made then return made, true end
+  return best
 end
 
 function M.keyChange(plan, timeline, key, r, meter, colour, at)
@@ -1275,6 +1332,15 @@ function M.keyChange(plan, timeline, key, r, meter, colour, at)
       end
       V.origin = V
       truck = V
+      -- (A named applied chord the gear change cuts off from its chord - a
+      -- Monte's V7/V before the new key's V - is plain again, 1.14.)
+      for i, x in ipairs(timeline) do
+        local nx = timeline[i + 1]
+        if x.applied and x.applied.named and nx == V then
+          x.key, x.applied = key, nil
+          x.chord = T.chord(key, x.degree, colour)
+        end
+      end
     end
   end
   return { at = at, semis = semis, key = newKey, truck = truck }
@@ -1419,8 +1485,9 @@ function M.applied(timeline, plan, key, r, rnd, colour)
   return out
 end
 
--- With Mixed, now and then a chord takes another colour (`T.flavourChord`):
--- about one chord in five that may.
+-- Now and then a chord takes another colour (`T.flavourChord`): about one
+-- chord in five that may. (With Mixed until 1.14; now with every colour -
+-- the diminished chord a third up, a seventh chord, not with Triads.)
 M.FLAVOUR_CHANCE = { Rare = 0.2, Common = 0.5 }
 local FLAVOUR_WEIGHT = { sus4 = 3, sus2 = 2, add2 = 1.5, add9 = 1.5, ["9"] = 2, ["6"] = 2, dim = 1.5 }
 
@@ -1434,24 +1501,30 @@ M.SIXNINE_CHANCE = 0.5
 
 function M.flavour(timeline, plan, key, r, rnd, sixRnd)
   local chance = M.FLAVOUR_CHANCE[r.flavours]
-  if not chance or r.colour ~= "Mixed" or T.scaleLen(key) ~= 7 then return end
+  if not chance or T.scaleLen(key) ~= 7 then return end
   local keep = cadenceSlots(plan, timeline)
   local decided = {}
+  -- (Nor a chord whose copy is a cadence's, where the copy could not follow
+  -- it: a Period's answer opens as its question did.)
+  local blocked = {}
+  for _, sl in ipairs(timeline) do if keep[sl] and sl.origin then blocked[sl.origin] = true end end
   for i, sl in ipairs(timeline) do
     local was = sl.origin and decided[sl.origin]
     local go
     if was ~= nil then go = was ~= false
-    else go = not keep[sl] and not sl.borrowed and rnd() < chance end
+    else go = not keep[sl] and not sl.borrowed and not (sl.origin and blocked[sl.origin]) and rnd() < chance end
     -- (Nor the chord an applied chord leads to: it must stay the chord it
     -- is the dominant of.)
     local target = timeline[i - 1] and timeline[i - 1].applied
-    if go and not keep[sl] and not sl.borrowed and not sl.applied and not target then
+    -- (Nor the truck driver's V: the gear change is a dominant seventh.)
+    if go and not keep[sl] and not sl.borrowed and not sl.applied and not target and not sl.truck then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
       local before, after = timeline[i - 1], timeline[i + 1]
       local cands, weights = {}, {}
       for _, f in ipairs(T.FLAVOURS) do
         local ch = T.flavourChord(sl.key or key, sl.degree, f, seventh)
+        if f == "dim" and r.colour == "Triads" then ch = nil end
         -- (Not one that drops a named progression's bass note: no sus4 over
         -- Pachelbel's G/B.)
         if ch and sl.bassPc then
@@ -3124,6 +3197,36 @@ function M.spaceBass(bass, timeline, lows)
   return bass
 end
 
+-- (1.14) The bass lying back with the chords: where a chord is pulled, the
+-- bass's note on its beat comes an eighth late, with the chord, and the
+-- note before is held to meet it. (Anything the bass played inside that
+-- eighth goes: it changes where the chords do.) `chordTl` is the pulled
+-- copy of `timeline`, slot for slot.
+function M.pullBass(list, timeline, chordTl)
+  local eps = 1e-9
+  for i, csl in ipairs(chordTl) do
+    if csl.pulled then
+      local at, to = timeline[i].s, csl.s
+      local pitch, onTo
+      for k = #list, 1, -1 do
+        local n = list[k]
+        if math.abs(n.step - at) < eps then pitch = n.pitch end
+        if math.abs(n.step - to) < eps then onTo = true end
+        if n.step > at - eps and n.step < to - eps then table.remove(list, k) end
+      end
+      if pitch and not onTo then
+        local nextAt = csl.e
+        for _, n in ipairs(list) do if n.step > to + eps and n.step < nextAt then nextAt = n.step end end
+        list[#list + 1] = { step = to, len = nextAt - to, pitch = pitch, accent = false }
+      end
+      for _, p in ipairs(list) do
+        if p.step < at - eps and math.abs(p.step + p.len - at) < eps then p.len = to - p.step end
+      end
+      table.sort(list, function(a, b) if a.step ~= b.step then return a.step < b.step end return a.pitch < b.pitch end)
+    end
+  end
+end
+
 -- The kick drum's places in a bar, which the bass can follow.
 function M.kickPattern(meter, r, rnd)
   -- (A named rhythm, 1.11, is the kick's pattern, as it is; drawn nothing.)
@@ -3384,10 +3487,47 @@ local function drumFill(meter, r, rnd, base, from, to)
   return out, kind
 end
 
-function M.drumIdea(meter, r, rnd)
+-- (1.14) Ghost notes: the snare tapped very quietly (`M.GHOST_VELOCITY`,
+-- at any Velocity) on the weakest places in the bar - the sixteenths between
+-- the eighths, or the middle of a triplet - most often just before or after
+-- the backbeat. Chosen once for the idea, so every bar has the same; never
+-- where the snare or the kick already plays, nor in a fill. One draw per
+-- place, so Common keeps Rare's and adds.
+M.GHOST_CHANCE = { Rare = 0.35, Common = 0.8 }
+M.GHOST_AWAY = 0.35     -- a place not next to the backbeat: this much as likely
+M.GHOST_VELOCITY = 38
+
+function M.ghostSteps(meter, g, r, rnd)
+  local chance = M.GHOST_CHANCE[r.ghosts]
+  if not chance or not rnd then return {} end
+  -- (Places by the third of a sixteenth: a triplet kick at 9 1/3 is the
+  -- same place however it was reached.)
+  local function at(x) return math.floor(x * 3 + 0.5) end
+  local taken = {}
+  for _, x in ipairs(g.kick) do taken[at(x)] = true end
+  for _, x in ipairs(g.snare) do taken[at(x)] = true end
+  local places = {}
+  if r.figures == "Triplets" and r.pace ~= "Calm" and meter.beat == 4 then
+    -- (In a shuffle, the middle note of the triplet, which the hats skip.)
+    for b = 0, meter.bar - 1, 4 do places[#places + 1] = b + 4 / 3 end
+  else
+    for t = 1, meter.bar - 1, 2 do places[#places + 1] = t end
+  end
+  local out = {}
+  for _, t in ipairs(places) do
+    local x = rnd()
+    local nearIt = false
+    for _, y in ipairs(g.snare) do if math.abs(t - y) <= 2 then nearIt = true end end
+    if not taken[at(t)] and x < chance * (nearIt and 1 or M.GHOST_AWAY) then out[#out + 1] = t end
+  end
+  return out
+end
+
+function M.drumIdea(meter, r, rnd, ghostRnd)
   local D = M.DRUM
   local bar, bars = meter.bar, r.bars
   local g = drumGroove(meter, r, rnd)
+  local ghosts = M.ghostSteps(meter, g, r, ghostRnd)
   -- The answering bar: one small change, chosen once for the whole idea.
   local change = pickOne(rnd, { "pickup", "double", "open" })
 
@@ -3436,6 +3576,14 @@ function M.drumIdea(meter, r, rnd)
     end
     for _, k in ipairs(kick) do if k < fillFrom then add(base + k, 1, D.kick, k == 0) end end
     for _, x in ipairs(g.snare) do if x < fillFrom then add(base + x, 1, g.snarePitch, true) end end
+    local kickAt = {}
+    for _, k in ipairs(kick) do kickAt[math.floor(k * 3 + 0.5)] = true end
+    for _, x in ipairs(ghosts) do
+      if x < fillFrom and not kickAt[math.floor(x * 3 + 0.5)] then
+        add(base + x, 1, D.snare, false)
+        notes[#notes].ghost = true
+      end
+    end
     for _, t in ipairs(g.time) do
       if t < fillFrom and not (crashes[b] and t == 0) then
         if open[t] and g.timePitch == D.hat then add(base + t, 2, D.open, false)
@@ -3461,7 +3609,7 @@ function M.drumIdea(meter, r, rnd)
   end)
   local fillBars = {}
   for b = 0, bars - 1 do if fills[b] then fillBars[#fillBars + 1] = tostring(b + 1) end end
-  return notes, { style = g.style, fills = fillBars, fillKinds = fillKinds, change = change }
+  return notes, { style = g.style, fills = fillBars, fillKinds = fillKinds, change = change, ghosts = #ghosts }
 end
 
 ------------------------------------------------------------------------------
@@ -3532,8 +3680,9 @@ local function toBlockNotes(list, chan, vel, warp, meter, part)
     if vel == "Shaped" then
       v = M.shapedVelocity(meter, n.step, part, n.accent, top[n.step] and n.pitch < top[n.step])
     end
+    if n.ghost then v = M.GHOST_VELOCITY end
     out[#out + 1] = { start = s / 4, len = (e - s) / 4, pitch = n.pitch, chan = chan,
-                      accent = n.accent, vel = v, tension = n.tension }
+                      accent = n.accent, vel = v, tension = n.tension, ghost = n.ghost }
   end
   table.sort(out, function(a, b)
     if a.start ~= b.start then return a.start < b.start end
@@ -3596,22 +3745,31 @@ function M.make(st, meter, seed)
   local sch, schemaWhy = M.schemaFor(r, key, M.stream(seed, "schema"))
   -- (1.12) Where the key changes, if it does: the timeline keeps the same
   -- chord either side apart there.
-  local changeAt
+  local changeAt, tonicStart
   if r.kind == "Measure" and M.KEY_CHANGE[r.keyChange] then
     -- (For the truck driver, a look at the chords first - the same dice
     -- give the same chords - to find a section that starts on the tonic.)
-    local tonicAt
-    if r.keyChange == "Truck driver" then
+    local tonicAt, canTonic, made
+    if r.keyChange == "Truck driver" and T.scaleLen(key) == 7 then
       local look = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour,
                              sch and M.schemaFor(r, key, M.stream(seed, "schema")))
       tonicAt = function(step)
         local sl = M.chordAt(look, step)
         return sl and sl.degree == 0
       end
+      -- (1.14) Where none starts on the tonic, one may be made to: its first
+      -- chord becomes the tonic, if that leaves its close the chords it
+      -- needs (two for a full close, one for a half).
+      canTonic = function(u)
+        local need = (u.cad == "PAC" or u.cad == "IAC" or u.cad == "DC" or u.cad == "EC") and 2
+                     or ((u.cad ~= "none" and u.cad ~= "open") and 1 or 0)
+        return u.rel and #u.rel > need
+      end
     end
-    changeAt = M.changeAt(plan, meter, tonicAt)
+    changeAt, made = M.changeAt(plan, meter, tonicAt, canTonic)
+    if made then tonicStart = changeAt end
   end
-  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch, changeAt)
+  local timeline = M.harmony(plan, key, r, meter, M.stream(seed, "harmony"), colour, sch, changeAt, tonicStart)
   local keyChange = M.keyChange(plan, timeline, key, r, meter, colour, changeAt)
   M.raiseDominant(timeline, key, colour)
   local borrowed = M.borrow(timeline, key, r, M.stream(seed, "borrow"), colour)
@@ -3700,6 +3858,7 @@ function M.make(st, meter, seed)
     local kick = M.kickPattern(meter, r, M.stream(seed, "drums"))
     local bassList = M.bassPart(ctx, timeline, r, M.stream(seed, "bass"), kick, book and melody)
     if book then M.spaceBass(bassList, timeline, lows) end
+    if r.bassPull == "With the chords" then M.pullBass(bassList, timeline, chordTl) end
     parts[#parts + 1] = { name = "Bass", list = bassList }
   end
   -- (Last, so the other parts keep their channels.)
@@ -3800,7 +3959,8 @@ end
 -- A Drums idea: one part, on channel 10, in one item.
 function M.makeDrums(st, meter, seed, r)
   local total = r.bars * meter.bar
-  local list, info = M.drumIdea(meter, r, M.stream(seed, "kit"))
+  local list, info = M.drumIdea(meter, r, M.stream(seed, "kit"),
+                                (r.ghosts ~= "Off") and M.stream(seed, "ghost") or nil)
   local notes = toBlockNotes(list, 9, r.velocity, M.swingWarp(meter, st.swing), meter, "Drums")
   local block = { parts = { { name = "Drums", notes = notes, chan = 9, drums = true } },
                   notes = {}, beats = total / 4, layout = "one" }

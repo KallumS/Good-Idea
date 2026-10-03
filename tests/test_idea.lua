@@ -22,6 +22,9 @@ local function make(settings, seed, meter)
   -- test that does not say walks, so it tests what it means to; the sweep
   -- says, and plays both.)
   st.progression = "Walk"
+  -- (1.14: and the bass stays on the beat under pulled chords, unless a
+  -- test says.)
+  st.bassPull = "On the beat"
   for k, v in pairs(settings or {}) do st[k] = v end
   I.clampState(st)
   return I.make(st, meter or M44, seed or 1), st
@@ -120,7 +123,19 @@ local function auditDrums(idea, tag)
     local bi = math.floor(step / bar + 1e-9)
     rule("every drum is a General MIDI drum the generator knows", GM[n.pitch] == true, tag .. " " .. n.pitch)
     if n.pitch == I.DRUM.kick and math.abs(step - bi * bar) < 1e-6 then kickOn[bi] = true end
-    if n.pitch == I.DRUM.snare or n.pitch == I.DRUM.clap then backed[bi] = true end
+    if (n.pitch == I.DRUM.snare and not n.ghost) or n.pitch == I.DRUM.clap then backed[bi] = true end
+    -- (1.14) A ghost note: the snare, quiet, on a weak place, alone.
+    if n.ghost then
+      rule("a ghost note is a quiet snare", n.pitch == I.DRUM.snare and n.vel == I.GHOST_VELOCITY, tag)
+      rule("a ghost note falls on a weak sixteenth, or the middle of a triplet",
+           I.strength(meter, step) == 0 and (not I.offGrid(step) or math.abs((step % 4) - 4 / 3) < 1e-6), tag)
+      for _, m in ipairs(b.notes) do
+        if m ~= n and math.abs(m.start - n.start) < 1e-9 then
+          rule("a ghost note never sounds with the kick or another snare",
+               m.pitch ~= I.DRUM.kick and m.pitch ~= I.DRUM.snare and m.pitch ~= I.DRUM.clap and not TOM[m.pitch], tag)
+        end
+      end
+    end
     if TOM[n.pitch] then toms[bi] = true end
     if n.pitch == I.DRUM.crash then crashOn[bi] = (math.abs(step - bi * bar) < 1e-6) end
   end
@@ -165,8 +180,9 @@ local function audit(idea, tag)
       if r.velocity == "Shaped" then
         rule("a shaped velocity is a real one, 1 to 127", n.vel >= 1 and n.vel <= 127, tag)
       else
-        rule("velocity is 100, or 115 when accented",
-             n.vel == 100 or (r.velocity == "Accents" and n.vel == I.ACCENT), tag)
+        rule("velocity is 100, or 115 when accented (a ghost note quiet)",
+             (n.vel == 100 and not n.ghost) or (r.velocity == "Accents" and n.vel == I.ACCENT)
+             or (n.ghost and n.vel == I.GHOST_VELOCITY), tag)
       end
       if not p.drums then
         rule("every pitched note is in the scale sounding under it", inKeyAt(n.start * 4, n.pitch % 12),
@@ -440,7 +456,9 @@ local function audit(idea, tag)
       for _, n in ipairs(bp.notes) do
         local st = n.start * 4
         local arr = false
-        for _, sl in ipairs(tl) do if math.abs(sl.s - st) < 1e-6 then arr = true end end
+        for _, sl in ipairs((r.bassPull == "With the chords") and idea.chordTimeline or tl) do
+          if math.abs(sl.s - st) < 1e-6 then arr = true end
+        end
         rule("a pulsing bass in a named rhythm plays its steps, or where a chord comes",
              inBar[st % meter.bar] or arr, tag .. " " .. r.groove)
       end
@@ -523,7 +541,8 @@ local function audit(idea, tag)
         if u.cad == "HC" then
           local sl
           for _, x in ipairs(idea.timeline) do if (x.beat or x.s) < u.start + u.len and x.e >= u.start + u.len - 1e-9 then sl = x end end
-          if sl and not sl.borrowed and not sl.flavour then
+          -- (An applied chord keeps its seventh: a Fonte's V7/III, 1.14.)
+          if sl and not sl.borrowed and not sl.flavour and not sl.applied then
             rule("by the book, a half close with Mixed is a plain triad", #sl.chord.pcs <= 3, tag .. " " .. idea.chords)
           end
         end
@@ -565,8 +584,9 @@ local function audit(idea, tag)
       rule("the bass stays in the bass", n.pitch >= 28 and n.pitch <= 55, tag)
     end
     -- The bass plays the root on every chord change (or the note an
-    -- inverted chord stands on).
-    for _, sl in ipairs(tl) do
+    -- inverted chord stands on) - where the chords do, if it lies back with
+    -- them (1.14).
+    for _, sl in ipairs((r.bassPull == "With the chords") and idea.chordTimeline or tl) do
       local found = false
       for _, n in ipairs(bp.notes) do
         if math.abs(n.start * 4 - sl.s) < 1e-6 and n.pitch % 12 == I.bassPcOf(sl) then found = true end
@@ -593,7 +613,10 @@ for mi, sig in ipairs(METERS) do
                    voicing = T.VOICINGS[seed % #T.VOICINGS + 1],
                    colour = (seed % 5 == 0) and "Mixed" or "Any",
                    -- (The engine's own choice, 1.13: walk or named, half and half.)
-                   progression = "Any" }
+                   progression = "Any",
+                   -- (1.14: the bass with pulled chords or on the beat, as
+                   -- the engine rolls it; ghost notes in turn.)
+                   bassPull = "Any", ghosts = ({ "Rare", "Common", "Off" })[seed % 3 + 1] }
       -- Every third idea borrows, flavours and inverts on Common.
       if seed % 3 == 2 then st.borrowed, st.flavours, st.inversions, st.applied = "Common", "Common", "Common", "Common" end
       -- Tension (1.10) on Common with the others, off now and then; a
@@ -769,7 +792,8 @@ do
   local seen = {}
   for seed = 1, 400 do
     local kind = I.KINDS[seed % 3 + 1]
-    local idea = make({ kind = kind, root = "Any", scale = "Any", register = "Any", voicing = "Any", progression = "Any" }, seed)
+    local idea = make({ kind = kind, root = "Any", scale = "Any", register = "Any", voicing = "Any", progression = "Any",
+                        bassPull = "Any" }, seed)
     for id in pairs(idea.r.rolled) do
       seen[id] = seen[id] or {}
       seen[id][tostring(idea.r[id])] = true
@@ -927,9 +951,9 @@ end
 do
   local bad = 0
   for seed = 1, 20 do
-    local i7 = make({ kind = "Phrase", content = "Chords", colour = "Sevenths", chordStyle = "Block" }, seed)
+    local i7 = make({ kind = "Phrase", content = "Chords", colour = "Sevenths", chordStyle = "Block", flavours = "Off" }, seed)
     for _, sl in ipairs(i7.timeline) do if #sl.chord.pcs ~= 4 then bad = bad + 1 end end
-    local it = make({ kind = "Phrase", content = "Chords", colour = "Triads", chordStyle = "Block" }, seed)
+    local it = make({ kind = "Phrase", content = "Chords", colour = "Triads", chordStyle = "Block", flavours = "Off" }, seed)
     for _, sl in ipairs(it.timeline) do if #sl.chord.pcs ~= 3 then bad = bad + 1 end end
   end
   eq(bad, 0, "Sevenths are four-note chords, Triads three")
@@ -1466,7 +1490,7 @@ do
     if every then fourOk = fourOk + 1 end
     local half = make({ kind = "Drums", beat = "Half-time", fills = "None", drumBars = 2 }, seed)
     local snares = {}
-    for _, n in ipairs(half.block.notes) do if n.pitch == D.snare then snares[#snares + 1] = n.start % 4 end end
+    for _, n in ipairs(half.block.notes) do if n.pitch == D.snare and not n.ghost then snares[#snares + 1] = n.start % 4 end end
     local only3 = #snares > 0
     for _, x in ipairs(snares) do if x ~= 2 then only3 = false end end
     if only3 then halfOk = halfOk + 1 end
@@ -1585,7 +1609,7 @@ do
       end
     end
     if any then with = with + 1 end
-    for _, st in ipairs({ { colour = "Mixed", flavours = "Off" }, { colour = "Sevenths" }, { colour = "Triads" },
+    for _, st in ipairs({ { colour = "Mixed", flavours = "Off" }, { colour = "Triads", flavours = "Off" },
                           { colour = "Mixed", scale = 10 } }) do
       st.kind = "Measure"
       for _, sl in ipairs(make(st, seed).timeline) do if sl.flavour then off = off + 1 end end
@@ -1594,7 +1618,7 @@ do
   for _, f in ipairs(T.FLAVOURS) do ok(seen[f], "with Mixed and Flavours on Rare, " .. f .. " turns up") end
   ok(with >= n * 0.2 and with <= n * 0.75, ("now and then: in %d of %d Measures"):format(with, n))
   eq(owned, 0, "never the first chord, the last, or a cadence's")
-  eq(off, 0, "and never with Flavours off, with Triads or Sevenths, or in a pentatonic scale")
+  eq(off, 0, "and never with Flavours off, or in a pentatonic scale")
 end
 
 -- A Loop's flavours come round with it: each time round, the same chords
@@ -1637,18 +1661,32 @@ do
       end
       for at, v in pairs(stacks) do
         table.sort(v)
-        local ch = I.chordAt(idea.timeline, math.floor(at * 4 + 0.5)).chord
+        local csl = I.chordAt(idea.timeline, math.floor(at * 4 + 0.5))
+        local ch = csl.chord
         local tag = ("%s seed %d %s"):format(style, seed, ch.name)
         local root = false
         for _, p in ipairs(v) do if p % 12 == ch.rootPc then root = true end end
         if style == "Open" and #v >= 3 then check(v[1] % 12 == ch.rootPc and v[#v] - v[1] > 12, tag .. " spread from its root")
         elseif style == "Shell" and #ch.pcs >= 3 then check(#v == 3 and v[1] % 12 == ch.rootPc, tag .. " three notes on its root")
-        elseif style == "Rootless" and ch.nine and #ch.pcs >= 3 then check(not root, tag .. " has no root")
+        elseif style == "Rootless" and ch.nine and #ch.pcs >= 3 then
+          -- (A chord that has no three notes but its root - a sus2, whose
+          -- ninth is already there - has no rootless voicing: close.)
+          local rest = ch.has[ch.nine] and 0 or 1
+          for _, pc in ipairs(ch.pcs) do if pc ~= ch.rootPc then rest = rest + 1 end end
+          if rest >= 3 then check(not root, tag .. " has no root") end
         elseif style == "Power" then
           local only = v[1] % 12 == ch.rootPc
           for _, p in ipairs(v) do if p % 12 ~= ch.rootPc and (p - ch.rootPc) % 12 ~= 7 then only = false end end
           check(only, tag .. " root and fifth only")
-        elseif (style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4") and #ch.pcs >= 3 then check(#v == 4, tag .. " four voices") end
+        elseif (style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4" or style == "Drop 4") and #ch.pcs >= 3 then
+          check(#v == 4, tag .. " four voices")
+          -- (Drop 4: the lowest a gap under the three close notes above it.)
+          -- (By the book an inverted chord leaves its bass note out above
+          -- it, so its shape is the drop voicing less one note.)
+          if style == "Drop 4" and #v == 4 and not csl.inversion then
+            check(v[4] - v[2] < 12 and v[2] - v[1] > 2, tag .. " three close over a gap")
+          end
+        end
       end
     end
   end
@@ -1820,8 +1858,8 @@ do
     local a = make({ kind = "Motif", flavours = "Off", voicing = "Close", inversions = "Off" }, seed)
     local b = make({ kind = "Motif", flavours = "Rare", voicing = "Rootless", inversions = "Rare" }, seed)
     if fingerprint(a.block.notes) ~= fingerprint(b.block.notes) then bad = bad + 1 end
-    local c = make({ kind = "Measure", colour = "Triads", flavours = "Off" }, seed)
-    local d = make({ kind = "Measure", colour = "Triads", flavours = "Rare" }, seed)
+    local c = make({ kind = "Measure", scale = 10, flavours = "Off" }, seed)
+    local d = make({ kind = "Measure", scale = 10, flavours = "Rare" }, seed)
     if fingerprint(c.block.notes) ~= fingerprint(d.block.notes) then bad = bad + 1 end
   end
   eq(bad, 0, "the new chord settings, hidden, change nothing")
@@ -2144,7 +2182,7 @@ do
                          { "Doo-wop", "Slow", "C Am F G" } }) do
       local idea = make({ kind = "Measure", form = "Loop", measureBars = 16, chordPace = c[2],
                           progression = c[1], scale = 1, root = 1, colour = "Triads",
-                          push = "None", pull = "None" }, seed)
+                          push = "None", pull = "None", flavours = "Off" }, seed)
       local got = {}
       for _, sl in ipairs(idea.timeline) do
         got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
@@ -2274,8 +2312,10 @@ do
     if u3.kind == "repeat" then
       local function marks(u)
         local out = {}
+        -- (But for the last bar: a suspension there is held over into the
+        -- next statement, and the last one has none.)
         for _, n in ipairs(idea.melody) do
-          if n.tension and n.step >= u.start and n.step < u.start + u.len then
+          if n.tension and n.step >= u.start and n.step < u.start + u.len - 16 then
             out[#out + 1] = n.tension .. ":" .. (n.step - u.start)
           end
         end
@@ -2614,14 +2654,15 @@ do
   -- The truck driver: the new key's V just before the change.
   local trucks, good = 0, 0
   for seed = 1, 40 do
-    local idea = make({ kind = "Measure", keyChange = "Truck driver", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+    local idea = make({ kind = "Measure", keyChange = "Truck driver", scale = (seed % 2 == 0) and 2 or 1,
+                        colour = (seed % 3 == 0) and "Mixed" or "Any", flavours = "Common" }, seed)
     local kc = idea.keyChange
     if kc and kc.truck then
       trucks = trucks + 1
       local V = kc.truck
       -- (Up to the change - or to where its first chord is pushed in.)
       local nx = I.chordAt(idea.timeline, V.e)
-      if (V.e == kc.at or (nx.pushed and V.e == kc.at - 2)) and V.chord.quality == "major"
+      if (V.e == kc.at or (nx.pushed and V.e == kc.at - 2)) and V.chord.quality == "major" and not V.flavour
          and (V.chord.rootPc - T.pc(kc.key, 0)) % 12 == 7 then good = good + 1 end
     end
   end
@@ -2639,6 +2680,34 @@ do
     end
   end
   eq(intoTonic, vs, "the truck driver's V always leads to the new key's tonic")
+  -- (1.14) And it happens: where no section starts on the tonic, one is
+  -- made to - all but where the last is no more than its close.
+  local seven, made = 0, 0
+  for seed = 1, 200 do
+    local idea = make({ kind = "Measure", keyChange = "Truck driver", progression = "Any" }, seed)
+    if T.scaleLen(idea.key) == 7 then
+      seven = seven + 1
+      if idea.keyChange and idea.keyChange.truck then made = made + 1 end
+    end
+  end
+  ok(made >= seven * 0.85, ("the truck driver changes gear in nearly every Measure: %d of %d"):format(made, seven))
+  -- And a named applied chord it cuts off from its chord (a Monte's V7/V
+  -- before the new key's V, where the V takes the place of a short chord:
+  -- two a bar in 3/4) is plain again.
+  local cut, seen = 0, 0
+  for seed = 1, 120 do
+    local idea = make({ kind = "Measure", keyChange = "Truck driver", progression = "Monte", scale = 1,
+                        colour = "Sevenths", applied = "Off", flavours = "Off", chordPace = "Two a bar" },
+                      seed, I.meter(3, 4))
+    local tl = idea.timeline
+    for i, sl in ipairs(tl) do
+      if sl.applied and tl[i + 1] then
+        seen = seen + 1
+        if (sl.chord.rootPc - tl[i + 1].chord.rootPc) % 12 ~= 7 then cut = cut + 1 end
+      end
+    end
+  end
+  ok(seen > 50 and cut == 0, ("an applied chord still leads to its chord across a gear change: %d of %d do not"):format(cut, seen))
   -- None, or hidden (not a Measure), changes nothing.
   local hidden = 0
   for seed = 1, 20 do
@@ -2752,6 +2821,27 @@ do
     end
   end
   eq(#bad, 0, "the Do-Re-Mi, the Romanesca, the Fonte and the Monte, as written: " .. table.concat(bad, "; "))
+  -- (1.14) And in C minor: the Meyer and Prinner with the harmonic minor's
+  -- V and vii°6; the Romanesca falling do te le me; the Monte up to V; the
+  -- Fonte from iv down to III.
+  local minor = { Galant = "Cm G/D G/B Cm Fm Cm/Eb Bdim/D Cm", ["Do-Re-Mi"] = "Cm G/B Cm",
+                  Romanesca = "Cm Gm/Bb Ab Cm/Eb", Monte = "C7 Fm7 D7 G7", Fonte = "C7 Fm7 Bb7 Ebmaj7" }
+  local badMinor = {}
+  for name, w in pairs(minor) do
+    for seed = 1, 6 do
+      local idea = make({ kind = "Measure", form = "Loop", measureBars = (name == "Galant") and 16 or 8,
+                          chordPace = "One a bar", progression = name, scale = 2, root = 1,
+                          colour = (name == "Fonte" or name == "Monte") and "Sevenths" or "Triads",
+                          push = "None", pull = "None", flavours = "Off", inversions = "Off" }, seed)
+      local got = {}
+      for _, sl in ipairs(idea.timeline) do
+        got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
+      end
+      local line = table.concat(got, " ")
+      if line:sub(1, #w) ~= w or idea.schema ~= name then badMinor[#badMinor + 1] = name .. ": " .. line end
+    end
+  end
+  eq(#badMinor, 0, "and in a minor key: " .. table.concat(badMinor, "; "))
 end
 
 do
@@ -2764,7 +2854,7 @@ do
     for _, nt in ipairs(idea.block.notes) do
       if nt.start < 4 then
         if nt.pitch == I.DRUM.kick then kicks[#kicks + 1] = ("%g"):format(nt.start * 4) end
-        if nt.pitch == I.DRUM.snare then snares[#snares + 1] = ("%g"):format(nt.start * 4) end
+        if nt.pitch == I.DRUM.snare and not nt.ghost then snares[#snares + 1] = ("%g"):format(nt.start * 4) end
       end
     end
     table.sort(kicks, function(x, y) return tonumber(x) < tonumber(y) end)
@@ -2793,6 +2883,148 @@ do
     end
   end
   ok(sixFour > 10 and doubled >= sixFour * 0.9, ("a six-four keeps its doubled bass: %d of %d"):format(doubled, sixFour))
+end
+
+------------------------------------------------------------------------------
+-- 1.14: flavours with every colour, Drop 4, ghost notes, the bass lying back
+------------------------------------------------------------------------------
+
+do
+  -- Flavours with Triads and Sevenths: a triad takes the colours a triad
+  -- can (no diminished seventh, no 9th); a seventh chord those that keep
+  -- or replace its seventh (no sus2 or added note).
+  local seen = { Triads = {}, Sevenths = {} }
+  local wrong, sus7, sus = 0, 0, 0
+  for seed = 1, 200 do
+    for _, col in ipairs({ "Triads", "Sevenths" }) do
+      local idea = make({ kind = "Measure", colour = col, flavours = "Common", scale = 1 }, seed)
+      for _, sl in ipairs(idea.timeline) do
+        local f = sl.flavour
+        if f then
+          seen[col][f] = true
+          if col == "Triads" and (f == "dim" or f == "9") then wrong = wrong + 1 end
+          if col == "Sevenths" and (f == "sus2" or f == "add2" or f == "add9") then wrong = wrong + 1 end
+          if col == "Sevenths" and f == "sus4" then
+            sus = sus + 1
+            if #sl.chord.pcs == 4 then sus7 = sus7 + 1 end
+          end
+        end
+      end
+    end
+  end
+  for _, f in ipairs({ "sus4", "sus2", "add2", "add9", "6", "6/9" }) do ok(seen.Triads[f], "with Triads, a " .. f .. " turns up") end
+  for _, f in ipairs({ "sus4", "9", "6", "dim" }) do ok(seen.Sevenths[f], "with Sevenths, a " .. f .. " turns up") end
+  eq(wrong, 0, "with Triads no diminished seventh or 9th; with Sevenths no sus2 or added note")
+  ok(sus > 0 and sus7 == sus, ("with Sevenths a sus4 keeps its seventh, a 7sus4: %d of %d"):format(sus7, sus))
+  -- And a Loop of a named progression plays the same flavoured chords each
+  -- time round (its repeats carry the progression on).
+  local differ, n = 0, 0
+  for seed = 1, 40 do
+    local idea = make({ kind = "Measure", form = "Loop", measureBars = 16, chordPace = "One a bar",
+                        progression = "Pachelbel", scale = 1, colour = "Mixed", flavours = "Common",
+                        borrowed = "Off", applied = "Off", push = "None", pull = "None" }, seed)
+    local names = {}
+    for _, sl in ipairs(idea.timeline) do names[#names + 1] = sl.chord.name end
+    if #names == 16 then
+      n = n + 1
+      if table.concat(names, " ", 1, 7) ~= table.concat(names, " ", 9, 15) then differ = differ + 1 end
+    end
+  end
+  ok(n >= 10 and differ == 0, ("a named Loop's flavours come round the same: %d of %d differ"):format(differ, n))
+end
+
+do
+  -- Ghost notes: none with Off; with Rare some, Common keeping Rare's and
+  -- adding; the same places every bar; never in a fill; and the rest of the
+  -- drums as they were.
+  local function ghostsOf(idea)
+    local out = {}
+    for _, nt in ipairs(idea.block.notes) do
+      if nt.ghost then out[#out + 1] = { bar = math.floor(nt.start + 1e-9) // 4, at = nt.start * 4 % 16 } end
+    end
+    return out
+  end
+  local function rest(idea)
+    local out = {}
+    for _, nt in ipairs(idea.block.notes) do if not nt.ghost then out[#out + 1] = nt end end
+    return fingerprint(out)
+  end
+  local offAny, rare, common, lost, inFill, notSame, moved, withRare = 0, 0, 0, 0, 0, 0, 0, 0
+  for seed = 1, 200 do
+    local base = { kind = "Drums", fills = "Every 2 bars", drumBars = 4, pace = "Flowing", figures = "Plain" }
+    local function with(level)
+      local st = {}
+      for k, v in pairs(base) do st[k] = v end
+      st.ghosts = level
+      return make(st, seed)
+    end
+    local off, a, c = with("Off"), with("Rare"), with("Common")
+    offAny = offAny + #ghostsOf(off)
+    if rest(a) ~= rest(off) or rest(c) ~= rest(off) then moved = moved + 1 end
+    local ga, gc = ghostsOf(a), ghostsOf(c)
+    rare, common = rare + #ga, common + #gc
+    if #ga > 0 then withRare = withRare + 1 end
+    local inC, perBar = {}, { {}, {}, {}, {} }
+    for _, g in ipairs(gc) do inC[g.bar .. ":" .. g.at] = true end
+    for _, g in ipairs(ga) do
+      if not inC[g.bar .. ":" .. g.at] then lost = lost + 1 end
+      perBar[g.bar + 1][#perBar[g.bar + 1] + 1] = g.at
+      -- (Fills in bars 2 and 4: at least the last beat.)
+      if (g.bar == 1 or g.bar == 3) and g.at >= 12 then inFill = inFill + 1 end
+    end
+    if table.concat(perBar[1], " ") ~= table.concat(perBar[3], " ") then notSame = notSame + 1 end
+  end
+  eq(offAny, 0, "Ghost notes Off: none")
+  ok(withRare >= 100, ("Ghost notes Rare: in most drum ideas (%d of 200)"):format(withRare))
+  ok(common >= 1.5 * rare, ("Common has more ghost notes than Rare: %d against %d"):format(common, rare))
+  eq(lost, 0, "and keeps every one of Rare's")
+  eq(inFill, 0, "never in a fill")
+  eq(notSame, 0, "the same places in every bar")
+  eq(moved, 0, "and the rest of the drums are as they were")
+end
+
+do
+  -- The bass with pulled chords: on the beat it is the bass with no pull;
+  -- with the chords, it changes where they do, the note before held to meet
+  -- it. The engine decides, half and half; it is not shown.
+  local pulled, follow, early, beatSame, tune = 0, 0, 0, 0, 0
+  for seed = 1, 60 do
+    local base = { kind = "Measure", pull = "Lots", push = "None", chordStyle = "Block" }
+    local function with(over)
+      local st = {}
+      for k, v in pairs(base) do st[k] = v end
+      for k, v in pairs(over) do st[k] = v end
+      return make(st, seed)
+    end
+    local w, o, p = with({ bassPull = "With the chords" }), with({ bassPull = "On the beat" }), with({ pull = "None" })
+    if fingerprint(part(o, "Bass").notes) ~= fingerprint(part(p, "Bass").notes) then beatSame = beatSame + 1 end
+    if fingerprint(part(w, "Melody").notes) ~= fingerprint(part(o, "Melody").notes) then tune = tune + 1 end
+    local bass = part(w, "Bass").notes
+    for _, sl in ipairs(w.chordTimeline) do
+      if sl.pulled then
+        pulled = pulled + 1
+        local late = false
+        for _, nt in ipairs(bass) do
+          local x, e = nt.start * 4, (nt.start + nt.len) * 4
+          if math.abs(x - sl.s) < 1e-6 and nt.pitch % 12 == I.bassPcOf(sl) then late = true end
+          -- Nothing starts or stops on the beat the chord lies back from.
+          if math.abs(x - sl.beat) < 1e-6 or math.abs(e - sl.beat) < 1e-6 then early = early + 1 end
+        end
+        if late then follow = follow + 1 end
+      end
+    end
+  end
+  ok(pulled >= 50, "pulled chords to follow: " .. pulled)
+  eq(follow, pulled, "with the chords, the bass's new note comes where the pulled chord does")
+  eq(early, 0, "and not on the beat: the note before is held to meet it")
+  eq(beatSame, 0, "on the beat, the bass is the bass with no pull")
+  eq(tune, 0, "and the tune is the same either way")
+  local n = 0
+  for seed = 1, 400 do
+    if make({ kind = "Measure", bassPull = "Any" }, seed).r.bassPull == "With the chords" then n = n + 1 end
+  end
+  ok(n >= 160 and n <= 240, ("the engine has the bass lie back in about half the ideas: %d of 400"):format(n))
+  ok(not I.shows(I.BY_ID.bassPull, { kind = "Measure" }), "and it is not shown")
 end
 
 C.done()

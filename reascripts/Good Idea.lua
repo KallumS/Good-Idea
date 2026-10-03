@@ -16,7 +16,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.13
+ * Version:        1.14
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -514,10 +514,11 @@ local function drawArrangement(n)
 end
 
 local function drawDrums(n)
-  fold(n, "Drums", summaryOf({ "beat", "fills", "cymbal" }), function()
+  fold(n, "Drums", summaryOf({ "beat", "fills", "cymbal", "ghosts" }), function()
     settingRow({ "beat" }, 60)
     settingRow({ "fills" }, 60)
     settingRow({ "cymbal" }, 52)
+    settingRow({ "ghosts" }, 52)
   end)
 end
 

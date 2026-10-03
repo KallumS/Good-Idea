@@ -44,7 +44,7 @@ is a pure function of the settings, the metre and the idea number (1 to
 `I.MAX_SEED`, 99999). The dice are Midi Variator's Park-Miller generator
 (`I.random`), and every part of an idea draws from **its own stream**
 (`I.stream(seed, name)`: pick, plan, harmony, rhythm, melody, chords, bass,
-drums, in 1.1 borrow and push, in 1.2 pull and kit, in 1.5 colour and invert, in 1.8 applied, in 1.9 schema, in 1.10 tension, in 1.12 sixnine), so changing how the chords are played
+drums, in 1.1 borrow and push, in 1.2 pull and kit, in 1.5 colour and invert, in 1.8 applied, in 1.9 schema, in 1.10 tension, in 1.12 sixnine, in 1.14 ghost), so changing how the chords are played
 leaves the tune and the bass alone, and a different bass the tune and the
 chords. (A Measure's Pulse bass still takes its kick pattern from the
 `drums` stream, where 1.0's drums drew it.) The tests hold all of that.
@@ -65,7 +65,8 @@ same idea, and one setting's change leave the others' choices alone:
   `drums` switch, since 1.2 ([0013](docs/decisions/0013-drums-are-a-kind-of-idea.md)).
 - A setting the engine decides is **`hidden`** (1.13): never shown
   (`I.shows`), left alone by Keep, but rolled - Progression (Walk or Any
-  named, half and half), Part-writing (By the book), Form (all ten evenly).
+  named, half and half), Part-writing (By the book), Form (all ten evenly),
+  Bass pull (1.14: On the beat or With the chords, half and half).
 - Every Off / Rare setting also has **Common** (1.6): the same draws with
   a higher threshold, so Common only ever adds to what Rare does.
 - **A value is never renamed**; its label is (`name(v)`): the chord pace
@@ -154,7 +155,12 @@ everywhere means strength >= 2.
      - **invert, borrow and applied skip a spec'd slot**, a flavour must
      keep its bass, and the merge keeps the Meyer's V4/3 V6/5 apart. A
      repeat (no shift) carries the list on, its tune `fit`, until `sch.at`
-     is back where its source began (`u.schemaAt`), then copies. The
+     is back where its source began (`u.schemaAt`), then copies. (1.14) A
+     repeat that carries the list on to a point an earlier unit of the same
+     length and close began at plays that unit's chords (a `twin`), so a
+     Loop comes round the same, flavours and all. Each progression has a
+     `major` and, where it can, a `minor` list (1.14: the galant ones too -
+     the Fonte in minor goes iv to III, since ii is diminished). The
      Blues goes a chord a bar by absolute bar (`sch.blues`). 1.13 added the
      Do-Re-Mi, Romanesca, Fonte and Monte; a spec may be `appliedTo` a degree
      (its V, `I.appliedKey`, `sl.applied.named`), plain again if a close cuts
@@ -192,16 +198,23 @@ everywhere means strength >= 2.
      `I.pull` makes a **copy** of the timeline (`idea.chordTimeline`) with
      some chord changes an eighth late (`sl.s + 2`, `sl.pulled`, the chord
      before held to meet it). **Only the chords part plays from the copy**;
-     the tune and bass use the timeline on the beat.
+     the tune and bass use the timeline on the beat - but with Bass pull
+     With the chords (1.14, hidden, half the ideas), `I.pullBass` moves the
+     bass's change at a pulled chord to where the chord comes, after
+     `spaceBass`, holding the note before.
    - **flavour** ([0018](docs/decisions/0018-flavours-voicings-and-inversions.md)):
-     `I.flavour`, with Mixed and Flavours on Rare, after borrowing - about
+     `I.flavour`, with Flavours on Rare (any colour since 1.14; with Triads
+     no `dim`, and `seventh` - whether the chord has one - rules out the
+     rest that do not fit), after borrowing - about
      one chord in five that may (`I.FLAVOUR_CHANCE`; half on Common) becomes
      `T.flavourChord`: sus4, sus2, add2 (inside), add9 (on top), 9, 6 (half
      of them 6/9 since 1.12, on the `sixnine` stream; 6/9 is not in
      `T.FLAVOURS`, so older draws are unchanged), or the
      diminished seventh a third up. In key, offered only where the interval
      is real; keeps `sl.degree`; never the first, last or a cadence's chord
-     (`cadenceSlots`), never a borrowed one; `sl.flavour`.
+     (`cadenceSlots`), never a borrowed one, nor the truck driver's V, nor a
+     chord whose copy is a cadence's (`blocked`: the copy could not follow
+     it); `sl.flavour`.
    - **invert** (0018): `I.invert`, after the push - about one chord in four
      that could (`I.INVERT_CHANCE`; three in five on Common): first
      inversion where the bass steps in or out; second only as the textbooks
@@ -229,7 +242,10 @@ everywhere means strength >= 2.
      skip moved slots. The truck driver only goes where the new tonic
      arrives: `I.changeAt` takes `tonicAt` (a look at the harmony first, the
      same dice giving the same chords) and picks the last section starting
-     on the tonic. `idea.keyChange.text` for the window.
+     on the tonic; where none does (1.14), the latest that can is made to
+     (`canTonic`: its first chord the tonic, if its close keeps the chords it
+     needs; `harmony`'s `tonicAt`), and a named applied chord the truck's V
+     cuts off is plain again. `idea.keyChange.text` for the window.
    Flavours and inversions follow a copied chord's original (`rs.orig` ->
    `sl.origin`): a repeat or a Loop comes round the same.
    Borrowing and pushing touch one occurrence of the harmony, so even an
@@ -301,7 +317,8 @@ everywhere means strength >= 2.
 6. **parts** - `chordsPart` (voiced by `T.voiceAs` in the Voicing chosen -
    Close is `T.voice`, close position nearest the chord before, unchanged;
    Open, Drop 2, Drop 3, Drop 2 & 4, Shell, Rootless as 0018 says, Power
-   (1.12: root, fifth, octave; outside Any), reaching
+   (1.12: root, fifth, octave; outside Any), Drop 4 (1.14: the lowest of
+   four close notes dropped; outside Any), reaching
    down to G2 and then over the tune before giving up to Close; Block /
    Pulse / Broken with an arpeggio pattern; under a Phrase, the bass note in
    the bass, under the voicing but for Close), `bassPart` (Held / Pulse - on the kick
@@ -370,6 +387,12 @@ everywhere means strength >= 2.
    the dembow (kick every beat, snare 3 6 11 14; 4/4 only); an answering
    bar's open hat falls back to the pickup on the ride or under quarter
    hats, and the pickup to the "a" of 4 where the snare has the "and".
+   1.14: **ghost notes** (`I.ghostSteps`, the `ghost` stream, Off / Rare /
+   Common): snare at `I.GHOST_VELOCITY` (`nt.ghost`, quiet at any Velocity)
+   on the odd sixteenths (a shuffle's middle triplet), a place within a
+   sixteenth of the snare likeliest (`GHOST_AWAY` elsewhere); never with the
+   kick or snare (places compared in thirds of a sixteenth), never in a
+   fill; the same every bar.
 
 The weights in `IV_WEIGHT`, `PULL`, `MOVES` and the rhythm tables were set by
 reading `tools/demo.lua` output. If you change one, read the demo for every
@@ -482,11 +505,11 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 
 | | |
 | --- | --- |
-| `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition, and the low interval limit. |
-| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 640,000 checks in all); then by name: the same number is the same idea, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), Common against Rare, part-writing by the book against Free (doubling, sevenths, the bass's spacing, the chords under the tune, parallels, half closes), shaped velocity, applied chords (rates, bent notes, D7 in C and the tune's F#, Loops, hidden) the 1.8 forms and deceptive close, named progressions (each as written, the blues bar by bar, the fallback and its reason, Any named suiting the key, a flavoured named chord keeping its bass), tension and the second voice (rates, all three kinds, Common keeping Rare's, a Loop leaning alike, the resolution left out by the book and kept under a 9-8, hidden, the tune untouched by a second voice, channels and tracks), the 1.11 chord styles and named rhythms (in chords, bass and kick, Syncopated elsewhere, never rolled), and 1.12's 6/9 (half the 6s, the same round a Loop), Power (root and fifth, never rolled) and key change (the same degrees moved up, the tune with them, from B to the C# above, the new key from the change even after Puff's I, the truck driver's V into the new tonic, hidden in a Phrase), and 1.13's hidden settings (not shown, half the ideas named, every form about one in ten, Keep leaving them), what outlines a triad, the minor V (and the tune's leading note; Aeolian's v kept), the evaded close (half Extended's stretches, on I6, the tune leaping up), the Do-Re-Mi, Romanesca, Fonte and Monte as written, the dembow (and a backbeat in 3/4), and the six-four's doubled bass. The tests' `make` walks unless a test names a progression. The sweep plays every idea in one of the seven voicings, every third on Common, every fifth with Free part-writing, every fourth Measure in a 1.8 form, every third idea with a named progression (the rest as the engine rolls it), Tension on Common with the other Commons (Off every seventh), a second voice every fourth, a 1.11 chord style every sixth and a named rhythm every fifth, a key change every seventh Measure (and Power among the voicings), and checks by the book on the rest. `GOOD_IDEA_SAY=1` prints passing checks too, with their numbers. |
+| `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition (Drop 4 since 1.14), and the low interval limit. |
+| `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 640,000 checks in all); then by name: the same number is the same idea, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), Common against Rare, part-writing by the book against Free (doubling, sevenths, the bass's spacing, the chords under the tune, parallels, half closes), shaped velocity, applied chords (rates, bent notes, D7 in C and the tune's F#, Loops, hidden) the 1.8 forms and deceptive close, named progressions (each as written, the blues bar by bar, the fallback and its reason, Any named suiting the key, a flavoured named chord keeping its bass), tension and the second voice (rates, all three kinds, Common keeping Rare's, a Loop leaning alike, the resolution left out by the book and kept under a 9-8, hidden, the tune untouched by a second voice, channels and tracks), the 1.11 chord styles and named rhythms (in chords, bass and kick, Syncopated elsewhere, never rolled), and 1.12's 6/9 (half the 6s, the same round a Loop), Power (root and fifth, never rolled) and key change (the same degrees moved up, the tune with them, from B to the C# above, the new key from the change even after Puff's I, the truck driver's V into the new tonic, hidden in a Phrase), and 1.13's hidden settings (not shown, half the ideas named, every form about one in ten, Keep leaving them), what outlines a triad, the minor V (and the tune's leading note; Aeolian's v kept), the evaded close (half Extended's stretches, on I6, the tune leaping up), the Do-Re-Mi, Romanesca, Fonte and Monte as written, the dembow (and a backbeat in 3/4), and the six-four's doubled bass; and 1.14's flavours with Triads and Sevenths (the ones each can take, a 7sus4 keeping its seventh), a named Loop's flavours the same each time round, ghost notes (none when Off, in most ideas on Rare, Common keeping Rare's, never in a fill, the same every bar, the rest of the drums unchanged), the bass with pulled chords (changing where they come, the note before held, on the beat the bass with no pull, the tune the same, half the ideas, not shown), the galant schemata in minor as written, the truck driver changing gear in nearly every Measure, and an applied chord it cuts off made plain. The tests' `make` walks unless a test names a progression, and keeps the bass on the beat under pulled chords unless a test says. The sweep plays every idea in one of the seven voicings, every third on Common, every fifth with Free part-writing, every fourth Measure in a 1.8 form, every third idea with a named progression (the rest as the engine rolls it), Tension on Common with the other Commons (Off every seventh), a second voice every fourth, a 1.11 chord style every sixth and a named rhythm every fifth, a key change every seventh Measure (and Power and Drop 4 among the voicings), ghost notes in turn and the bass pull as the engine rolls it (1.14), and checks by the book on the rest; a ghost note is checked as a quiet snare on a weak place, alone. `GOOD_IDEA_SAY=1` prints passing checks too, with their numbers. |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
 | `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
-| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (shown only with Mixed), the eight voicings, inversions, Progression, Part-writing and Form not shown (1.13), a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
+| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (with every colour since 1.14), the nine voicings, inversions, Progression, Part-writing and Form not shown (1.13), a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the time signature, saved and nonsense settings. |
 
 The sweep tallies each rule over every note it applies to and reports the
 rule once, with a count and the first idea that broke it. **Run the deep
@@ -562,7 +585,7 @@ hash, so a release is: commit the code, then add a new `<version>` block
 pointing at that commit. Never edit an existing one. ReaPack keys a package by
 its name, so do not rename `Good Idea.lua`.
 
-Every change the user asks for has been a release (1.0 to 1.13 so far), in
+Every change the user asks for has been a release (1.0 to 1.14 so far), in
 this order:
 
 1. Read the demo before; make the change; read the demo after.
@@ -649,6 +672,9 @@ MISSED / DID NOT APPLY):
   `GOOD_IDEA_SAY=1` and see their counts.
 - A sabotage that hangs or crashes is caught only in effect: make a cleaner
   one (a hang found `fit`'s unbounded search).
+- **Never sabotage by hand in the working tree**: undoing it with `git
+  checkout` threw away every uncommitted 1.14 change in that file (saved
+  only by a stash made a moment before). `bite.sh` works on a copy.
 - `bite.sh` copies the working tree as each bite starts: **do not edit
   the code while a batch runs**. A batch of a dozen takes 30-60 minutes;
   give the background job a long timeout (the default stops it at 30).
@@ -697,19 +723,18 @@ mid-task: background jobs stop (restart them), the working tree and the
 scratchpad survive; commit often - the stop hook asks for a clean, pushed
 tree at the end of every turn.
 
-**Left open** (none asked for yet): not run inside REAPER; a separate Drop
-4; out-of-key colour (a passing #iv dim7, the Neapolitan, augmented sixths)
-- 0006 keeps chords in key; flavours for Triads or Sevenths; ghost notes
-and per-drum choices in drum ideas; a drum idea matched to a Measure's
-kick-and-bass; pull for the bass; with Mixed figures, a dotted tune can rub
-against triplet chords on the same beat; which steps are open is not
-remembered between sessions. From 1.7-1.13: the Form row is hidden (one
-line in `drawArrangement` and `hidden` in its setting to bring back); the
-truck driver falls back to a plain step up in about a third of Measures (no
-section after half way starts on the tonic); Fill strokes come where the
-tune rests only about half the time (the rest are chord changes under a
-moving tune); the galant schemata are major-key but the Do-Re-Mi; the
-Ponte, the Aprile and the Pastorella are not separate (the last two share
-the Meyer's and the Do-Re-Mi's chords); "no more than two leaps in a row"
-(the cantus firmus's other rule) is not enforced; the leaps rule is not
-checked in the whole-tone and diminished scales.
+**Left open** (none asked for yet): not run inside REAPER; out-of-key
+colour (a passing #iv dim7, the Neapolitan, augmented sixths) - 0006 keeps
+chords in key; per-drum choices in drum ideas; a drum idea matched to a
+Measure's kick-and-bass; with Mixed figures, a dotted tune can rub against
+triplet chords on the same beat; which steps are open is not remembered
+between sessions. From 1.7-1.14: the Form row is hidden (one line in
+`drawArrangement` and `hidden` in its setting to bring back); the truck
+driver steps up plainly in about 1 Measure in 13 (the last section is only
+its close); Fill strokes come where the tune rests only about half the time
+(the rest are chord changes under a moving tune); the Ponte, the Aprile and
+the Pastorella are not separate (the last two share the Meyer's and the
+Do-Re-Mi's chords); "no more than two leaps in a row" (the cantus firmus's
+other rule) is not enforced; the leaps rule is not checked in the
+whole-tone and diminished scales; a Rootless sus2 triad (no three notes
+but its root) is played close; ghost notes only on the snare.

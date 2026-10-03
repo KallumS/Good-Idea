@@ -76,8 +76,9 @@ that make music sound like music:
 - **Named progressions.** Half the time, instead of the walk, the chords
   play a progression you know that suits the key: doo-wop, Pachelbel, the
   lament, the blues, the circle of fifths, the galant Meyer and Prinner,
-  Do-Re-Mi, Romanesca, Fonte and Monte, and others - with their basses as
-  written (Pachelbel's G/B, the Prinner's C/E). The summary line says which.
+  Do-Re-Mi, Romanesca, Fonte and Monte (in major and minor keys), and
+  others - with their basses as written (Pachelbel's G/B, the Prinner's
+  C/E). The summary line says which.
 - **Minor keys** close on a major V, its third the raised leading note
   (G B D in C minor), and the tune takes the B natural with it; the modes
   keep their own minor v.
@@ -128,7 +129,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    a dotted quarter in and arpeggios go long-short); the **push** (None,
    Some, Lots: chords arriving an eighth early, the tune and bass with them);
    the **pull** (None, Some, Lots: the chords played an eighth late, laid
-   back, while the tune and bass stay on the beat); and **Swing**, a slider from 0 (straight) to
+   back, while the tune stays on the beat - and the bass, in about half the
+   ideas, lies back with the chords; the engine decides); and **Swing**, a slider from 0 (straight) to
    100% (full triplet swing, the off-beat eighth two thirds of the way
    through the beat). Swing is not rolled by Any - it is your groove, and it
    is kept between sessions. In 6/8 and 12/8 there is no slider (they are in
@@ -146,12 +148,12 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
 5. **Chords**:
    - **Colour** - Triads; Sevenths; or Mixed: sevenths where they pull,
      added ninths elsewhere.
-   - **Flavours** (with Mixed) - Off, Rare or Common (about half the chords
-     that can). Now and then a chord becomes a sus4 or sus2, an add2 or
-     add9, a 6th (half the time a 6/9, with the ninth on top), a 9th, or the
-     diminished chord on its third (G7 becomes
-     Bm7b5). Always built from the scale; never the first chord or the
-     cadence.
+   - **Flavours** (with every colour since 1.14) - Off, Rare or Common
+     (about half the chords that can). Now and then a chord becomes a sus4
+     or sus2, an add2 or add9, a 6th (half the time a 6/9, with the ninth on
+     top); and where the chords have sevenths, a 7sus4, a 9th, or the
+     diminished chord on its third (G7 becomes Bm7b5). Always built from
+     the scale; never the first chord or the cadence.
    - **Chord pace** - 0.5 a bar (a chord every two bars), 1 a bar, 1.5 a
      bar (three chords over two bars, 3+3+2 beats), 2 a bar, or 4 a bar (a
      chord on every beat; three a bar in 3/4). Any rolls 0.5, 1 and 2; 1.5
@@ -165,7 +167,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      second and fourth from the top dropped an octave); Shell (root, third
      and seventh); Rootless (third, fifth, seventh and ninth - the bass has
      the root); and, to choose, Power (root, fifth, octave: the rock power
-     chord).
+     chord) and Drop 4 (the lowest of four close notes dropped an octave:
+     three close notes over a gap).
    - **Inversions** - Off, Rare or Common. Now and then the third, fifth or
      seventh in the bass, only where it makes the bass move by step (C G/B
      Am; V4/2 falling to I6), and a six-four only where the textbooks allow
@@ -184,14 +187,17 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
    new chord), and a **key change** for the last section: None, Step up (a
    whole tone), Half step up, or Truck driver (a whole tone, through the
-   new key's V7 - C ... A7 | D). The window says where it changes, and to
-   what. A Measure has no drums: make a groove with **Drums**, the
+   new key's V7 - C ... A7 | D - into the new key's tonic: if no section
+   in the second half starts on the tonic, one is made to). The window says
+   where it changes, and to what. A Measure has no drums: make a groove with **Drums**, the
    fourth kind, and put it on a track of its own.
 7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
    **beat** (Backbeat, Half-time, Four on the floor, Breakbeat, Reggaeton -
    the kick on every beat under the snare's 3+3+2), the
-   **fills** (None, At the end, Every 4 bars, Every 2 bars) and the
-   **cymbal** (Hats, or Ride).
+   **fills** (None, At the end, Every 4 bars, Every 2 bars), the
+   **cymbal** (Hats, or Ride) and **ghost notes** (Off, Rare - the default -
+   or Common: the snare tapped very quietly on the sixteenths, mostly
+   around the backbeat, the same in every bar).
 
 Steps that mean nothing for what you have chosen are not shown: a Motif has
 no chords to set, a chords-only Phrase has no melody, Drums have no key.

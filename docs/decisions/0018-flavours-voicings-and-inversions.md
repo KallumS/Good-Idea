@@ -3,7 +3,9 @@
 Taken 2026-10-02. Stands. Widens [0006](0006-chords-stay-in-the-key.md)
 (every new chord is still built from the scale). In 1.6 the six-four rules
 were tightened against the textbooks, diminished triads favour first
-inversion, and every Rare setting gained Common (see the end).
+inversion, and every Rare setting gained Common (see the end). Widened by
+[0026](0026-flavours-ghosts-bass-pull-minor-schemata.md): flavours with
+Triads and Sevenths too, and a Drop 4 voicing.
 
 ## Context
 

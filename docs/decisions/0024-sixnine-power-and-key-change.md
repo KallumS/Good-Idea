@@ -2,7 +2,9 @@
 
 Taken 2026-10-03. Stands. Widens [0018](0018-flavours-voicings-and-inversions.md)
 (a flavour and a voicing) and [0006](0006-chords-stay-in-the-key.md) (the
-last section may be in another key).
+last section may be in another key). Changed by
+[0026](0026-flavours-ghosts-bass-pull-minor-schemata.md): the truck driver
+makes a section start on the new tonic where none does.
 
 ## Context
 

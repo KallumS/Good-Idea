@@ -571,7 +571,9 @@ ok(rowShown("flavours"), "Flavours shows with Mixed")
 clickIn("flavours", "Off")
 eq(chosenIn("flavours"), "Off", "and can be turned off")
 clickIn("colour", "Triads")
-ok(not rowShown("flavours"), "and is hidden with Triads, where it would do nothing")
+ok(rowShown("flavours"), "and with Triads (1.14): a sus, an added 2nd or 9th, a 6th")
+clickIn("colour", "Sevenths")
+ok(rowShown("flavours"), "and with Sevenths: a 7sus4, a 9th, a 6th, a diminished chord")
 -- 1.13: the engine decides the progression, the part-writing and the form.
 clickIn("kind", "Measure")
 openAll()
@@ -581,7 +583,8 @@ clickIn("voicing", "Drop 2 & 4")
 eq(chosenIn("voicing"), "Drop 2 & 4", "a voicing can be chosen")
 local voicings = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "voicing" then voicings[#voicings + 1] = b end end
-eq(table.concat(voicings, ","), "Any,Close,Open,Drop 2,Drop 3,Drop 2 & 4,Shell,Rootless,Power", "eight voicings (Power since 1.12), and Any")
+eq(table.concat(voicings, ","), "Any,Close,Open,Drop 2,Drop 3,Drop 2 & 4,Shell,Rootless,Power,Drop 4",
+   "nine voicings (Power since 1.12, Drop 4 since 1.14), and Any")
 clickIn("inversions", "Off")
 eq(chosenIn("inversions"), "Off", "inversions can be turned off")
 

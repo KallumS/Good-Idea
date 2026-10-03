@@ -926,7 +926,7 @@ end
 -- thirds down there are mud.
 ------------------------------------------------------------------------------
 
-M.VOICINGS = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless", "Power" }
+M.VOICINGS = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless", "Power", "Drop 4" }
 
 -- What a note is in its chord, by its distance above the root.
 local function roleOf(ch, pc)
@@ -992,7 +992,7 @@ local function shapes(ch, style)
       end
     end
     out[1] = { order = order }
-  elseif style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4" then
+  elseif style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4" or style == "Drop 4" then
     -- (A two-note chord - the pentatonic scales' third without a fifth - has
     -- nothing to drop; it stays in close position.)
     if #pcs < 3 then return out end
@@ -1039,7 +1039,9 @@ local function shapes(ch, style)
   return out
 end
 
-local DROPS = { ["Drop 2"] = { 2 }, ["Drop 3"] = { 3 }, ["Drop 2 & 4"] = { 2, 4 } }
+-- (1.14) Drop 4: the lowest of four close notes dropped an octave - three
+-- close notes over a gap.
+local DROPS = { ["Drop 2"] = { 2 }, ["Drop 3"] = { 3 }, ["Drop 2 & 4"] = { 2, 4 }, ["Drop 4"] = { 4 } }
 
 local function muddy(notes)
   for i = 2, #notes do

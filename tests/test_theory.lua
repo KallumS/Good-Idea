@@ -394,10 +394,11 @@ do
         if style == "Close" then check(close(v), tag .. " is inside an octave")
         elseif style == "Open" then
           check(v[1] % 12 == ch.rootPc and v[#v] - v[1] > 12, tag .. " has the root at the bottom and spreads past an octave")
-        elseif style == "Drop 2" or style == "Drop 3" then
+        elseif style == "Drop 2" or style == "Drop 3" or style == "Drop 4" then
           local c, at = undrop(v, 1)
-          check(#v == 4 and closeFour(c) and at[1] == ((style == "Drop 2") and 2 or 3),
-                tag .. " is four notes in close position with the " .. ((style == "Drop 2") and "second" or "third") .. " from the top dropped")
+          local k = ({ ["Drop 2"] = 2, ["Drop 3"] = 3, ["Drop 4"] = 4 })[style]
+          check(#v == 4 and closeFour(c) and at[1] == k,
+                tag .. " is four notes in close position with the " .. ({ "", "second", "third", "fourth" })[k] .. " from the top dropped")
         elseif style == "Drop 2 & 4" then
           local c, at = undrop(v, 2)
           check(#v == 4 and closeFour(c) and at[1] == 2 and at[2] == 4, tag .. " is close position with the second and fourth dropped")
