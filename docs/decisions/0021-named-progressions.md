@@ -7,7 +7,9 @@ lament's VII and the double plagal's bVII do) and
 list rather than the walk). Widened by
 [0025](0025-the-engine-decides-more.md): the Do-Re-Mi, Romanesca, Fonte and
 Monte, and the Progression row is no longer shown - half the ideas walk,
-half take a named progression that suits the key.
+half take a named progression that suits the key. Widened again by
+[0028](0028-common-tone-swiss-and-the-schemata-tunes.md): the Aprile,
+Pastorella and Ponte, and a schema's tune on each stage.
 
 ## Context
 

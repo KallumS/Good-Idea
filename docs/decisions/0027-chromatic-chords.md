@@ -3,7 +3,9 @@
 Taken 2026-10-03. Stands. Widens [0006](0006-chords-stay-in-the-key.md)
 (a third kind of chord from outside the key, after
 [0011](0011-borrowed-chords-rarely-and-named.md)'s borrowed chords and
-[0020](0020-applied-chords-cadences-and-forms.md)'s applied ones).
+[0020](0020-applied-chords-cadences-and-forms.md)'s applied ones). Widened by
+[0028](0028-common-tone-swiss-and-the-schemata-tunes.md): the Swiss sixth
+and the common-tone diminished seventh, left out here.
 
 ## Context
 

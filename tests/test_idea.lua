@@ -279,17 +279,29 @@ local function audit(idea, tag)
              and #sl.chord.pcs == 3 and I.bassPcOf(sl) == (do0 + 5) % 12, tag .. " " .. idea.chords)
       else
         local want = { (do0 + 8) % 12, do0, (do0 + 6) % 12 }
-        if c.kind == "Fr+6" then want[4] = (do0 + 2) % 12 elseif c.kind == "Ger+6" then want[4] = (do0 + 3) % 12 end
+        -- (The Swiss, 1.16: ri - the German's me, spelled up.)
+        if c.kind == "Fr+6" then want[4] = (do0 + 2) % 12 elseif c.kind == "Ger+6" or c.kind == "Sw+6" then want[4] = (do0 + 3) % 12 end
         local okNotes = #sl.chord.pcs == #want and I.bassPcOf(sl) == (do0 + 8) % 12
         for _, pc in ipairs(want) do if not sl.chord.has[pc] then okNotes = false end end
         rule("an augmented sixth is le do fi (and re or me), le in the bass", okNotes, tag .. " " .. idea.chords)
       end
-      if c.kind == "Ger+6" then
-        rule("a German sixth goes through the cadential six-four to V",
+      if c.kind == "Ger+6" or c.kind == "Sw+6" then
+        rule("a German or Swiss sixth goes through the cadential six-four to V",
              nx and nx.degree == 0 and nx.inversion == 2 and I.bassPcOf(nx) == T.pc(key, 4) and V(nx2), tag .. " " .. idea.chords)
       else
         rule("a Neapolitan or an augmented sixth goes to V", V(nx), tag .. " " .. idea.chords)
       end
+    end
+    -- A common-tone diminished seventh (1.16): fully diminished, between two
+    -- statements of the same major chord, whose root it holds in the bass.
+    if sl.commonTone then
+      local pv, nx = tl[i - 1], tl[i + 1]
+      local full = #sl.chord.pcs == 4
+      for j = 2, #sl.chord.pcs do if (sl.chord.pcs[j] - sl.chord.pcs[j - 1]) % 12 ~= 3 then full = false end end
+      rule("a common-tone diminished seventh sits between the same chord, holding its root in the bass",
+           full and pv and nx and pv.chord.name == nx.chord.name and pv.chord.quality == "major"
+           and I.bassPcOf(sl) == pv.chord.rootPc and I.bassPcOf(pv) == pv.chord.rootPc and I.bassPcOf(nx) == nx.chord.rootPc
+           and sl.chord.has[pv.chord.rootPc], tag .. " " .. idea.chords)
     end
     if sl.applied and sl.applied.passing then
       local pv, nx = tl[i - 1], tl[i + 1]
@@ -403,7 +415,15 @@ local function audit(idea, tag)
         if q and not n.first and not p.first and r.scale < 14 then
           local i1, i2 = p.pos - q.pos, n.pos - p.pos
           if math.abs(i1) >= 2 and math.abs(i2) >= 2 and i1 * i2 > 0 then
-            rule("two leaps the same way outline a triad", I.outlinesTriad(q.pitch, p.pitch, n.pitch),
+            -- (Nor where all three are notes of a diminished chord sounding
+            -- under them, on its beats - a sequence arpeggiating vii°, which
+            -- leaves no other way: 1.16.)
+            local function onDim(nt)
+              local ch = I.chordAt(tl, nt.step).chord
+              return ch.quality == "diminished" and ch.has[nt.pitch % 12]
+            end
+            local dimArp = onDim(q) and onDim(p) and onDim(n)
+            rule("two leaps the same way outline a triad", dimArp or I.outlinesTriad(q.pitch, p.pitch, n.pitch),
                  ("%s %s %s %s"):format(tag, T.pitchName(q.pitch), T.pitchName(p.pitch), T.pitchName(n.pitch)))
           end
         end
@@ -2093,7 +2113,7 @@ do
         end
       end
       if any then ideas[lvl] = ideas[lvl] + 1 end
-      if lvl ~= "Off" and #idea.applied == (function() local k = 0 for _, sl in ipairs(tl) do if sl.applied then k = k + 1 end end return k end)() then said = said + 1 end
+      if lvl ~= "Off" and #idea.applied == (function() local k = 0 for _, sl in ipairs(tl) do if sl.applied or sl.commonTone then k = k + 1 end end return k end)() then said = said + 1 end
     end
   end
   eq(count.Off, 0, "with Applied off, no applied chords")
@@ -3224,6 +3244,134 @@ do
   end
   ok(n >= 30 and moved == 0, ("and its neighbours take no flavour: %d of %d do"):format(moved, n))
   eq(off, 0, "with Applied off, none")
+end
+
+------------------------------------------------------------------------------
+-- 1.16: the common-tone diminished seventh, the Swiss sixth, the Aprile,
+-- the Pastorella and the Ponte, and the schemata's tunes
+------------------------------------------------------------------------------
+
+do
+  -- The common-tone diminished seventh: with Applied, now and then a held I
+  -- or V coloured by #ii°7 or #vi°7; none with Triads or with Applied off;
+  -- the window says it.
+  local seen, rare, triads, off, said = 0, 0, 0, 0, 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", applied = "Common", colour = "Sevenths", chordPace = "One a bar" }, seed)
+    for _, sl in ipairs(idea.timeline) do if sl.commonTone then seen = seen + 1 end end
+    for _, a in ipairs(idea.applied) do if a.text:find("common-tone", 1, true) then said = said + 1 end end
+    for _, sl in ipairs(make({ kind = "Measure", applied = "Rare", colour = "Sevenths", chordPace = "One a bar" }, seed).timeline) do
+      if sl.commonTone then rare = rare + 1 end
+    end
+    for _, sl in ipairs(make({ kind = "Measure", applied = "Common", colour = "Triads" }, seed).timeline) do
+      if sl.commonTone then triads = triads + 1 end
+    end
+    for _, sl in ipairs(make({ kind = "Measure", applied = "Off", colour = "Sevenths" }, seed).timeline) do
+      if sl.commonTone then off = off + 1 end
+    end
+  end
+  ok(seen >= 30 and seen > rare and rare > 0, ("common-tone diminished sevenths: %d on Common, %d on Rare, in 300 Measures"):format(seen, rare))
+  eq(said, seen, "and the window names each")
+  eq(triads, 0, "none with Triads")
+  eq(off, 0, "none with Applied off")
+end
+
+do
+  -- The Swiss sixth: in major keys only, through the cadential six-four;
+  -- the German still in both.
+  local swissMajor, swissMinor, gerMajor = 0, 0, 0
+  for seed = 1, 400 do
+    for _, scale in ipairs({ 1, 2 }) do
+      local idea = make({ kind = "Measure", borrowed = "Common", applied = "Off", colour = "Sevenths", scale = scale }, seed)
+      for _, c in ipairs(idea.chromatic) do
+        if c.kind == "Sw+6" then if scale == 1 then swissMajor = swissMajor + 1 else swissMinor = swissMinor + 1 end end
+        if c.kind == "Ger+6" and scale == 1 then gerMajor = gerMajor + 1 end
+      end
+    end
+  end
+  ok(swissMajor >= 5, "the Swiss sixth turns up in major keys: " .. swissMajor)
+  eq(swissMinor, 0, "and never in minor")
+  ok(gerMajor >= 3, "the German still turns up in major: " .. gerMajor)
+end
+
+do
+  -- The Aprile, the Pastorella and the Ponte, as written; and the schemata
+  -- sing their tunes: the first note of each stage the degree it names.
+  local want = { major = { Aprile = "C G/D G/B C", Pastorella = "Cmaj7 G7 Cmaj7", Ponte = "Cmaj7 G7" },
+                 minor = { Aprile = "Cm G/D G/B Cm", Pastorella = "Cm7 G7 Cm7", Ponte = "Cm7 G7" } }
+  local bad = {}
+  for mode, list in pairs(want) do
+    for name, w in pairs(list) do
+      for seed = 1, 6 do
+        local idea = make({ kind = "Measure", form = "Loop", measureBars = 8, chordPace = "One a bar", progression = name,
+                            scale = (mode == "major") and 1 or 2, root = 1,
+                            colour = (name == "Aprile") and "Triads" or "Sevenths",
+                            push = "None", pull = "None", flavours = "Off", inversions = "Off", borrowed = "Off",
+                            applied = "Off" }, seed)
+        local got = {}
+        for _, sl in ipairs(idea.timeline) do
+          got[#got + 1] = sl.chord.name .. (sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or "")
+        end
+        local line = table.concat(got, " ")
+        if line:sub(1, #w) ~= w or idea.schema ~= name then bad[#bad + 1] = mode .. " " .. name .. ": " .. line end
+      end
+    end
+  end
+  eq(#bad, 0, "the Aprile, the Pastorella and the Ponte, as written: " .. table.concat(bad, "; "))
+  -- The tunes: for each stage a schema names, the first note in it.
+  local stages, sung = 0, 0
+  local aprileRe, meyerFa = 0, 0
+  for seed = 1, 120 do
+    for _, name in ipairs({ "Galant", "Do-Re-Mi", "Aprile", "Pastorella" }) do
+      local idea = make({ kind = "Measure", form = (seed % 2 == 0) and "Loop" or "Sentence", chordPace = "One a bar",
+                          progression = name, scale = (seed % 3 == 0) and 2 or 1, push = "None", tension = "Off" }, seed)
+      local mel = idea.melody
+      for _, sl in ipairs(idea.timeline) do
+        local sing = sl.spec and sl.spec.sing
+        if sing then
+          local list = (type(sing) == "number") and { { sl.s, sing } }
+                       or { { sl.s, sing[1] }, { sl.s + (sl.e - sl.s) // 2, sing[2] } }
+          for _, st in ipairs(list) do
+            local first
+            for _, nt in ipairs(mel) do
+              if nt.step >= st[1] and nt.step < sl.e and not first then first = nt end
+            end
+            if first then
+              stages = stages + 1
+              local key = I.keyAt({ key = idea.key, timeline = idea.timeline }, first.step)
+              if first.pitch % 12 == T.pc(key, st[2]) then
+                sung = sung + 1
+                if name == "Aprile" and st[2] == 1 and T.SCALES[idea.key.scale].name == "Major" then aprileRe = aprileRe + 1 end
+                if name == "Galant" and st[2] == 3 and sl.degree == 4 then meyerFa = meyerFa + 1 end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  ok(stages > 300 and sung >= stages * 0.7, ("the schemata sing their tunes: %d of %d stages"):format(sung, stages))
+  -- (A flavour never sets the same chord on the same bass twice running:
+  -- a Romanesca's I6 then I, flavoured as the diminished chord on its third.)
+  local twice = 0
+  for seed = 1, 300 do
+    local idea = make({ kind = "Measure", form = "Loop", chordPace = "Two a bar", progression = "Romanesca",
+                        colour = "Mixed", flavours = "Common", scale = 8 }, seed)
+    -- (Mixolydian: its iii is diminished, so I can take that flavour.)
+    local tl = idea.timeline
+    for i = 2, #tl do
+      if tl[i].degree == tl[i - 1].degree and I.bassPcOf(tl[i]) == I.bassPcOf(tl[i - 1]) then twice = twice + 1 end
+    end
+  end
+  eq(twice, 0, "a flavour never puts the same chord on the same bass twice running")
+  -- And Any named rolls the three new ones with the rest.
+  local rolled = {}
+  for seed = 1, 600 do
+    local idea = make({ kind = "Measure", progression = "Any named", scale = (seed % 2 == 0) and 2 or 1 }, seed)
+    if idea.schema then rolled[idea.schema] = true end
+  end
+  ok(rolled.Aprile and rolled.Pastorella and rolled.Ponte, "Any named rolls the Aprile, the Pastorella and the Ponte")
+  ok(aprileRe > 20 and meyerFa > 20, ("the Aprile's re and the Meyer's fa over the same V6/5: %d and %d"):format(aprileRe, meyerFa))
 end
 
 C.done()

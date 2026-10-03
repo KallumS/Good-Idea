@@ -68,7 +68,7 @@ end
 local STREAMS = { pick = 1, plan = 2, harmony = 3, rhythm = 4, melody = 5,
                   chords = 6, bass = 7, drums = 8, borrow = 9, push = 10,
                   pull = 11, kit = 12, colour = 13, invert = 14, applied = 15, schema = 16,
-                  tension = 17, sixnine = 18, ghost = 19, chroma = 20, passing = 21 }
+                  tension = 17, sixnine = 18, ghost = 19, chroma = 20, passing = 21, commontone = 22 }
 
 function M.stream(seed, name)
   local salt = STREAMS[name] or 0
@@ -437,14 +437,15 @@ function M.buildSettings()
       when = function(st) return st.kind ~= "Drums" and (st.scale == "Any" or #T.SCALES[st.scale].iv == 7) end,
       hints = {
         Off = "No chord borrowed from another key.",
-        Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. And where the bass climbs a tone (F to G), now and then a passing diminished seventh on the note between (F F#dim7 G). The window says which, and where. Seven-note scales only.",
+        Rare = "Now and then the chord before a major or minor chord becomes that chord's own dominant - its V (or V7), or its leading-tone chord - borrowed from the key the next chord is home in: D7 before G in C major (V7/V), E before Am (V/vi). The most common chromatic chord there is. And where the bass climbs a tone (F to G), now and then a passing diminished seventh on the note between (F F#dim7 G); and, but with Triads, a held I or V coloured by the common-tone diminished seventh (C D#dim7/C C), its root held. The window says which, and where. Seven-note scales only.",
         Common = "The same, on more of the chords that can take one, and in most ideas.",
       } },
 
     -- Added in 1.9, last for the same reason. Walk draws nothing new.
     { id = "progression", label = "Progression", step = "Chords",
       values = { "Walk", "Any named", "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament",
-                 "Circle", "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte" },
+                 "Circle", "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte",
+                 "Aprile", "Pastorella", "Ponte" },
       -- (1.13: not shown; every idea walks or plays a named progression that
       -- suits its key, half and half. 0025.)
       any = true, default = "Any", anyValues = { "Walk", "Any named" }, anyWeights = { 1, 1 },
@@ -459,12 +460,15 @@ function M.buildSettings()
         Lament = "i VII VI V - the lament (the Andalusian cadence), the bass falling do te le sol. Minor keys.",
         Circle = "Round the circle of fifths: I IV vii iii vi ii V I, or in minor i iv VII III VI ii V i ('I Will Survive').",
         ["Double plagal"] = "I bVII IV I - two plagal steps home (the coda of 'Hey Jude'). Major keys.",
-        Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do) then a Prinner (IV I6 vii6 I, the bass fa mi re do) - Gjerdingen's stock phrases. In minor, i V4/3 V6/5 i, iv i6 vii°6 i.",
+        Galant = "The galant schemata: a Meyer (I V4/3 V6/5 I, the bass do re ti do, the tune do ti fa mi) then a Prinner (IV I6 vii6 I, the bass fa mi re do, the tune la sol fa mi) - Gjerdingen's stock phrases. In minor, i V4/3 V6/5 i, iv i6 vii°6 i.",
         Blues = "The 12-bar blues - I I I I IV IV I I V IV I I - and its 8- and 16-bar cousins, a chord a bar. Measures only.",
         ["Do-Re-Mi"] = "I V6/5 I - the bass do ti do under a tune rising do re mi: the galant Do-Re-Mi.",
         Romanesca = "I V6 vi I6 - the bass do ti la mi: the galant Romanesca. In minor, i v6 VI i6, the bass do te le me.",
         Fonte = "V7/ii ii V7 I - a pair stepped down: the galant Fonte ('fountain'). In minor, V7/iv iv V7/III III: the minor key's ii cannot be a key, so it falls from iv to III.",
         Monte = "V7/IV IV V7/V V - a pair stepped up: the galant Monte ('mountain'). In minor, V7/iv iv V7/V V.",
+        Aprile = "I V4/3 V6/5 I under a tune do ti re do: the galant Aprile.",
+        Pastorella = "I V7 I under a tune mi re fa mi, the V7 holding two notes of it: the galant Pastorella.",
+        Ponte = "The tonic, then V held (V7 with Sevenths or Mixed) - standing on the dominant: the galant Ponte ('bridge').",
       } },
 
     -- Added in 1.10, last for the same reason. Off draws nothing, and the
@@ -781,18 +785,24 @@ M.PROGRESSIONS = {
   Circle = { major = { { 0 }, { 3 }, { 6 }, { 2 }, { 5 }, { 1 }, { 4 }, { 0 } },
              minor = { { 0 }, { 3 }, { 6, from = 2 }, { 2, from = 2 }, { 5, from = 2 }, { 1 }, { 4, from = 3 }, { 0 } } },
   ["Double plagal"] = { major = { { 0 }, { 6, from = 8 }, { 3 }, { 0 } } },
-  Galant = { major = { { 0 }, { 4, bass = 1 }, { 4, bass = 6 }, { 0 }, { 3 }, { 0, bass = 2 }, { 6, bass = 1 }, { 0 } },
+  -- (1.16) `sing`: the scale degree the schema's tune has on that stage
+  -- (Open Music Theory, "Galant schemata - summary"): the Meyer do ti fa mi,
+  -- the Prinner la sol fa mi. A list, for a chord that holds two stages.
+  Galant = { major = { { 0, sing = 0 }, { 4, bass = 1, sing = 6 }, { 4, bass = 6, sing = 3 }, { 0, sing = 2 },
+                       { 3, sing = 5 }, { 0, bass = 2, sing = 4 }, { 6, bass = 1, sing = 3 }, { 0, sing = 2 } },
              -- (1.14) In minor, "converted directly" (Open Music Theory):
              -- the V and the vii°6 from the harmonic minor, the iv from the
              -- natural.
-             minor = { { 0 }, { 4, from = 3, bass = 1 }, { 4, from = 3, bass = 6 }, { 0 }, { 3, from = 2 },
-                       { 0, bass = 2 }, { 6, from = 3, bass = 1 }, { 0 } } },
+             minor = { { 0, sing = 0 }, { 4, from = 3, bass = 1, sing = 6 }, { 4, from = 3, bass = 6, sing = 3 },
+                       { 0, sing = 2 }, { 3, from = 2, sing = 5 }, { 0, bass = 2, sing = 4 },
+                       { 6, from = 3, bass = 1, sing = 3 }, { 0, sing = 2 } } },
   -- (1.13) More galant schemata (Open Music Theory, "Galant schemata"): the
   -- Do-Re-Mi (I V6/5 I, the bass do ti do), the Romanesca (I V6 vi I6, the
   -- bass do ti la mi), the Fonte (V7/ii ii V7 I, a step down) and the Monte
   -- (V7/IV IV V7/V V, a step up). `appliedTo`: the chord is that degree's own
   -- dominant, from the home scale bent (I.appliedKey).
-  ["Do-Re-Mi"] = { major = { { 0 }, { 4, bass = 6 }, { 0 } }, minor = { { 0 }, { 4, from = 3, bass = 6 }, { 0 } } },
+  ["Do-Re-Mi"] = { major = { { 0, sing = 0 }, { 4, bass = 6, sing = 1 }, { 0, sing = 2 } },
+                   minor = { { 0, sing = 0 }, { 4, from = 3, bass = 6, sing = 1 }, { 0, sing = 2 } } },
   -- (1.14) And in minor. The Romanesca's bass falls do te le me - the
   -- natural minor's v6, as a falling line in minor takes it (the raised ti
   -- falling to le would be an augmented second). The Monte: V7/iv iv V7/V V.
@@ -806,13 +816,28 @@ M.PROGRESSIONS = {
             minor = { { 0, appliedTo = 3 }, { 3, from = 2 }, { 6, from = 2, appliedTo = 2 }, { 2, from = 2 } } },
   Monte = { major = { { 0, appliedTo = 3 }, { 3 }, { 1, appliedTo = 4 }, { 4 } },
             minor = { { 0, appliedTo = 3 }, { 3, from = 2 }, { 1, appliedTo = 4 }, { 4, from = 3 } } },
+  -- (1.16) The last three of Open Music Theory's schemata. The Aprile has
+  -- the Meyer's chords and bass (do re ti do) under the tune do ti re do;
+  -- the Pastorella I V7 V7 I (the bass do sol sol do) under mi re fa mi -
+  -- one V7 holding two stages; the Ponte "holds onto" the dominant and "adds
+  -- a seventh" ("Galant Schemata - continuation patterns"): V held, entered
+  -- from the tonic so an idea on it opens at home. (The seventh is the
+  -- Colour's: V7 with Sevenths or Mixed, V with Triads.)
+  Aprile = { major = { { 0, sing = 0 }, { 4, bass = 1, sing = 6 }, { 4, bass = 6, sing = 1 }, { 0, sing = 0 } },
+             minor = { { 0, sing = 0 }, { 4, from = 3, bass = 1, sing = 6 }, { 4, from = 3, bass = 6, sing = 1 },
+                       { 0, sing = 0 } } },
+  Pastorella = { major = { { 0, sing = 2 }, { 4, sing = { 1, 3 } }, { 0, sing = 2 } },
+                 minor = { { 0, sing = 2 }, { 4, from = 3, sing = { 1, 3 } }, { 0, sing = 2 } } },
+  Ponte = { major = { { 0 }, { 4 }, { 4 }, { 4 } },
+            minor = { { 0 }, { 4, from = 3 }, { 4, from = 3 }, { 4, from = 3 } } },
   -- (A chord a bar, by the bar: not filled in order like the rest.)
   Blues = { blues = { [8] = { 0, 4, 3, 3, 0, 4, 0, 0 },
                       [12] = { 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 },
                       [16] = { 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0 } } },
 }
 M.PROGRESSION_ORDER = { "Doo-wop", "Singer-songwriter", "Puff", "Pachelbel", "Lament", "Circle",
-                        "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte" }
+                        "Double plagal", "Galant", "Blues", "Do-Re-Mi", "Romanesca", "Fonte", "Monte",
+                        "Aprile", "Pastorella", "Ponte" }
 
 -- The progression an idea plays - its chords for this key's mode - or nil
 -- (Walk, or one that does not suit the key, the kind or the length; `why`
@@ -1512,8 +1537,13 @@ end
 ------------------------------------------------------------------------------
 
 M.CHROMATIC_CHANCE = { Rare = 0.35, Common = 0.8 }
-M.CHROMATIC_WEIGHT = { N6 = 2, ["It+6"] = 1, ["Fr+6"] = 1, ["Ger+6"] = 1 }
-local CHROMATIC_KINDS = { "N6", "It+6", "Fr+6", "Ger+6" }
+-- (1.16) The Swiss sixth: the German's sound with ri for me - "the Swiss
+-- chord tends to appear in major keys, with ri proceeding to mi and do
+-- carrying over into the cadential 6/4" (Open Music Theory). In a major key
+-- it shares the German's place, half and half; in minor, the German alone
+-- ("almost always used in minor").
+M.CHROMATIC_WEIGHT = { N6 = 2, ["It+6"] = 1, ["Fr+6"] = 1, ["Ger+6"] = 1, ["Sw+6"] = 0.5 }
+local CHROMATIC_KINDS = { "N6", "It+6", "Fr+6", "Ger+6", "Sw+6" }
 
 local function scaleNamed(name)
   for i, sc in ipairs(T.SCALES) do if sc.name == name then return i end end
@@ -1527,6 +1557,7 @@ local function aug6Key(key, kind)
   for i, v in ipairs(T.ivOf(key)) do iv[i] = v end
   iv[4], iv[6] = 6, 8
   if kind == "Ger+6" then iv[3] = 3 end
+  if kind == "Sw+6" then iv[2] = 3 end
   for i = 2, 7 do if iv[i] <= iv[i - 1] then return nil end end
   return { root = key.root, scale = key.scale, iv = iv }
 end
@@ -1535,7 +1566,7 @@ end
 -- 21.4): the dominant seventh on le it sounds like.
 local function aug6Chord(k6, kind)
   local pos = { 5, 7 }
-  if kind == "Fr+6" then pos[#pos + 1] = 8 elseif kind == "Ger+6" then pos[#pos + 1] = 9 end
+  if kind == "Fr+6" or kind == "Sw+6" then pos[#pos + 1] = 8 elseif kind == "Ger+6" then pos[#pos + 1] = 9 end
   pos[#pos + 1] = 10
   local ch = { degree = 5, pos = pos, pcs = {}, has = {}, colour = "Sevenths", quality = "major",
                aug6 = kind, numeral = kind }
@@ -1544,7 +1575,7 @@ local function aug6Chord(k6, kind)
     ch.has[ch.pcs[i]] = true
   end
   ch.rootPc = ch.pcs[1]
-  ch.name = T.noteName(k6, 5) .. ({ ["It+6"] = "7(no5)", ["Fr+6"] = "7(b5)", ["Ger+6"] = "7" })[kind]
+  ch.name = T.noteName(k6, 5) .. ({ ["It+6"] = "7(no5)", ["Fr+6"] = "7(b5)", ["Ger+6"] = "7", ["Sw+6"] = "7" })[kind]
   return ch
 end
 
@@ -1593,17 +1624,21 @@ function M.chromatic(timeline, plan, key, r, rnd, meter)
       for _, k in ipairs(CHROMATIC_KINDS) do
         local fits = (k == "N6" and PHRYG ~= nil) or (k ~= "N6" and aug6Key(key, k) ~= nil)
         -- (With Triads, three notes: the Neapolitan and the Italian sixth.)
-        if r.colour == "Triads" and (k == "Fr+6" or k == "Ger+6") then fits = false end
+        if r.colour == "Triads" and (k == "Fr+6" or k == "Ger+6" or k == "Sw+6") then fits = false end
         if before and before.degree == ((k == "N6") and 1 or 5) then fits = false end
         -- (The German sixth needs room for the I6/4: half of a V two beats
         -- long or more, on a beat.)
         -- (Not at a half close, whose V is its last chord: the tune comes
         -- home on it, not on the six-four.)
-        if k == "Ger+6" then
+        if k == "Ger+6" or k == "Sw+6" then
           local cut = V.s + snap(meter, (V.e - V.s) / 2)
           fits = fits and V.e - V.s >= 2 * meter.beat and cut > V.s and cut < V.e and u.cad ~= "HC"
         end
-        if fits and (was == nil or was == k) then kinds[#kinds + 1] = k; weights[#weights + 1] = M.CHROMATIC_WEIGHT[k] end
+        -- (The Swiss only in major keys: in minor, ri would be me, which
+        -- `aug6Key` refuses - the scale would not climb.)
+        local w = M.CHROMATIC_WEIGHT[k]
+        if k == "Ger+6" and T.degreeQuality(key, 0) == "major" then w = 0.5 end
+        if fits and (was == nil or was == k) then kinds[#kinds + 1] = k; weights[#weights + 1] = w end
       end
       local kind
       if was ~= nil then kind = was and kinds[1] or nil
@@ -1635,7 +1670,7 @@ function M.chromatic(timeline, plan, key, r, rnd, meter)
         pre.chord = aug6Chord(k, kind)
         pre.bassPc, pre.bassPos, pre.inversion = nil, nil, nil
         pre.spec = { 5, chromatic = true }
-        if kind == "Ger+6" then
+        if kind == "Ger+6" or kind == "Sw+6" then
           -- The cadential six-four: the tonic over sol, then V.
           local cut = V.s + snap(meter, (V.e - V.s) / 2)
           local six = { s = V.s, e = cut, beat = V.beat or V.s, degree = 0, key = key,
@@ -1749,6 +1784,108 @@ function M.passing(timeline, plan, key, r, rnd, meter)
   return out
 end
 
+------------------------------------------------------------------------------
+-- The common-tone diminished seventh (1.16)
+--
+-- A diminished seventh that "progresses to a major triad or dominant
+-- seventh chords whose root is the same as one of the notes of the o7
+-- chord" - #ii°7 to I, #vi°7 to V - an embellishment: "the remaining three
+-- notes of the diminished seventh chord resolve to the nearest chord tone,
+-- but the diminished 7th of the chord remains unresolved as a common tone".
+-- So a held I or V, three beats or more and not a close's, may be split I -
+-- #ii°7 - I (V - #vi°7 - V): a neighbour chord, its common tone - the
+-- chord's root - held in the bass. With Applied on, its own dice; not with
+-- Triads (it is a seventh chord); a copy does what its original did.
+------------------------------------------------------------------------------
+
+M.COMMON_TONE_CHANCE = { Rare = 0.4, Common = 0.8 }
+
+-- The scale the tune hears under it: the chord's own with its second, fourth
+-- and sixth bent to a minor third, an augmented fourth and a major sixth
+-- above the root. Nil where that takes more than a semitone.
+local function commonToneKey(k, x)
+  local iv = {}
+  for i, v in ipairs(T.ivOf(k)) do iv[i] = v end
+  local root = T.pc(k, x)
+  local tonic = T.rootPc(k)
+  for _, sp in ipairs({ { x + 1, 3 }, { x + 3, 6 }, { x + 5, 9 } }) do
+    local d = sp[1] % 7
+    local want = (root + sp[2] - tonic) % 12
+    if iv[d + 1] ~= want then
+      local diff = (want - iv[d + 1] + 6) % 12 - 6
+      if math.abs(diff) ~= 1 then return nil end
+      iv[d + 1] = want
+    end
+  end
+  for i = 2, 7 do if iv[i] <= iv[i - 1] then return nil end end
+  return { root = k.root, scale = k.scale, iv = iv, lift = k.lift }
+end
+
+function M.commonTone(timeline, plan, key, r, rnd, meter)
+  local chance = M.COMMON_TONE_CHANCE[r.applied]
+  if not chance or T.scaleLen(key) ~= 7 or r.colour == "Triads" then return {} end
+  local keep = cadenceSlots(plan, timeline)
+  local out, decided = {}, {}
+  local first = {}
+  for _, sl in ipairs(timeline) do
+    if sl.origin and not first[sl.origin] then first[sl.origin] = sl end
+  end
+  local i = 1
+  while i <= #timeline do
+    local sl = timeline[i]
+    local x = rnd()
+    local origin = sl.origin
+    local was = origin and decided[origin]
+    if was == nil and origin and first[origin] ~= sl then was = false end
+    -- (Counted from its beat: a chord pushed in early is split on the beats.)
+    local from = sl.beat or sl.s
+    local beats = (sl.e - from) // meter.beat
+    local k = sl.key or key
+    local can = (sl.degree == 0 or sl.degree == 4) and sl.chord.quality == "major" and not sl.bassPc
+                and not keep[sl] and not sl.spec and not sl.borrowed and not sl.applied and not sl.chromatic
+                and not sl.moved and not sl.truck and not sl.flavour
+                and from % meter.beat == 0 and (sl.e - from) % meter.beat == 0 and beats >= 3
+    local go
+    if was ~= nil then go = was == true else go = x < chance end
+    local done = false
+    if go and can then
+      local ck = commonToneKey(k, sl.degree)
+      local ch = ck and T.chord(ck, sl.degree + 1, "Sevenths")
+      local full = ch and #ch.pcs == 4 and ch.has[sl.chord.rootPc]
+      if full then for j = 2, 4 do if (ch.pcs[j] - ch.pcs[j - 1]) % 12 ~= 3 then full = false end end end
+      if full then
+        local ctLen = math.max(1, beats // 4) * meter.beat
+        local after = math.max(1, beats // 4) * meter.beat
+        local a = sl.e - after - ctLen
+        local C = { s = a, e = a + ctLen, beat = a, degree = (sl.degree + 1) % 7, key = ck, chord = ch,
+                    spec = { (sl.degree + 1) % 7, commonTone = true } }
+        C.bassPc, C.bassPos, C.inversion = sl.chord.rootPc, sl.degree, 3
+        C.origin = C
+        C.commonTone = { name = ch.name .. "/" .. T.noteName(ck, sl.degree),
+                         numeral = (sl.degree == 0) and "#iio7" or "#vio7", over = sl.chord.name }
+        local back = {}
+        for kk, v in pairs(sl) do back[kk] = v end
+        back.s, back.beat = a + ctLen, a + ctLen
+        sl.e = a
+        sl.rootHeld, back.rootHeld = true, true
+        table.insert(timeline, i + 1, C)
+        table.insert(timeline, i + 2, back)
+        for _, u in ipairs(plan.units) do
+          for j, y in ipairs(u.slots or {}) do
+            if y == sl then table.insert(u.slots, j + 1, C); table.insert(u.slots, j + 2, back); break end
+          end
+        end
+        out[#out + 1] = C
+        done = true
+        i = i + 2
+      end
+    end
+    if origin and was == nil then decided[origin] = done end
+    i = i + 1
+  end
+  return out
+end
+
 -- Now and then a chord takes another colour (`T.flavourChord`): about one
 -- chord in five that may. (With Mixed until 1.14; now with every colour -
 -- the diminished chord a third up, a seventh chord, not with Triads.)
@@ -1784,7 +1921,7 @@ function M.flavour(timeline, plan, key, r, rnd, sixRnd)
     -- a chromatic chord or the six-four a German sixth goes to, nor a chord
     -- whose root a passing or chromatic chord needs where it is, 1.15.)
     if go and not keep[sl] and not sl.borrowed and not sl.applied and not target and not sl.truck
-       and not sl.chromatic and not (sl.spec and sl.spec.cadential) and not sl.rootHeld then
+       and not sl.chromatic and not (sl.spec and sl.spec.cadential) and not sl.rootHeld and not sl.commonTone then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
       local before, after = timeline[i - 1], timeline[i + 1]
@@ -1802,6 +1939,11 @@ function M.flavour(timeline, plan, key, r, rnd, sixRnd)
         -- (Not one that sounds like the chord either side of it. An add9 has
         -- the notes and the name of Mixed's own; it changes the voicing,
         -- putting its ninth on top.)
+        -- (Nor one whose bass is the chord before's, on the same degree - a
+        -- Romanesca's I6 then I as D#m7b5 over D#, 1.16: the same chord on
+        -- the same bass twice.)
+        if ch and before and before.degree == sl.degree and M.bassPcOf(before) == (sl.bassPc or ch.rootPc) then ch = nil end
+        if ch and after and after.degree == sl.degree and M.bassPcOf(after) == (sl.bassPc or ch.rootPc) then ch = nil end
         if ch and (ch.name ~= sl.chord.name or f == "add9") and not (before and before.chord.name == ch.name)
            and not (after and after.chord.name == ch.name) and (was == nil or was == f or (was == "6/9" and f == "6")) then
           cands[#cands + 1] = ch
@@ -2404,8 +2546,44 @@ local function goalFor(ctx, u, prev, target, step)
 end
 
 -- New notes for a unit at the given onsets (steps from the unit's start).
+-- (1.16) A named schema's tune: the stage a step falls in, if its chord
+-- names a degree to sing there (`spec.sing`, a degree or a list of two for
+-- a chord holding two stages), as { at = where the stage starts, degree }.
+local function stageAt(ctx, sl, step)
+  local sing = sl.spec and sl.spec.sing
+  if not sing then return nil end
+  if type(sing) == "number" then return { at = sl.s, degree = sing, key = sl } end
+  local mid = sl.s + snap(ctx.meter, (sl.e - sl.s) / 2)
+  if step < mid or mid <= sl.s then return { at = sl.s, degree = sing[1], key = sl } end
+  return { at = mid, degree = sing[2], key = sl, second = true }
+end
+
+-- The note a stage sings: that degree, a note of the chord, the nearest to
+-- the note before (within a fifth, no tritone, no augmented second, not a
+-- third time), or nil.
+local function singNote(ctx, key, ch, prev, reps, degree, target)
+  local want = T.pc(key, degree)
+  local best, bestCost
+  for p = ctx.lo, ctx.hi do
+    if T.pc(key, p) == want and T.onChord(key, ch, p) then
+      local ok = true
+      if prev then
+        local iv = p - prev
+        local semis = math.abs(T.pitch(key, p) - T.pitch(key, prev))
+        if math.abs(iv) > 4 or semis == 6 or (math.abs(iv) == 1 and semis == 3) or (iv == 0 and reps >= 1) then ok = false end
+      end
+      if ok then
+        local cost = (prev and math.abs(p - prev) or 0) * 10 + math.abs(p - target)
+        if not bestCost or cost < bestCost then best, bestCost = p, cost end
+      end
+    end
+  end
+  return best
+end
+
 local function walkUnit(ctx, u, onsets, rnd, state)
   local out = {}
+  state.sung = state.sung or {}
   local reps = state.reps or 0
   local closing = u.cad ~= "none"
   for i, o in ipairs(onsets) do
@@ -2416,7 +2594,20 @@ local function walkUnit(ctx, u, onsets, rnd, state)
     local strong = M.strength(ctx.meter, step) >= 2 or i == 1
     local target = ctx.target(step)
     local p
-    if not state.prev then
+    -- (1.16) The first note of a schema's stage sings its degree.
+    local stage = stageAt(ctx, sl, step)
+    local sing
+    if stage and step >= stage.at and not (closing and i >= #onsets - 1) then
+      local id = tostring(sl) .. (stage.second and "b" or "a")
+      if not state.sung[id] then
+        state.sung[id] = true
+        sing = singNote(ctx, key, ch, state.prev, reps, stage.degree, target)
+      end
+    end
+    if sing then
+      p = sing
+      if not state.prev then ctx.firstPos = p end
+    elseif not state.prev then
       p = nearestOn(ctx, key, ch, target)
       ctx.firstPos = p
     elseif closing and i == #onsets then
@@ -2455,8 +2646,31 @@ end
 -- With `ending`, the last note counts as on the beat too: it is the
 -- unit's ending (an exact repeat of a unit that closes).
 local function fit(ctx, u, notes, ending)
+  local sung = {}
   for i, nt in ipairs(notes) do
     local step = u.start + nt.at
+    -- (1.16) A copied tune sings a schema's stage too: its first note there
+    -- moves to the stage's degree, the nearest within a fifth - but for a
+    -- close's last two notes, which go where the close goes.
+    local sl = M.chordAt(ctx.timeline, step)
+    local stage = stageAt(ctx, sl, step)
+    if stage and step >= stage.at and not (ending and u.cad ~= "none" and i >= #notes - 1) then
+      local id = tostring(sl) .. (stage.second and "b" or "a")
+      if not sung[id] then
+        sung[id] = true
+        local key = M.keyAt(ctx, step)
+        local want = T.pc(key, stage.degree)
+        if T.pc(key, nt.pos) ~= want then
+          for d = 1, 4 do
+            local hit
+            for _, q in ipairs({ nt.pos - d, nt.pos + d }) do
+              if not hit and q >= ctx.lo and q <= ctx.hi and T.pc(key, q) == want and T.onChord(key, sl.chord, q) then hit = q end
+            end
+            if hit then nt.pos = hit; break end
+          end
+        end
+      end
+    end
     if M.strength(ctx.meter, step) >= 2 or (ending and i == #notes and u.cad ~= "none") then
       local ch = M.chordAt(ctx.timeline, step).chord
       local key = M.keyAt(ctx, step)
@@ -3985,7 +4199,7 @@ function M.chordLine(timeline, meter)
     -- An inverted chord is written over its bass note: C/E.
     local slash = sl.bassPos and ("/" .. T.noteName(sl.key, sl.bassPos)) or ""
     table.insert(bars[b], (sl.pushed and "^" or "") .. (sl.pulled and "_" or "") .. sl.chord.name .. slash ..
-                          ((sl.borrowed or sl.chromatic) and "*" or "") .. (sl.applied and ">" or ""))
+                          ((sl.borrowed or sl.chromatic) and "*" or "") .. ((sl.applied or sl.commonTone) and ">" or ""))
     -- A chord held over bar lines shows in each bar it sounds in, as "-".
     for x = b + 1, (sl.e - 1) // meter.bar + 1 do
       bars[x] = bars[x] or {}
@@ -4063,6 +4277,8 @@ function M.make(st, meter, seed)
   for _, sl in ipairs(M.passing(timeline, plan, key, r, M.stream(seed, "passing"), meter)) do
     applied[#applied + 1] = sl
   end
+  -- (1.16) And the common-tone diminished seventh, colouring a held I or V.
+  local commonTones = M.commonTone(timeline, plan, key, r, M.stream(seed, "commontone"), meter)
   M.flavour(timeline, plan, key, r, M.stream(seed, "colour"), M.stream(seed, "sixnine"))
   -- By the book, a half close with Mixed stands on a plain V: "almost
   -- invariably a triad, rather than a seventh chord" (Open Music Theory,
@@ -4225,12 +4441,22 @@ function M.make(st, meter, seed)
   -- (1.15) Each chromatic chord, said in full for the window.
   local chromaticNotes = {}
   local CHROMATIC_SAID = { N6 = "the Neapolitan", ["It+6"] = "an Italian augmented sixth",
-                           ["Fr+6"] = "a French augmented sixth", ["Ger+6"] = "a German augmented sixth" }
+                           ["Fr+6"] = "a French augmented sixth", ["Ger+6"] = "a German augmented sixth",
+                           ["Sw+6"] = "a Swiss augmented sixth" }
   for _, sl in ipairs(chromatic) do
     local c = sl.chromatic
     c.bar = (sl.pushed and sl.s + 2 or sl.s) // meter.bar + 1
     c.text = ("%s (%s, %s) in bar %d, before the V"):format(c.name, c.numeral, CHROMATIC_SAID[c.kind], c.bar)
     chromaticNotes[#chromaticNotes + 1] = c
+  end
+
+  -- (1.16) Each common-tone diminished seventh, said with the applied
+  -- chords.
+  for _, sl in ipairs(commonTones) do
+    local c = sl.commonTone
+    c.bar = sl.s // meter.bar + 1
+    c.text = ("%s (%s, the common-tone diminished seventh) in bar %d, colouring %s"):format(c.name, c.numeral, c.bar, c.over)
+    appliedNotes[#appliedNotes + 1] = c
   end
 
   local cadNames = { PAC = "closes on the tonic", IAC = "closes on the third or fifth",
