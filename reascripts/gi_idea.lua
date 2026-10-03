@@ -1781,9 +1781,10 @@ function M.flavour(timeline, plan, key, r, rnd, sixRnd)
     -- is the dominant of.)
     local target = timeline[i - 1] and timeline[i - 1].applied
     -- (Nor the truck driver's V: the gear change is a dominant seventh. Nor
-    -- a chromatic chord or the six-four a German sixth goes to, 1.15.)
+    -- a chromatic chord or the six-four a German sixth goes to, nor a chord
+    -- whose root a passing or chromatic chord needs where it is, 1.15.)
     if go and not keep[sl] and not sl.borrowed and not sl.applied and not target and not sl.truck
-       and not sl.chromatic and not (sl.spec and sl.spec.cadential) then
+       and not sl.chromatic and not (sl.spec and sl.spec.cadential) and not sl.rootHeld then
       local seventh = false
       for _, pc in ipairs(sl.chord.pcs) do if T.roleOf(sl.chord, pc) == "7" then seventh = true end end
       local before, after = timeline[i - 1], timeline[i + 1]
