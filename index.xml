@@ -164,6 +164,19 @@ About one Measure in eight now has a chromatic chord, and one in ten a passing d
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.16" author="kallums" time="2026-10-03T21:00:00Z">
+        <changelog><![CDATA[Three more galant schemata among the named progressions, in major and minor keys: the Aprile (I V4/3 V6/5 I under a tune do ti re do), the Pastorella (I V7 I under mi re fa mi) and the Ponte (the tonic, then standing on the dominant).
+The galant schemata now sing their tunes: on each stage the tune takes the note the schema names - the Meyer's do ti fa mi, the Prinner's la sol fa mi, the Do-Re-Mi's do re mi, the Aprile's and the Pastorella's - about four stages in five (the rest where the tune rests, or a rule comes first).
+The Swiss sixth, in major keys: the German sixth's sound spelled with D# (le do ri fi), going through the I6/4 with D# rising to E. It shares the German's place in a major key; in minor the German stays.
+The common-tone diminished seventh, with Applied: now and then a held I or V is coloured by the diminished seventh that keeps its root - C D#dim7/C C, G A#dim7/G G - the root held in the bass. The window names it. Not with Triads.
+Fixed: a flavour no longer puts the same chord on the same bass twice running.
+Idea numbers from 1.15 may give different ideas where a schema now sings, or a held I or V takes the common-tone chord.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
