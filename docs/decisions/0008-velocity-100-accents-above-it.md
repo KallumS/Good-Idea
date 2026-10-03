@@ -1,6 +1,6 @@
 # 0008. Velocity is 100; accents rise above it
 
-Taken 2026-10-01. Stands.
+Taken 2026-10-01. Changed in 1.7: Shaped velocity is the default ([0019](0019-part-writing-by-the-book.md)); Flat and Accents stay.
 
 ## Context
 

@@ -25,15 +25,32 @@ end
 
 local function show(idea)
   print(("== %s"):format(idea.block.name))
-  print(("   %s  /  shape %s, %s"):format(idea.summary, idea.plan.shape, idea.ending))
-  print("   " .. idea.chords)
+  if idea.plan.shape ~= "" then
+    print(("   %s  /  shape %s, %s"):format(idea.summary, idea.plan.shape, idea.ending))
+  else
+    print(("   %s  /  %s"):format(idea.summary, idea.ending))
+  end
+  if idea.chords ~= "" then print("   " .. idea.chords) end
+  for _, b in ipairs(idea.borrowed) do print("   borrowed: " .. b.text) end
+  for _, c in ipairs(idea.chromatic or {}) do print("   chromatic: " .. c.text) end
+  for _, a in ipairs(idea.applied or {}) do if a.passing then print("   passing: " .. a.text) end end
   for _, part in ipairs(idea.block.parts) do
     local out, lastBar = {}, -1
     for _, n in ipairs(part.notes) do
       local bar = math.floor(n.start / meter.barBeats + 1e-9)
       if bar ~= lastBar then out[#out + 1] = "|"; lastBar = bar end
       local name = part.drums and tostring(n.pitch) or T.pitchName(n.pitch, idea.key)
-      out[#out + 1] = name .. (n.vel > 100 and ">" or "")
+      -- Anything off the eighth-note grid shows where it falls in the bar,
+      -- in beats from 1: a triplet at @1.33, a dotted eighth's sixteenth
+      -- at @1.75, a push at @4.5.
+      local at = n.start - bar * meter.barBeats
+      local grid = math.abs(at * 2 - math.floor(at * 2 + 0.5)) > 1e-6
+      -- A tension note (1.10) is marked: (s) a suspension held over the
+      -- change, (a) an appoggiatura, (ant) an anticipation.
+      local mark = ({ suspension = "(s)", appoggiatura = "(a)", anticipation = "(ant)" })[n.tension or ""] or ""
+      -- (A ghost note, 1.14, in brackets.)
+      if n.ghost then mark = mark .. "(g)" end
+      out[#out + 1] = name .. (grid and ("@%.2f"):format(at + 1) or "") .. mark .. (n.vel > 100 and ">" or "")
     end
     print(("   %-7s %s"):format(part.name, table.concat(out, " ")))
   end

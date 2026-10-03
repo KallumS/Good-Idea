@@ -32,6 +32,138 @@
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/872be2992abe5cbbc8cef630d16b7a99a74a771c/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.1" author="kallums" time="2026-10-01T23:30:00Z">
+        <changelog><![CDATA[More rhythm, and borrowed chords. Figures: now and then a dotted rhythm or a triplet, in the tune and the chords, with the drums shuffling on triplets. Push: chords that arrive an eighth early, with the tune, bass and kick drum coming along. A Swing slider, from straight to full triplet swing, for every part of every idea. Borrowed chords: rarely - about one idea in four, one chord - a chord from another scale on the same key note (a minor iv or a bVI in a major key, a major IV in a minor one); the tune bends to it, and the window says which chord, where, and which scale it came from. With Figures on Plain, Push on None, Borrowed on Off and no swing, every idea number from 1.0 gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/20f3923b924a46236638ba6115fecca14fbb527d/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.2" author="kallums" time="2026-10-01T23:59:00Z">
+        <changelog><![CDATA[A shorter window, drums on their own, and more rhythm in the chords. Every step but the first now folds to one line saying what is chosen in it - click its name to open it. Drums is a fourth kind of idea beside Motif, Phrase and Measure: 1 to 16 bars of General MIDI drums - backbeat, half-time, four on the floor or breakbeat, on hats or ride - with fills at the end, every 4 bars or every 2, and a crash where each fill lands. A Measure always has drums now. Pull: chords played an eighth late, laid back while the tune, bass and drums stay on the beat. Chord pace 1.5 a bar: three chords over two bars. Dotted and triplet figures now reach every chord style and a walking bass. Layout sits by the Insert, Export and Audition buttons. With Figures on Plain, Push and Pull on None, Borrowed on Off and no swing, every idea number from 1.0 gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cbe3fcb6bd3809b13bc0e74dab8fc45efd22a824/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.3" author="kallums" time="2026-10-02T00:30:00Z">
+        <changelog><![CDATA[A Measure is now melody, chords and bass - no drums. Drums are their own kind of idea, with their own beat, fills and cymbal; make a groove there and put it on its own track. A Measure on Tracks makes three tracks. Its tune, chords and bass are exactly what they were. The chord pace reads in numbers: 0.5, 1, 1.5, 2 and the new 4 a bar - a chord on every beat (three a bar in 3/4). 0.5 a bar is the old Slow, renamed. Any rolls 0.5, 1 and 2; 1.5 and 4 are there to choose, so every idea number from 1.0 keeps its pace.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/be831eaf5ec631959fdb726e4e35f7482a148784/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.4" author="kallums" time="2026-10-02T01:00:00Z">
+        <changelog><![CDATA[Figures now reach the tune and the chords together. Before, the tune only took a dotted or triplet rhythm where it already had two eighths in a beat, so at an easy pace the chords took nearly all the figures. Now a quarter note in the tune can become a dotted eighth and a sixteenth or a triplet, and a half note a dotted quarter and an eighth or a quarter-note triplet. With Triplets about a quarter of the tune's beats are triplets, and most phrases have triplets in the tune and the chords at once. The chords, bass and drums play exactly the rhythms they did. With Figures on Plain nothing changes, and every idea number from 1.0 still gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a51e7a947d69ea6d5c56a3245cc6795da0f58009/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a51e7a947d69ea6d5c56a3245cc6795da0f58009/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a51e7a947d69ea6d5c56a3245cc6795da0f58009/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a51e7a947d69ea6d5c56a3245cc6795da0f58009/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a51e7a947d69ea6d5c56a3245cc6795da0f58009/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.5" author="kallums" time="2026-10-02T12:00:00Z">
+        <changelog><![CDATA[More ways to play the chords. Flavours: with Mixed, now and then a chord becomes a sus4 or sus2, an added 2nd, an add9 with the ninth on top, a 9th chord, a 6th chord, or the diminished chord on its third (G7 becomes Bm7b5) - always from the scale, never the first chord or the cadence, and the same each time a passage comes round. Voicing: Close, Open, Drop 2, Drop 3, Drop 2 & 4, Shell or Rootless. Inversions: now and then the third, fifth or seventh in the bass, only where it makes the bass move by step - C G/B Am, the cadential I6/4, V4/2 falling to I6 - with the bass playing it and the chord line writing C/E. With Flavours and Inversions off and Voicing on Close, every idea number from 1.0 still gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/5fb405ca823c3e19b0fbd958ce859ceaa68cf0f0/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.6" author="kallums" time="2026-10-02T15:00:00Z">
+        <changelog><![CDATA[Inversions checked against the textbooks: a second inversion (six-four) now only where they allow one - the cadential I6/4 at a cadence on a strong beat, or a passing or pedal six-four on a weak beat between chords of the same function - and a diminished chord is usually played in first inversion (vii6), as it is in practice. Borrowed, Flavours and Inversions each gain Common beside Rare: borrowed chords in most ideas (two in a longer one, now and then), flavours on half the chords that can take one, inversions on more than half the chords where one does its job.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/a67600a17752ad86dffe3db2479d93fe6367520b/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.7" author="kallums" time="2026-10-02T20:00:00Z">
+        <changelog><![CDATA[Part-writing by the book, as the harmony and orchestration textbooks have it: an inverted chord no longer doubles its bass note above it (G/B plays no second B), a chord's seventh falls a step into the next chord, a half close with Mixed stands on a plain V, the chords sit just under the tune instead of far below it, the bass sits under the chords and within an octave and a fifth of them (never in among them), and the tune and the bass make no parallel fifths or octaves. Part-writing Free gives the old sound. New velocity, Shaped (the default): the downbeat loudest and the off-beats softest, the chords under the tune and a chord's inner notes under its top. With Part-writing Free and Velocity Flat (and the other settings plain), every idea number from 1.0 still gives the same idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d3502abed4dee33f8a16a8d2fb43e0d9fa275b04/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.8" author="kallums" time="2026-10-02T23:00:00Z">
+        <changelog><![CDATA[Applied chords (Key step, Rare by default): now and then the chord before a major or minor chord becomes its own V or V7 (D7 before G in C), or its leading-tone diminished chord - the commonest chromatic chord in every style. Marked > in the chord line and named under it. A Loop and a Period's answer play it again.
+The deceptive cadence: V to vi where the tonic was due, the tune holding the tonic note over vi.
+Six more forms (chosen only - Any still rolls the original four): Hybrid 1 to 4 (Caplin's antecedent + continuation, antecedent + cadential, compound basic idea + continuation, compound basic idea + consequent), Ternary (A B A), and Extended, a sentence stretched by a deceptive cadence.
+With Applied off, every 1.0 idea number is still the 1.0 idea.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/e77c407ffac0ca13d08f4bc9b0431630c57ad4e3/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.9" author="kallums" time="2026-10-03T02:00:00Z">
+        <changelog><![CDATA[Named progressions (Chords step): besides Walk - each chord drawn from the one before, as always - the chords can play a progression everyone knows by ear: Doo-wop (I vi IV V), Singer-songwriter (vi IV I V), Puff (I iii IV I), Pachelbel (the canon, its bass stepping down), Lament (i VII VI V, the Andalusian cadence), Circle (round the circle of fifths), Double plagal (I bVII IV I), Galant (the 18th-century Meyer and Prinner) and Blues (8, 12 or 16 bars, a chord a bar, Measures only) - or Any named, which picks one that suits the key. Inverted chords keep their basses as written (Pachelbel's G/B). The progression plays in order, a repeated passage carries it on, and a passage that closes still ends on its cadence; a Loop plays nothing else. One that does not suit the key (a lament in a major key) is not played, and the summary line says why.
+Walk is the default, so every idea number is as it was in 1.8.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd8d5cd24e3100bcbf1eaaea4f8717617a2471fd/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.12" author="kallums" time="2026-10-03T06:00:00Z">
+        <changelog><![CDATA[Everything from 1.10, 1.11 and 1.12 (1.10 and 1.11 were not published on their own).
+Tension (Melody step, Rare by default): now and then the tune leans on the beat and falls a step into the chord - a suspension (the note before held over the chord change), an appoggiatura (leapt up to, a step above the chord's note), or, at a close, the last note arriving an eighth early (an anticipation). By the book, the chords leave out the note it falls to while it sounds (but for the 9-8), as Open Music Theory says.
+Second voice (Melody step, Off by default): a part in thirds or sixths under the tune, on a note of the chord on every beat, on its own channel or track.
+Three more chord styles, to choose: Pedal (each chord struck once and held), Offbeat (short chords on the off-beats - the skank, the oom-pah) and Fill (the chords answer the tune, struck where it holds or rests).
+Four named rhythms in Groove, to choose: Tresillo, Habanera, Clave and 3+3+3+3+2+2 - in 4/4 the pulsing chords, the pulsing bass and the drums' kick play them as written.
+The 6/9: half the 6 chords now take the ninth on top. Power, a voicing to choose: root, fifth, octave.
+Key change (Arrangement, Measures): Step up, Half step up or Truck driver - the last section a tone or a semitone higher, tune, chords and bass; the truck driver goes through the new key's V7 into its tonic (C ... A7 | D). The window says where and to what.
+What changes for idea numbers you have kept: with the default settings, some tunes now lean (about a third of Measures), and some 6 chords are now 6/9. With Tension Off and Flavours Off, every idea from 1.9 is as it was; every 1.0 idea number still gives the 1.0 idea with the plain settings.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/26fd7ec2c1c20b8dda040e74802e66dc858e3013/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.13" author="kallums" time="2026-10-03T12:00:00Z">
+        <changelog><![CDATA[A tidier window: the Progression, the Part-writing and the Form are no longer settings - Good Idea decides them. Every idea walks its chords or plays a named progression that suits its key, half and half; always writes its parts by the book; and picks its form, each of the ten about one time in ten. The summary line says which.
+Two leaps the same way in the tune only where they outline a chord (C E G, not B D F), as counterpoint teaches.
+Minor keys close on a major V, its third the raised leading note (G7 with B natural in C minor), and the tune takes the B too; the modes keep their own minor v.
+An evaded cadence: the Extended form's stretch is now half the time V to I6 instead of home, the tune leaping up instead of resolving, then the ending again to a full close.
+More galant schemata among the named progressions: the Do-Re-Mi, the Romanesca, the Fonte (A7 Dm G7 C) and the Monte (C7 F D7 G).
+A Reggaeton drum beat: the dembow, the kick on every beat under the snare's 3+3+2.
+Fixed: a six-four chord keeps its doubled bass, as Hutchinson teaches (it had been taken out since 1.7); a drum idea's second bar always answers its first, even on the ride.
+Idea numbers from earlier versions now give different ideas.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/d0ceee0a743f780397abb4ed993e5410941895f6/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.14" author="kallums" time="2026-10-03T15:00:00Z">
+        <changelog><![CDATA[Flavours now come with every Colour, not only Mixed: with Triads a chord may become a sus4, sus2, add2, add9, 6 or 6/9; with Sevenths a 7sus4, a 9th, a 6th, or the diminished chord on its third.
+A new voicing to choose: Drop 4 - the lowest of four close notes dropped an octave.
+Ghost notes in drum ideas (Drums step: Off, Rare - the default - or Common): the snare tapped very quietly on the sixteenths, mostly just before or after the backbeat, the same every bar.
+Where the chords are pulled late, the bass now lies back with them in about half the ideas (Good Idea decides); otherwise it stays on the beat with the tune.
+The galant schemata in minor keys too: the Meyer and Prinner, the Romanesca (the bass falling do te le me), the Monte, and the Fonte (from iv down to III, since the minor key's ii cannot be a key of its own).
+The truck-driver key change now changes gear in nearly every Measure (12 in 13, from 6 in 10): where no section starts on the tonic, one is made to.
+Fixed: a Loop of a named progression plays the same flavoured chords each time round; a Period's answer opens as its question did; the truck driver's V is always a plain dominant seventh.
+Idea numbers from 1.13 may give different ideas: most ideas with chords can now take a flavour, and drum ideas have ghost notes.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/1efaf2b6e16ef530c24cf93e65b0ea017f40f22f/reascripts/gi_place.lua</source>
+      </version>
+      <version name="1.15" author="kallums" time="2026-10-03T18:00:00Z">
+        <changelog><![CDATA[Chromatic chords, with Borrowed on (Rare by default): now and then, before a close's V, the ii or IV becomes the Neapolitan (Db/F in C - the major chord on the flat 2nd, over its third) or an augmented sixth - Italian, French or German (Ab in the bass, F# above it, both moving out to G; Ab7 on a lead sheet). The German goes through the I6/4 first, as the books say it almost always does. The window says which chord, where, and what it is.
+A passing diminished seventh, with Applied on: where the bass climbs a tone (F to G), the second half of the first chord becomes the diminished seventh on the note between (F F#dim7 G), the bass climbing by semitones. With Triads, the diminished triad.
+By the book, the Neapolitan doubles its bass, and an augmented sixth's F# rises to G in the next chord.
+About one Measure in eight now has a chromatic chord, and one in ten a passing diminished chord, with the defaults. Idea numbers from 1.14 may give different ideas where they do.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/b0c98af8a27e7a144963b87a4dafc5b1af14f955/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>

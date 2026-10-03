@@ -1,6 +1,10 @@
 # 0007. A Measure goes on a track per part; a Motif or Phrase is one item
 
-Taken 2026-10-01. Stands.
+Taken 2026-10-01. Stands. Since [0013](0013-drums-are-a-kind-of-idea.md) a Measure always has
+drums, and drums alone are a kind of idea, always one item (and since
+[0016](0016-a-measure-has-no-drums-paces-in-numbers.md) a Measure has no
+drums: melody, chords and bass, three tracks); since
+[0012](0012-steps-fold-away.md) the Layout row sits with the output buttons.
 
 ## Context
 

@@ -76,6 +76,31 @@ local NUMERALS = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII" }
 function M.key(root, scale) return { root = root or 1, scale = scale or 1 } end
 
 local function ivOf(key) return key.iv or M.SCALES[key.scale].iv end
+
+-- The same scale `semis` semitones up (1.12, a key change): every position
+-- sounds that much higher. Its key note is spelled the way that gives the
+-- scale the fewest sharps and flats (D, not C##; Eb, not D#), and where it
+-- passes B it is lifted an octave (B up a tone is C#, above, not below).
+function M.transpose(key, semis)
+  local from = M.rootPc(key) + (key.lift or 0)
+  local want = (from + semis) % 12
+  local best, bestCost
+  for i, rt in ipairs(M.ROOTS) do
+    local pc = M.rootPc({ root = i })
+    if pc == want then
+      local k = { root = i, scale = key.scale, iv = key.iv }
+      local cost = 0
+      for pos = 0, #ivOf(k) - 1 do
+        local name = M.noteName(k, pos)
+        cost = cost + #name - 1
+        if name:find("##") or name:find("bb") then cost = cost + 10 end
+      end
+      if not bestCost or cost < bestCost then best, bestCost = k, cost end
+    end
+  end
+  best.lift = from + semis - want
+  return best
+end
 M.ivOf = ivOf
 
 function M.scaleLen(key) return #ivOf(key) end
@@ -95,7 +120,7 @@ function M.pitch(key, pos)
   local n   = #iv
   local oct = math.floor(pos / n)
   local k   = pos - oct * n
-  return M.rootPc(key) + iv[k + 1] + 12 * oct
+  return M.rootPc(key) + (key.lift or 0) + iv[k + 1] + 12 * oct
 end
 
 -- The highest position at or below a pitch. Every pitch has one, because the
@@ -103,7 +128,7 @@ end
 function M.floorPos(key, midi)
   local iv   = ivOf(key)
   local n    = #iv
-  local root = M.rootPc(key)
+  local root = M.rootPc(key) + (key.lift or 0)
   local oct  = math.floor((midi - root) / 12)
   local kmax = 0
   for k = 1, n do
@@ -438,6 +463,7 @@ function M.chord(key, degree, colour)
   ch.quality = M.degreeQuality(key, d)
   ch.name = M.chordName(key, ch)
   ch.numeral = M.degreeNumeral(key, d)
+  ch.nine = M.ninthOf(key, d)
   return ch
 end
 
@@ -462,6 +488,109 @@ end
 
 -- Does a scale position sound a note of the chord?
 function M.onChord(key, ch, pos) return ch.has[M.pc(key, pos)] == true end
+
+------------------------------------------------------------------------------
+-- Flavours (docs/decisions/0018-flavours-voicings-and-inversions.md)
+--
+-- Other ways to colour a chord on a degree, every one stacked from the scale
+-- so it stays in key. Each is offered only where its interval is the real
+-- one: a sus4 needs a perfect fourth above the root (F in C major has a
+-- tritone there, so no Fsus4), a sus2 or an added 2nd a whole tone, a 6th
+-- a major sixth, a 9th a whole-tone ninth. "dim" is the diminished seventh
+-- chord a third above the root: the chord's upper notes without its root,
+-- the way G7 becomes Bm7b5 (G9 without the G) - offered only where that
+-- chord is diminished.
+--
+--   sus4   root, fourth, fifth (and the seventh, if the chord had one: 7sus4)
+--   sus2   root, second, fifth
+--   add2   the triad and a whole-tone 2nd, voiced inside, next to the root
+--   add9   the triad and its ninth, voiced on top (`ninthUp`)
+--   9      a seventh chord and its ninth, on top: Dm9, G9
+--   6      the triad and its major sixth: C6, Dm6
+--   dim    the diminished seventh chord a third up
+------------------------------------------------------------------------------
+
+M.FLAVOURS = { "sus4", "sus2", "add2", "add9", "9", "6", "dim" }
+
+local function semisAbove(key, degree, steps)
+  return M.pitch(key, degree + steps) - M.pitch(key, degree)
+end
+
+-- The scale steps above the degree for a flavour, or nil where it is not
+-- the real thing in this key. `seventh`: the chord it replaces had one.
+function M.flavourShape(key, degree, flavour, seventh)
+  if M.scaleLen(key) ~= 7 then return nil end
+  local q = M.degreeQuality(key, degree)
+  local triad = q == "major" or q == "minor"
+  if flavour == "sus4" then
+    if not triad or semisAbove(key, degree, 3) ~= 5 then return nil end
+    if seventh then return { 0, 3, 4, 6 } end
+    return { 0, 3, 4 }
+  elseif flavour == "sus2" then
+    if seventh or not triad or semisAbove(key, degree, 1) ~= 2 then return nil end
+    return { 0, 1, 4 }
+  elseif flavour == "add2" or flavour == "add9" then
+    if seventh or not triad or semisAbove(key, degree, 1) ~= 2 then return nil end
+    return (flavour == "add2") and { 0, 1, 2, 4 } or { 0, 2, 4, 8 }
+  elseif flavour == "9" then
+    if not seventh or not triad or semisAbove(key, degree, 8) ~= 14 then return nil end
+    return { 0, 2, 4, 6, 8 }
+  elseif flavour == "6" then
+    if not triad or semisAbove(key, degree, 5) ~= 9 then return nil end
+    return { 0, 2, 4, 5 }
+  elseif flavour == "dim" then
+    if M.degreeQuality(key, degree + 2) ~= "diminished" then return nil end
+    return { 2, 4, 6, 8 }
+  elseif flavour == "6/9" then
+    -- (1.12: a 6 with the whole-tone ninth on top - not in FLAVOURS, so the
+    -- flavours drawn before are drawn the same; a 6 may become one.)
+    if seventh or not triad or semisAbove(key, degree, 5) ~= 9 or semisAbove(key, degree, 1) ~= 2 then return nil end
+    return { 0, 2, 4, 5, 8 }
+  end
+end
+
+-- The chord on a degree with a flavour, or nil. It keeps the degree it
+-- stands for (`degree`), so the walk, the cadences and the tune read it as
+-- the chord it colours; `flavour` says how.
+function M.flavourChord(key, degree, flavour, seventh)
+  local d = norm(key, degree)
+  local shape = M.flavourShape(key, d, flavour, seventh)
+  if not shape then return nil end
+  local base = d + shape[1]
+  local ch = { degree = norm(key, base), pos = {}, pcs = {}, has = {}, colour = "Mixed",
+               flavour = flavour, stands = d }
+  for i, o in ipairs(shape) do
+    ch.pos[i] = d + o
+    ch.pcs[i] = M.pc(key, d + o)
+    ch.has[ch.pcs[i]] = true
+  end
+  ch.rootPc = ch.pcs[1]
+  ch.quality = M.degreeQuality(key, ch.degree)
+  ch.numeral = M.degreeNumeral(key, ch.degree)
+  ch.addInside = flavour == "add2" or nil
+  ch.ninthUp = (flavour == "add9" or flavour == "9" or flavour == "6/9") or nil
+  ch.nine = M.ninthOf(key, ch.degree)
+  ch.name = M.chordName(key, ch)
+  -- An added 2nd and an added 9th are the same notes; the name says which
+  -- way it is voiced.
+  if flavour == "add2" then
+    ch.name = M.noteName(key, ch.degree) .. ((ch.quality == "minor") and "m(add2)" or "add2")
+  elseif flavour == "6/9" then
+    ch.name = M.noteName(key, ch.degree) .. ((ch.quality == "minor") and "m6/9" or "6/9")
+  end
+  return ch
+end
+
+-- The whole-tone ninth above a degree, as a pitch class, where the scale has
+-- one: the note a rootless voicing puts in place of the root.
+function M.ninthOf(key, degree)
+  if M.scaleLen(key) ~= 7 then
+    local o = stepFor(key, degree, { 2 })
+    return o and M.pc(key, degree + o) or nil
+  end
+  if semisAbove(key, degree, 1) == 2 then return M.pc(key, degree + 1) end
+  return nil
+end
 
 ------------------------------------------------------------------------------
 -- Which chord follows which
@@ -534,7 +663,8 @@ function M.cadenceChords(key, half)
     if half and M.rootAbove(key, d) == 5 then w = nil end
     if w then
       local q = M.degreeQuality(key, d)
-      if M.rootAbove(key, d) == 7 and q ~= "major" then w = 2 end   -- v, not V
+      -- (v, not V - but in the Minor scale the V is harmonic minor's, 1.13.)
+      if M.rootAbove(key, d) == 7 and q ~= "major" and M.SCALES[key.scale].name ~= "Minor" then w = 2 end
       if M.rootAbove(key, d) == 1 and q ~= "major" then w = 0 end   -- only a major bII
       if q == "diminished" or q == "augmented" then w = w * 0.25 end
       if w > 0 then out[#out + 1] = { degree = d, weight = w } end
@@ -584,6 +714,10 @@ end
      opts.start    the first chord (default the tonic)
      opts.cadence  how it ends:
                      "PAC", "IAC"  a cadence chord, then the tonic
+                     "DC"          a cadence chord, then vi (a deceptive close)
+                     "EC"          a cadence chord, then the tonic - which
+                                   gi_idea stands on its third (an evaded
+                                   close, 1.13)
                      "HC"          on a cadence chord (a half cadence)
                      "open"        on anything but the tonic that leads back
                                    to opts.loopTo (default the first chord),
@@ -602,7 +736,14 @@ function M.progression(key, n, opts, rnd)
   local start = norm(key, opts.start or 0)
   local cad = opts.cadence or "none"
   local tail = {}
-  if cad == "PAC" or cad == "IAC" then
+  -- A deceptive cadence (1.8): a cadence chord, then vi (VI in minor) where
+  -- the tonic was due - in a seven-note scale; elsewhere, an imperfect close.
+  if cad == "DC" and M.scaleLen(key) ~= 7 then cad = "IAC" end
+  if cad == "DC" then
+    if n == 1 then return { 5 } end
+    local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
+    tail = { c.degree, 5 }
+  elseif cad == "PAC" or cad == "IAC" or cad == "EC" then
     if n == 1 then return { 0 } end
     local c = draw(rnd, M.cadenceChords(key), function(x) return x.weight end)
     tail = { c.degree, 0 }
@@ -718,7 +859,9 @@ local function mean(t)
   return s / math.max(1, #t)
 end
 
-function M.voice(pcs, prev, lo, hi)
+-- (`want`, a pitch the voicing should have if it can - the note a seventh
+-- falls to - weighs a voicing without it down.)
+function M.voice(pcs, prev, lo, hi, want)
   local best, bestCost
   local centre = (lo + hi) / 2
   for base = lo, hi do
@@ -745,11 +888,267 @@ function M.voice(pcs, prev, lo, hi)
           cost = 0
         end
         cost = cost + 0.15 * math.abs(mean(notes) - centre)
+        if want then
+          local has = false
+          for _, p in ipairs(notes) do if p == want then has = true end end
+          if not has then cost = cost + 8 end
+        end
         if not bestCost or cost < bestCost then best, bestCost = notes, cost end
       end
     end
   end
   return best or {}
+end
+
+------------------------------------------------------------------------------
+-- Voicings (docs/decisions/0018-flavours-voicings-and-inversions.md)
+--
+-- The ways a player lays a chord out, each made as a set of candidate
+-- shapes in every octave, the one nearest the chord before chosen (as close
+-- position is):
+--
+--   Close     every note once, inside an octave (`M.voice`, unchanged)
+--   Open      spread: the root, the fifth, then the third an octave up and
+--             the rest above it - 1 5 3 7 (9)
+--   Drop 2    four voices in close position, the second from the top
+--             dropped an octave; Drop 3 the third; Drop 2 & 4 the second
+--             and the fourth. A triad doubles its root to make four; a
+--             five-note chord leaves out its fifth.
+--   Shell     the root, the third and the seventh - the notes that say what
+--             the chord is (a sus chord's fourth or second stands for the
+--             third; a chord with no seventh takes its sixth, or its fifth)
+--   Rootless  no root (the bass has it): the third, fifth, seventh and the
+--             ninth in its place, with the third or the seventh at the
+--             bottom (Bill Evans' A and B shapes). A chord whose ninth is
+--             not a whole tone keeps its root.
+--
+-- No two voices closer than a fourth below C3 (the low interval limit):
+-- thirds down there are mud.
+------------------------------------------------------------------------------
+
+M.VOICINGS = { "Close", "Open", "Drop 2", "Drop 3", "Drop 2 & 4", "Shell", "Rootless", "Power", "Drop 4" }
+
+-- What a note is in its chord, by its distance above the root.
+local function roleOf(ch, pc)
+  local iv = (pc - ch.rootPc) % 12
+  if iv == 0 then return "R" end
+  if iv == 1 or iv == 2 then return "9" end
+  if iv == 3 or iv == 4 then return "3" end
+  if iv == 5 then return "4" end
+  if iv == 9 then return "6" end
+  if iv == 10 or iv == 11 then return "7" end
+  return "5"
+end
+M.roleOf = roleOf
+
+-- The chord's notes, each once, ordered by height above the root.
+local function byHeight(ch, pcs)
+  local seen, out = {}, {}
+  for _, pc in ipairs(pcs) do
+    if not seen[pc] then seen[pc] = true; out[#out + 1] = pc end
+  end
+  table.sort(out, function(a, b) return (a - ch.rootPc) % 12 < (b - ch.rootPc) % 12 end)
+  return out
+end
+
+-- Each pitch class placed the first pitch above the one before, from `base`.
+local function stackUp(base, pcs)
+  local out = { base }
+  for i = 2, #pcs do
+    local p = out[i - 1] + 1
+    while p % 12 ~= pcs[i] do p = p + 1 end
+    out[i] = p
+  end
+  return out
+end
+
+-- Every rotation of a cyclic order of pitch classes.
+local function rotations(pcs)
+  local out = {}
+  for i = 1, #pcs do
+    local r = {}
+    for j = 0, #pcs - 1 do r[#r + 1] = pcs[(i - 1 + j) % #pcs + 1] end
+    out[#out + 1] = r
+  end
+  return out
+end
+
+local function find(ch, pcs, role)
+  for _, pc in ipairs(pcs) do if roleOf(ch, pc) == role then return pc end end
+end
+
+-- The shapes (as orders of pitch classes from the bottom up, and how to
+-- spread them) a style can take for a chord.
+local function shapes(ch, style)
+  local pcs = byHeight(ch, ch.pcs)
+  local out = {}
+  if style == "Open" then
+    local order = { ch.rootPc }
+    local fifth = find(ch, pcs, "5")
+    if fifth then order[#order + 1] = fifth end
+    -- (No fifth - an Italian sixth, 1.15: the seventh next, then the third
+    -- an octave up, the root-seventh-tenth spread.)
+    local seventh = not fifth and find(ch, pcs, "7")
+    if seventh then order[#order + 1] = seventh end
+    for _, role in ipairs({ "3", "4", "6", "7", "9" }) do
+      for _, pc in ipairs(pcs) do
+        if roleOf(ch, pc) == role and pc ~= fifth and pc ~= seventh then order[#order + 1] = pc end
+      end
+    end
+    out[1] = { order = order }
+  elseif style == "Drop 2" or style == "Drop 3" or style == "Drop 2 & 4" or style == "Drop 4" then
+    -- (A two-note chord - the pentatonic scales' third without a fifth - has
+    -- nothing to drop; it stays in close position.)
+    if #pcs < 3 then return out end
+    local four = pcs
+    if #pcs == 3 then
+      -- A triad doubles its root: R 3 5 R, or 5 R 3 5 with the root inside.
+      out[#out + 1] = { order = { pcs[1], pcs[2], pcs[3], pcs[1] }, drop = style }
+      out[#out + 1] = { order = { pcs[3], pcs[1], pcs[2], pcs[3] }, drop = style }
+      return out
+    end
+    if #pcs > 4 then
+      four = {}
+      for _, pc in ipairs(pcs) do if roleOf(ch, pc) ~= "5" then four[#four + 1] = pc end end
+      while #four > 4 do table.remove(four) end
+    end
+    for _, r in ipairs(rotations(four)) do out[#out + 1] = { order = r, drop = style } end
+  elseif style == "Shell" then
+    local third = find(ch, pcs, "3") or find(ch, pcs, "4") or find(ch, pcs, "9")
+    local top = find(ch, pcs, "7") or find(ch, pcs, "6") or find(ch, pcs, "5")
+    if third and top then
+      out[1] = { order = { ch.rootPc, third, top } }
+      out[2] = { order = { ch.rootPc, top, third } }
+    end
+  elseif style == "Power" then
+    -- (1.12) The root, the fifth over it and the root again: no third. A
+    -- chord with no perfect fifth (diminished, augmented) plays its root in
+    -- octaves.
+    local fifth
+    for _, pc in ipairs(ch.pcs) do if (pc - ch.rootPc) % 12 == 7 then fifth = pc end end
+    out[1] = { order = fifth and { ch.rootPc, fifth, ch.rootPc } or { ch.rootPc, ch.rootPc } }
+  elseif style == "Rootless" then
+    local set = {}
+    for _, pc in ipairs(pcs) do if pc ~= ch.rootPc then set[#set + 1] = pc end end
+    if ch.nine and not ch.has[ch.nine] then set[#set + 1] = ch.nine end
+    if #set >= 3 then
+      set = byHeight(ch, set)
+      for _, r in ipairs(rotations(set)) do
+        local bottom = roleOf(ch, r[1])
+        if bottom == "3" or bottom == "7" or bottom == "4" then out[#out + 1] = { order = r } end
+      end
+      if #out == 0 then for _, r in ipairs(rotations(set)) do out[#out + 1] = { order = r } end end
+    end
+  end
+  return out
+end
+
+-- (1.14) Drop 4: the lowest of four close notes dropped an octave - three
+-- close notes over a gap.
+local DROPS = { ["Drop 2"] = { 2 }, ["Drop 3"] = { 3 }, ["Drop 2 & 4"] = { 2, 4 }, ["Drop 4"] = { 4 } }
+
+local function muddy(notes)
+  for i = 2, #notes do
+    if notes[i] - notes[i - 1] <= 4 and notes[i - 1] < 48 then return true end
+  end
+  return false
+end
+
+-- Close position for a flavoured chord: an added 2nd sits inside, between
+-- the root and the third; an added 9th goes on top, above the rest.
+local function closeFlavoured(ch, prev, lo, hi)
+  if ch.addInside then
+    local best, bestCost
+    local order = byHeight(ch, ch.pcs)
+    for base = lo, hi do
+      if base % 12 == ch.rootPc then
+        local notes = stackUp(base, order)
+        if notes[#notes] <= hi then
+          local cost = prev and math.abs(mean(notes) - mean(prev)) * #notes or 0
+          cost = cost + 0.15 * math.abs(mean(notes) - (lo + hi) / 2)
+          if not bestCost or cost < bestCost then best, bestCost = notes, cost end
+        end
+      end
+    end
+    return best
+  end
+  local rest, nine = {}, nil
+  for _, pc in ipairs(ch.pcs) do
+    if roleOf(ch, pc) == "9" then nine = pc else rest[#rest + 1] = pc end
+  end
+  local v = M.voice(rest, prev, lo, hi - 3)
+  if #v == 0 or not nine then return nil end
+  local p = v[#v] + 1
+  while p % 12 ~= nine do p = p + 1 end
+  v[#v + 1] = p
+  return v
+end
+
+local function spread(list, prev, lo, hi, want)
+  local best, bestCost
+  local centre = (lo + hi) / 2
+  for _, sh in ipairs(list) do
+    for base = lo - 24, hi do
+      if base % 12 == sh.order[1] then
+        local notes = stackUp(base, sh.order)
+        if sh.drop then
+          for _, k in ipairs(DROPS[sh.drop]) do
+            local i = #notes - k + 1
+            notes[i] = notes[i] - 12
+          end
+          table.sort(notes)
+        end
+        if notes[1] >= lo and notes[#notes] <= hi and not muddy(notes) then
+          local cost
+          if prev and #prev == #notes then
+            cost = 0
+            for i = 1, #notes do cost = cost + math.abs(notes[i] - prev[i]) end
+          elseif prev then
+            cost = math.abs(mean(notes) - mean(prev)) * #notes
+          else
+            cost = 0
+          end
+          cost = cost + 0.15 * math.abs(mean(notes) - centre)
+          if want then
+            local has = false
+            for _, p in ipairs(notes) do if p == want then has = true end end
+            if not has then cost = cost + 8 end
+          end
+          if not bestCost or cost < bestCost then best, bestCost = notes, cost end
+        end
+      end
+    end
+  end
+  return best
+end
+
+-- The chord voiced in a style, nearest the voicing before. A spread
+-- voicing needs about two octaves, so where it does not fit between lo and
+-- hi it may reach down an octave (not below `floor`), then up a fifth;
+-- failing that it is {} and the caller decides. A chord the style has no
+-- shape for (a two-note chord in a drop voicing) is played in close
+-- position.
+function M.voiceAs(ch, style, prev, lo, hi, floor, want)
+  if style == "Close" or not style then
+    if ch.addInside or ch.ninthUp then
+      local v = closeFlavoured(ch, prev, lo, hi)
+      if v then return v end
+    end
+    return M.voice(ch.pcs, prev, lo, hi, want)
+  end
+  local list = shapes(ch, style)
+  if #list > 0 then
+    local down = math.max(floor or lo, lo - 12)
+    for _, w in ipairs({ { lo, hi }, { down, hi }, { down, hi + 7 } }) do
+      local v = spread(list, prev, w[1], w[2], want)
+      if v then return v end
+    end
+    return {}
+  end
+  -- (Close position, then, but above C3 where it can be: no muddy thirds.)
+  local v = M.voice(ch.pcs, prev, math.max(lo, 48), hi, want)
+  if #v > 0 then return v end
+  return M.voice(ch.pcs, prev, lo, hi, want)
 end
 
 -- A root in the bass: the octave of `pc` inside [lo, hi] nearest the last
