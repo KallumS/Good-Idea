@@ -24,7 +24,7 @@ local g = {}
 local function resetFrame()
   g.idDepth, g.colDepth, g.colStack, g.idStack, g.paths = 0, 0, {}, {}, {}
   g.buttons, g.ink, g.texts, g.checkboxes, g.headings, g.tooltips = {}, {}, {}, {}, {}, {}
-  g.inputs, g.sliders = {}, {}
+  g.inputs, g.sliders, g.ticked = {}, {}, {}
   g.rects, g.bgAlpha, g.windowBg = {}, nil, nil
 end
 resetFrame()
@@ -100,6 +100,7 @@ end
 function ImGui.Checkbox(_, label, v)
   if type(v) ~= "boolean" then error("Checkbox value is a " .. type(v)) end
   g.checkboxes[#g.checkboxes + 1] = label
+  g.ticked[label] = v
   if g.toggle == label then return true, not v end
   return false, v
 end
@@ -141,7 +142,15 @@ end
 function ImGui.GetContentRegionAvail() return 1000, 400 end
 function ImGui.GetWindowDrawList() return {} end
 function ImGui.GetCursorScreenPos() return 0, 0 end
-function ImGui.InvisibleButton() return false end
+-- The roll is an InvisibleButton; g.rollAt, an x in pixels, clicks it there.
+function ImGui.InvisibleButton(_, id, w, h)
+  if type(id) ~= "string" or type(w) ~= "number" or type(h) ~= "number" then
+    error("InvisibleButton(ctx, str_id, size_w, size_h)")
+  end
+  return g.rollAt ~= nil
+end
+-- ReaImGui's GetMousePos(ctx) returns x and y.
+function ImGui.GetMousePos() return g.rollAt or 0, 0 end
 function ImGui.DrawList_AddRectFilled(_, x1, y1, x2, y2, col)
   for _, v in ipairs({ x1, y1, x2, y2, col }) do
     if type(v) ~= "number" or v ~= v then error("rect argument is " .. tostring(v)) end
@@ -192,9 +201,10 @@ local function start()
 end
 
 -- One frame, optionally clicking the n-th button drawn in it.
-local function frame(click, toggle, typeSeed, slide)
+local function frame(click, toggle, typeSeed, slide, rollAt)
   resetFrame()
   g.clickTarget, g.clicked, g.toggle, g.typeSeed, g.slide = click, nil, toggle, typeSeed, slide
+  g.rollAt = rollAt
   local f = deferred
   deferred = nil
   if not f then error("the script stopped deferring") end
@@ -730,6 +740,125 @@ frame()
 click("New Idea")
 eq(count("Stop"), 1, "with Play new ideas ticked, a new idea starts playing")
 
+------------------------------------------------------------------------------
+-- 1.17: playing with REAPER, the roll, where Export writes
+------------------------------------------------------------------------------
+
+local function checked(label) return g.ticked[label] == true end
+
+fresh()
+ok(checked("Play with REAPER"), "there is a Play with REAPER switch, ticked")
+eq(count("Audition"), 1, "REAPER stopped: Audition")
+P.cursor, P.playing, P.playPos = 0, true, 0.01
+frame()
+frame()
+eq(count("Stop"), 1, "REAPER plays: so does the idea, and Audition reads Stop")
+ok(#P.stuffed > 0, "notes went to the virtual keyboard")
+local before = ideaNumber()
+click("New Idea")
+ok(ideaNumber() ~= before, "a new idea while REAPER plays")
+eq(count("Stop"), 1, "comes straight in, still playing with REAPER")
+P.playing = false
+frame()
+frame()
+eq(count("Audition"), 1, "REAPER stops: so does the idea")
+
+-- With Play new ideas ticked too, a new idea still comes in with REAPER.
+fresh()
+frame(nil, "Play new ideas")
+P.cursor, P.playing, P.playPos = 0, true, 0.01
+frame()
+click("New Idea")
+P.playing = false
+frame()
+frame()
+eq(count("Audition"), 1, "with Play new ideas, a new idea still plays with REAPER, and stops with it")
+
+-- Stopped by hand while REAPER plays, Audition joins REAPER again.
+fresh()
+P.cursor, P.playing, P.playPos = 0, true, 0.01
+frame()
+click("Stop")
+eq(count("Audition"), 1, "stopped by hand")
+P.now = P.now + 1
+frame()
+eq(count("Audition"), 1, "and stays stopped while REAPER plays")
+click("Audition")
+eq(count("Stop"), 1, "Audition starts it again")
+P.playing = false
+frame()
+frame()
+eq(count("Audition"), 1, "with REAPER: it stops when REAPER does")
+
+-- Unticked, REAPER's play button is ignored, and that is saved.
+fresh()
+frame(nil, "Play with REAPER")
+P.playing, P.playPos = true, 0.01
+local sent = #P.stuffed
+frame()
+frame()
+eq(count("Audition"), 1, "unticked, REAPER's play is ignored")
+eq(#P.stuffed, sent, "and nothing is sent")
+atexitFn()
+ok(P.ext["GoodIdea:state"]:find("follow=0", 1, true), "the switch is saved")
+start()
+frame()
+frame()
+eq(count("Audition"), 1, "and comes back off")
+ok(not checked("Play with REAPER"), "unticked")
+
+-- A click on the roll plays from there.
+fresh()
+frame(nil, nil, nil, nil, 500)
+frame()
+eq(count("Stop"), 1, "a click on the roll auditions")
+ok(has(g.texts, "Playing from bar"), "and says where from")
+-- With REAPER playing, it moves REAPER there.
+fresh()
+P.cursor, P.playing, P.playPos = 0, true, 0
+frame()
+frame(nil, nil, nil, nil, 999)
+ok(P.cursor > 0, "with REAPER playing, a click moves REAPER's play position: " .. P.cursor)
+
+-- Save .mid to: the project's folder, REAPER's, or one chosen; and Open folder.
+fresh()
+eq(chosenIn("exportTo"), "Project folder", "Export goes beside the project unless told otherwise")
+ok(has(g.texts, "the project is not saved yet"), "an unsaved project says where it goes instead")
+local proj = os.tmpname()
+os.remove(proj)
+os.execute('mkdir -p "' .. proj .. '"')
+P.project = proj .. "/Song.rpp"
+click("Export .mid")
+local inProject = io.open(proj .. "/Good Idea/" .. (heading():gsub("[^%w%s%-%+#&%.]", "_"):gsub("#", "sharp")) .. ".mid", "rb")
+ok(inProject, "a saved project: into a Good Idea folder beside it")
+if inProject then inProject:close() end
+ok(has(g.texts, proj .. "/Good Idea"), "and the folder is shown")
+click("Open folder")
+eq(P.execs[#P.execs] and P.execs[#P.execs].cmd, 'open "' .. proj .. '/Good Idea"', "Open folder opens it")
+clickIn("exportTo", "REAPER folder")
+ok(has(g.texts, P.resource .. "/Good Idea"), "REAPER's folder, shown")
+P.js, P.jsFolder = true, proj .. "/Chosen"
+clickIn("exportTo", "Choose folder...")
+eq(chosenIn("exportTo"), "Choose folder...", "a folder chosen")
+click("Export .mid")
+local chosenFiles = io.popen('ls "' .. proj .. '/Chosen"'):read("a")
+ok(chosenFiles:find("%.mid"), "Export writes into it")
+eq(P.ext["GoodIdea:exportDir"], proj .. "/Chosen", "and it is saved")
+atexitFn()
+start()
+frame()
+eq(chosenIn("exportTo"), "Choose folder...", "it comes back after a restart")
+ok(has(g.texts, proj .. "/Chosen"), "the folder itself too")
+P.jsFolder = nil
+clickIn("exportTo", "REAPER folder")
+clickIn("exportTo", "Choose folder...")
+eq(chosenIn("exportTo"), "REAPER folder", "cancelling the chooser changes nothing")
+atexitFn()
+start()
+frame()
+eq(chosenIn("exportTo"), "REAPER folder", "the choice comes back")
+os.execute('rm -rf "' .. proj .. '"')
+
 -- No track selected: said, in red, and nothing breaks.
 fresh()
 P.selTracks = {}
@@ -897,10 +1026,13 @@ ok(heading():find("Good Idea 555 - Phrase (both), 3 bars, D Dorian", 1, true), "
 -- Settings from nowhere in particular are clamped rather than trusted.
 P.ext["GoodIdea:state"] = "seed=-9;autoplay=7;kind=Sonnet;motifBars=99;root=0;scale=40;pace=Fast;" ..
   "groove=;contour=Spiral;register=Attic;colour=Plaid;chordPace=Never;chordStyle=Mosh;form=Haiku;" ..
-  "bass=Slap;drums=Maybe;layout=Pile;velocity=Loud;content=Words"
+  "bass=Slap;drums=Maybe;layout=Pile;velocity=Loud;content=Words;follow=Sometimes;exportTo=Moon"
 start()
 local good, err = pcall(frame)
 ok(good, "a nonsense saved state still draws: " .. tostring(err))
 ok(heading():find("^Good Idea 1 %- Motif"), "as the first motif: " .. heading())
+eq(chosenIn("exportTo"), "Project folder", "a nonsense export folder: the project's")
+frame()
+ok(checked("Play with REAPER"), "and a nonsense switch: on")
 
 C.done()

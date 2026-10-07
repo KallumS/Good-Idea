@@ -17,6 +17,14 @@
      time_precise, each from its documented signature). Good Idea adds
      nothing: every call it makes was already here. Re-checked against the
      REAPER API functions page (REAPER 7.79) on 2026-10-01.
+
+     1.17 adds GetPlayPosition2, EnumProjects, GetOS, ExecProcess and
+     GetUserInputs, from the REAPER API functions page (REAPER 7.79, which
+     the user uploaded again on 2026-10-07), a recording state for
+     GetPlayState, and two
+     extension functions a script may only test for: SWS's CF_ShellExecute
+     and js_ReaScriptAPI's JS_Dialog_BrowseForFolder. Those read nil (not
+     installed) unless a test sets P.sws or P.js.
 ]]
 
 local P = {
@@ -24,7 +32,8 @@ local P = {
   selTracks = {}, lastTouched = nil, stuffed = {}, now = 1000.0,
   resource = "/tmp/good-idea-test-resource",
   tempo = 120, num = 4, den = 4,
-  cursor = 0, playing = false, playPos = 0,
+  cursor = 0, playing = false, playPos = 0, recording = false,
+  project = "", os = "OSX64", execs = {}, inputs = nil, sws = false, js = false, shell = {},
   undoDepth = 0, undoNames = {}, refreshDepth = 0,
   ext = {}, calls = {},
 }
@@ -178,11 +187,17 @@ local api = {
     P.stuffed[#P.stuffed + 1] = { mode = mode, a = a, b = b, c = c }
   end,
   GetCursorPosition = function() return P.cursor end,
-  SetEditCurPos = function(t, moveview, seekplay) P.cursor = t end,
+  SetEditCurPos = function(t, moveview, seekplay)
+    P.cursor = t
+    if seekplay and P.playing then P.playPos = t end
+  end,
   OnPlayButton = function() P.playing = true; P.playPos = P.cursor; P.calls.play = (P.calls.play or 0) + 1 end,
   OnStopButton = function() P.playing = false; P.calls.stop = (P.calls.stop or 0) + 1 end,
-  GetPlayState = function() return P.playing and 1 or 0 end,
+  -- integer GetPlayState(): &1 playing, &2 paused, &4 recording
+  GetPlayState = function() return (P.playing and 1 or 0) + (P.recording and 4 or 0) end,
   GetPlayPosition = function() return P.playPos end,
+  -- number GetPlayPosition2(): the next audio block being processed
+  GetPlayPosition2 = function() return P.playPos end,
 
   -- Housekeeping
   Undo_BeginBlock = function() P.undoDepth = P.undoDepth + 1 end,
@@ -208,14 +223,57 @@ local api = {
     return 1
   end,
 
+  -- ReaProject retval, optional string projfn = EnumProjects(integer idx)
+  EnumProjects = function(idx)
+    if idx ~= -1 then error("the scripts ask for the current project, -1") end
+    return { kind = "project" }, P.project
+  end,
+  -- string GetOS(): "Win32", "Win64", "OSX32", "OSX64", "macOS-arm64", or "Other"
+  GetOS = function() return P.os end,
+  -- string ExecProcess(string cmdline, integer timeoutmsec): -1 is no wait
+  ExecProcess = function(cmd, timeout)
+    if type(cmd) ~= "string" or math.type(timeout) ~= "integer" then error("ExecProcess(cmdline, timeoutmsec)") end
+    P.execs[#P.execs + 1] = { cmd = cmd, timeout = timeout }
+    return "0\n"
+  end,
+  -- boolean retval, string retvals_csv = GetUserInputs(string title,
+  -- integer num_inputs, string captions_csv, string retvals_csv)
+  GetUserInputs = function(title, n, captions, values)
+    if type(title) ~= "string" or math.type(n) ~= "integer" or type(captions) ~= "string"
+       or type(values) ~= "string" then error("GetUserInputs(title, num_inputs, captions_csv, retvals_csv)") end
+    P.asked = { title = title, n = n, captions = captions, values = values }
+    if P.inputs == nil then return false, values end
+    return true, P.inputs
+  end,
+
   -- Settings
   GetExtState = function(s, k) return P.ext[s .. ":" .. k] or "" end,
   SetExtState = function(s, k, v, persist) P.ext[s .. ":" .. k] = v end,
 }
 
+-- Extension functions: there when the extension is installed, nil when not.
+local extensions = {
+  -- boolean CF_ShellExecute(string file)  (SWS)
+  CF_ShellExecute = function()
+    if not P.sws then return nil end
+    return function(file) P.shell[#P.shell + 1] = file; return true end
+  end,
+  -- integer retval, string folder = JS_Dialog_BrowseForFolder(string caption,
+  -- string initialFolder)  (js_ReaScriptAPI): 1 chosen, 0 cancelled, -1 error
+  JS_Dialog_BrowseForFolder = function()
+    if not P.js then return nil end
+    return function(caption, initial)
+      if type(caption) ~= "string" or type(initial) ~= "string" then error("JS_Dialog_BrowseForFolder(caption, initialFolder)") end
+      if P.jsFolder then return 1, P.jsFolder end
+      return 0, ""
+    end
+  end,
+}
+
 function P.install()
   reaper = setmetatable({}, {
     __index = function(_, k)
+      if extensions[k] then return extensions[k]() end
       local f = api[k]
       if f == nil then error("the script called reaper." .. tostring(k) .. ", which the mock does not have") end
       return f
@@ -229,7 +287,9 @@ function P.reset()
   P.tracks, P.selected, P.editorTake = {}, {}, nil
   P.selTracks, P.lastTouched, P.stuffed, P.now = {}, nil, {}, 1000.0
   P.tempo, P.num, P.den = 120, 4, 4
-  P.cursor, P.playing, P.playPos = 0, false, 0
+  P.cursor, P.playing, P.playPos, P.recording = 0, false, 0, false
+  P.project, P.os, P.execs, P.inputs, P.asked = "", "OSX64", {}, nil, nil
+  P.sws, P.js, P.jsFolder, P.shell = false, false, nil, {}
   P.undoDepth, P.undoNames, P.refreshDepth = 0, {}, 0
   P.calls = {}
 end

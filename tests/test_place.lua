@@ -223,9 +223,219 @@ Place.previewStop()
 P.reset()
 Place.previewStart(b, 120, 0)
 local again = Place.previewTick(b.beats / 2 + 0.01, true)
-eq(again, 0, "with Loop on, the end starts it again")
+ok(again and again < 0.01, "with Loop on, the end starts it again, keeping time: " .. tostring(again))
+-- A second later (two beats at 120) it is 2.02 beats in: the round kept the
+-- time it went round at, not the time the wake-up came.
+local later = Place.previewTick(b.beats / 2 + 1.01, true)
+ok(later and math.abs(later * b.beats - 2.02) < 1e-6, "and keeps time after it: " .. tostring(later and later * b.beats))
 ok(Place.previewRunning(), "and it keeps running")
 Place.previewStop()
 ok(not Place.previewRunning(), "until stopped")
+
+------------------------------------------------------------------------------
+-- 1.17: playing with REAPER
+--
+-- At 120 a quarter note is half a second: the project's quarter note is the
+-- time times two.
+------------------------------------------------------------------------------
+
+-- The note-ons sent since `from`, as "channel:pitch" keys.
+local function onsSince(from)
+  local out = {}
+  for i = from + 1, #P.stuffed do
+    local m = P.stuffed[i]
+    if m.a >= 0x90 then out[#out + 1] = (m.a - 0x90) .. ":" .. m.b end
+  end
+  table.sort(out)
+  return table.concat(out, " ")
+end
+-- The notes of a block that start in (lo, hi], or that sound across `lo`
+-- when `across`, as the same keys.
+local function notesIn(block, lo, hi, across)
+  local out = {}
+  for _, n in ipairs(block.notes) do
+    local hit = across and (n.start <= lo and n.start + n.len > lo) or (n.start > lo and n.start <= hi)
+    if hit then out[#out + 1] = (n.chan or 0) .. ":" .. n.pitch end
+  end
+  table.sort(out)
+  return table.concat(out, " ")
+end
+local function hangingNotes()
+  local on = {}
+  for _, m in ipairs(P.stuffed) do
+    local k = (m.a % 16) * 128 + m.b
+    on[k] = (on[k] or 0) + ((m.a >= 0x90) and 1 or -1)
+  end
+  local n = 0
+  for _, v in pairs(on) do if v > 0 then n = n + 1 end end
+  return n
+end
+
+P.reset()
+Place.previewStop()
+Place.follow(b, true)
+ok(not Place.previewRunning(), "with REAPER stopped, nothing plays")
+P.cursor = 5          -- quarter note 10: two beats into the third bar, which starts on 8
+P.playing, P.playPos = true, 5
+Place.follow(b, true)
+ok(Place.previewWithReaper(), "REAPER plays: the idea plays with it")
+eq(Place.anchorQN(), 8, "from the start of the bar the edit cursor is in")
+local where = Place.previewTick(nil, false)
+eq(where, 2 / b.beats, "two beats in, where REAPER is")
+ok(notesIn(b, 2, 2, true) ~= "", "(something sounds across beat 2)")
+eq(onsSince(0), notesIn(b, 2, 2, true), "the notes held across beat 2 are struck, so a chord is heard")
+local mark = #P.stuffed
+P.playPos = 5.25
+Place.previewTick(nil, false)
+eq(onsSince(mark), notesIn(b, 2, 2.5), "half a beat on, the notes due in that half beat")
+mark = #P.stuffed
+P.playPos = 3         -- before the bar the idea starts on
+eq(Place.previewTick(nil, false), nil, "before its bar, nothing")
+eq(hangingNotes(), 0, "and nothing left sounding")
+P.playPos = (8 + b.beats + 0.5) / 2
+eq(Place.previewTick(nil, false), nil, "after its end with Loop off, nothing")
+eq(hangingNotes(), 0, "and silent")
+mark = #P.stuffed
+local round = Place.previewTick(nil, true)
+eq(round, 0.5 / b.beats, "with Loop on it goes round, in time with the project")
+eq(onsSince(mark), notesIn(b, 0.5, 0.5, true), "playing what sounds half a beat in")
+P.playing = false
+Place.follow(b, true)
+ok(not Place.previewRunning(), "REAPER stops: so does the idea")
+eq(hangingNotes(), 0, "with every note stopped")
+
+-- Never while recording: the take would record it.
+P.reset()
+P.playing, P.recording = true, true
+Place.follow(b, true)
+ok(not Place.previewRunning(), "never while REAPER records")
+P.recording = false
+
+-- The switch: off, REAPER's play is ignored; on while it plays, it joins in.
+P.reset()
+Place.follow(b, false)
+P.playing = true
+Place.follow(b, false)
+ok(not Place.previewRunning(), "Play with REAPER off: play is ignored")
+Place.follow(b, true)
+ok(Place.previewWithReaper(), "ticked while REAPER plays, it joins in")
+Place.follow(b, false)
+ok(not Place.previewRunning(), "unticked, it stops")
+
+-- Stopped by hand, it stays quiet until REAPER's next play.
+P.reset()
+Place.follow(b, true)
+P.playing = true
+Place.follow(b, true)
+Place.previewStop()
+Place.follow(b, true)
+ok(not Place.previewRunning(), "stopped by hand, it does not start again while REAPER plays")
+P.playing = false
+Place.follow(b, true)
+P.playing = true
+Place.follow(b, true)
+ok(Place.previewWithReaper(), "until REAPER plays again")
+
+-- A new idea while REAPER plays takes over where the old one was.
+P.reset()
+P.playing = false
+Place.follow(b, true)
+P.cursor, P.playing, P.playPos = 4, true, 5
+Place.follow(b, true)
+Place.previewTick(nil, false)
+local c2 = idea({ kind = "Phrase", content = "Both", phraseBars = 2 }, 7)
+ok(Place.previewSwap(c2), "a new idea swaps in")
+mark = #P.stuffed
+Place.previewTick(nil, false)
+eq(onsSince(mark), notesIn(c2, 2, 2, true), "and is heard from the same beat, in time")
+ok(Place.previewWithReaper(), "still with REAPER")
+
+-- A click on the roll: with REAPER playing, REAPER goes there.
+P.reset()
+P.playing = false
+Place.follow(b, true)
+P.cursor, P.playing, P.playPos = 4, true, 4
+Place.follow(b, true)
+Place.previewFrom(b, 4, 120, false)
+eq(P.cursor, 6, "REAPER's play position moves to beat 4 of the idea (quarter note 12)")
+eq(P.playPos, 6, "and playback with it")
+P.playPos = (8 + b.beats + 1) / 2   -- the second time round, with Loop on
+Place.previewTick(nil, true)
+Place.previewFrom(b, 4, 120, true)
+eq(P.cursor, (8 + b.beats + 4) / 2, "the second time round, to beat 4 of the second time round")
+
+-- Without REAPER playing, Audition plays from there.
+P.reset()
+P.playing = false
+Place.follow(b, true)
+Place.previewFrom(b, 4, 120, false)
+ok(Place.previewRunning() and not Place.previewWithReaper(), "with REAPER stopped, a click auditions")
+P.now = P.now + 0.001
+mark = #P.stuffed
+Place.previewTick(nil, false)
+eq(onsSince(mark), notesIn(b, 4, 4, true), "from beat 4, with what sounds across it")
+Place.previewStop()
+
+------------------------------------------------------------------------------
+-- 1.17: where Export writes
+------------------------------------------------------------------------------
+
+P.reset()
+local reaperDir = P.resource .. "/Good Idea"
+local d0, asked = Place.exportDir("Project", "")
+eq(d0, reaperDir, "an unsaved project: REAPER's Good Idea folder")
+eq(asked, false, "and says it is not the one asked for")
+P.project = "/music/My Song/My Song.rpp"
+eq(Place.exportDir("Project", ""), "/music/My Song/Good Idea", "a saved one: a Good Idea folder beside it")
+P.project = "C:\\Music\\Song.rpp"
+eq(Place.exportDir("Project", ""), "C:\\Music/Good Idea", "a Windows path too")
+eq(Place.exportDir("REAPER", "/x"), reaperDir, "REAPER: the resource path's")
+eq(select(2, Place.exportDir("Folder", "")), false, "a folder not chosen yet: REAPER's, and said")
+eq(Place.exportDir("Folder", "/somewhere"), "/somewhere", "a chosen folder")
+
+local out = os.tmpname()
+os.remove(out)
+local res3, path3 = Place.export(b, out .. "/")
+eq(res3, Place.OK, "export into a chosen folder")
+ok(path3 and path3:sub(1, #out + 1) == out .. "/" and not path3:find("//", 1, true), "into it: " .. tostring(path3))
+local f3 = path3 and io.open(path3, "rb")
+ok(f3, "the file is there")
+if f3 then f3:close() end
+os.execute('rm -rf "' .. out .. '"')
+
+-- Open folder: SWS's CF_ShellExecute, or the system's own command.
+P.reset()
+P.sws = true
+Place.openFolder("/music/Good Idea")
+eq(P.shell[1], "/music/Good Idea", "with SWS, CF_ShellExecute opens it")
+P.sws = false
+Place.openFolder("/music/Good Idea")
+eq(P.execs[1] and P.execs[1].cmd, 'open "/music/Good Idea"', "on a Mac, open")
+eq(P.execs[1] and P.execs[1].timeout, -1, "without waiting")
+P.os = "macOS-arm64"      -- the 7.79 page's name for an Apple-silicon Mac
+Place.openFolder("/music/Good Idea")
+eq(P.execs[#P.execs] and P.execs[#P.execs].cmd, 'open "/music/Good Idea"', "on an Apple-silicon Mac, open too")
+P.execs = { P.execs[1] }
+P.os = "Win64"
+Place.openFolder("C:\\Music\\Good Idea")
+eq(P.execs[2] and P.execs[2].cmd, 'explorer "C:\\Music\\Good Idea"', "on Windows, Explorer")
+P.os = "Other"
+Place.openFolder("/music")
+eq(P.execs[3] and P.execs[3].cmd, 'xdg-open "/music"', "elsewhere, xdg-open")
+
+-- Choosing one: the folder chooser with js_ReaScriptAPI, a box without.
+P.reset()
+P.js, P.jsFolder = true, "/chosen"
+eq(Place.chooseFolder("/start"), "/chosen", "js_ReaScriptAPI's folder chooser")
+P.jsFolder = nil
+eq(Place.chooseFolder("/start"), nil, "cancelled, nothing")
+P.js = false
+P.inputs = '  "/a b/c"  '
+eq(Place.chooseFolder("/start"), "/a b/c", "without it, a pasted path, quotes and spaces taken off")
+eq(P.asked and P.asked.values, "/start", "the box starts with the folder now")
+P.inputs = nil
+eq(Place.chooseFolder("/start"), nil, "cancelled, nothing")
+P.inputs = "   "
+eq(Place.chooseFolder("/start"), nil, "an empty box, nothing")
 
 C.done()
