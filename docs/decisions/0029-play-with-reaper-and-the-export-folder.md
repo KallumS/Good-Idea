@@ -102,6 +102,15 @@ session). `GetOS` on newer REAPERs also says "macOS-arm64", which the
 functions read nil unless a test installs them, as in a REAPER without
 SWS or js_ReaScriptAPI.
 
+### 2026-10-07, later: checked against REAPER 7.79
+
+The user uploaded the 7.79 API page again. Every `reaper.` call in the
+scripts is on it with the signature used and mocked; the three that are not
+are extensions' (`CF_ShellExecute`, `JS_Dialog_BrowseForFolder`,
+`ImGui_GetBuiltinPath`), which the page does not list. Its `GetOS` adds
+"macOS-arm64" to the 6.09 page's list: `openFolder` already took it for a
+Mac (`find("mac")`), and a test now says so. No code changed.
+
 ## Consequences
 
 - Once an idea is inserted, Play with REAPER plays it a second time over

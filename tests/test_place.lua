@@ -412,6 +412,10 @@ P.sws = false
 Place.openFolder("/music/Good Idea")
 eq(P.execs[1] and P.execs[1].cmd, 'open "/music/Good Idea"', "on a Mac, open")
 eq(P.execs[1] and P.execs[1].timeout, -1, "without waiting")
+P.os = "macOS-arm64"      -- the 7.79 page's name for an Apple-silicon Mac
+Place.openFolder("/music/Good Idea")
+eq(P.execs[#P.execs] and P.execs[#P.execs].cmd, 'open "/music/Good Idea"', "on an Apple-silicon Mac, open too")
+P.execs = { P.execs[1] }
 P.os = "Win64"
 Place.openFolder("C:\\Music\\Good Idea")
 eq(P.execs[2] and P.execs[2].cmd, 'explorer "C:\\Music\\Good Idea"', "on Windows, Explorer")

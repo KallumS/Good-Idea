@@ -19,8 +19,9 @@
      REAPER API functions page (REAPER 7.79) on 2026-10-01.
 
      1.17 adds GetPlayPosition2, EnumProjects, GetOS, ExecProcess and
-     GetUserInputs, from the REAPER API functions page (ReaTeam/Doc's copy,
-     read 2026-10-07), a recording state for GetPlayState, and two
+     GetUserInputs, from the REAPER API functions page (REAPER 7.79, which
+     the user uploaded again on 2026-10-07), a recording state for
+     GetPlayState, and two
      extension functions a script may only test for: SWS's CF_ShellExecute
      and js_ReaScriptAPI's JS_Dialog_BrowseForFolder. Those read nil (not
      installed) unless a test sets P.sws or P.js.
@@ -227,7 +228,7 @@ local api = {
     if idx ~= -1 then error("the scripts ask for the current project, -1") end
     return { kind = "project" }, P.project
   end,
-  -- string GetOS(): "Win32", "Win64", "OSX32", "OSX64", or "Other"
+  -- string GetOS(): "Win32", "Win64", "OSX32", "OSX64", "macOS-arm64", or "Other"
   GetOS = function() return P.os end,
   -- string ExecProcess(string cmdline, integer timeoutmsec): -1 is no wait
   ExecProcess = function(cmd, timeout)

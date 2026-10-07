@@ -516,10 +516,14 @@ added `GetPlayState`, `GetPlayPosition2`, `TimeMap_QNToMeasures`,
 `SetEditCurPos`, `EnumProjects`, `GetOS`, `ExecProcess`, `GetUserInputs`
 and two extension functions tested for before use (SWS's
 `CF_ShellExecute`, js_ReaScriptAPI's `JS_Dialog_BrowseForFolder`),
-checked against ReaTeam/Doc's copy of the API page on GitHub
+first checked against ReaTeam/Doc's copy of the API page on GitHub
 (`raw.githubusercontent.com/ReaTeam/Doc/master/reascripthelp.html`,
-REAPER 6.09; reaper.fm is blocked from the container). Re-check any new
-call there before using it, and write its mock from the same page.
+REAPER 6.09; reaper.fm is blocked from the container), then the same day
+against the 7.79 page the user uploaded again: every call in the scripts
+matches it, but for the extensions' (SWS, js_ReaScriptAPI, ReaImGui),
+which that page does not list. 7.79's `GetOS` also says "macOS-arm64".
+Re-check any new call there before using it (if the upload is gone,
+ReaTeam/Doc's copy is reachable), and write its mock from the same page.
 
 - `TimeMap_GetTimeSigAtTime` returns `num, denom, tempo` - no retval first.
 - `MIDI_InsertNote(take, sel, muted, startppq, endppq, chan, pitch, vel,
