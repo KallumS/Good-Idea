@@ -177,6 +177,18 @@ Idea numbers from 1.15 may give different ideas where a schema now sings, or a h
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/436e3777080e2fbeb8e49568d964c7a1224b3efe/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.17" author="kallums" time="2026-10-07T18:00:00Z">
+        <changelog><![CDATA[Play with REAPER (ticked to begin with): press play in REAPER and the idea plays along with your project, in its tempo, starting on the bar the edit cursor is in - where Insert would put it. Press New Idea or change a setting while it plays and the new idea comes in at the same place, in time. With Loop on it goes round in time with the project; REAPER's loop and moving REAPER's play position are followed, a chord held across the jump struck again. Untick it to have Good Idea ignore REAPER's play button. It never plays while REAPER records, so it cannot end up in a take. Once an idea is inserted, untick it or you will hear it twice.
+Click the picture of the notes to play from the nearest beat: on its own, Audition starts there; while playing with REAPER, REAPER's play position (and the edit cursor) jumps there.
+Export .mid now saves beside your project by default - a Good Idea folder next to the saved project (REAPER's folder until the project is saved) - and the folder is written under the buttons. Save .mid to: Project folder, REAPER folder or Choose folder..., and Open folder shows it in the Finder or Explorer. Exports from 1.0 to 1.16 went to REAPER's own Good Idea folder, which the Finder and Explorer hide: choose REAPER folder and press Open folder to find them.
+Audition's Loop now keeps exact time going round.
+The music is unchanged: the same idea number with the same settings gives the same idea as 1.16.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
