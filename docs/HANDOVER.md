@@ -1,7 +1,7 @@
 # Starting a fresh session
 
 Paste the prompt below into a new Claude Code session on this repository
-(branch `claude/pensive-cannon-snl685`, or `main` once it is merged). It is
+(branch `claude/wizardly-bohr-2ntsgh`, or `main` once it is merged). It is
 kept here so it survives the session that wrote it; update it at the end of
 each session.
 
@@ -28,7 +28,8 @@ diminished seventh - and the galant Aprile, Pastorella and Ponte, the
 schemata singing their tunes - the chromatic chords come under the
 existing Borrowed and Applied rows rather than new buttons; and in 1.17,
 playing along when REAPER plays, a click on the roll to play from a beat,
-and a choice of where Export saves with a button to open that folder). In 1.13 the
+and a choice of where Export saves with a button to open that folder -
+I've tested 1.17 in REAPER and it all works). In 1.13 the
 engine took over three choices to keep the window simple: the progression
 (walk or a named one, half and half), the part-writing (always by the book)
 and the form (each about one idea in ten) are decided under the hood and not
@@ -44,9 +45,12 @@ Before you change anything, please:
    because each of them cost time).
 2. Skim `docs/decisions/README.md` (latest: 0029) and the end of the latest
    session log in `docs/sessions/` to see where we left off.
-3. Install Lua if it is missing (`apt-get install -y lua5.4`), run
+3. If I attach the REAPER API functions page (`REAPER_API_functions.html`,
+   REAPER 7.79), check any new `reaper.` call against it before using it;
+   if not, ReaTeam/Doc's copy on GitHub is reachable (reaper.fm is not).
+4. Install Lua if it is missing (`apt-get install -y lua5.4`), run
    `tools/test.sh` and confirm everything passes before you start.
-4. Print a few ideas with `tools/demo.lua` so you know what it sounds like
+5. Print a few ideas with `tools/demo.lua` so you know what it sounds like
    now, e.g. `lua5.4 tools/demo.lua Measure 3 1 4 4 colour=Mixed`.
 
 How I like the work done:
@@ -81,9 +85,9 @@ How I like the work done:
   your scratchpad first, so you can quote them.
 
 Things left open that we might pick up (none of them asked for yet; the
-full list is at the end of CLAUDE.md): trying it inside REAPER; a drum
-groove matched to a Measure's bass; per-drum choices in drum ideas; tunes
+full list is at the end of CLAUDE.md): a drum groove matched to a
+Measure's bass; per-drum choices in drum ideas; tunes
 for the Romanesca, Fonte and Monte; bringing the Form row back if I want to
-pick a form myself.
+pick a form myself; remembering which steps are open between sessions.
 
 What I'd like to do next: **[describe it here]**

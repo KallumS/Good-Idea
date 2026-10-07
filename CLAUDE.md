@@ -500,7 +500,10 @@ in lanes, in the accent.
 ## Settings that outlive the window
 
 Saved as `key=value;` in one ExtState string (`GoodIdea`/`state`): every
-setting by id, `seed`, `autoplay` and `swing`. Loaded values go through
+setting by id, `seed`, `autoplay`, `swing`, and (1.17) `follow` (Play with
+REAPER, 1 unless saved 0) and `exportTo` (Project / REAPER / Folder). The
+chosen export folder has a key of its own, `GoodIdea`/`exportDir`, since a
+path can hold `;` and `=`. Loaded values go through
 `tonumber(v) or v`, so bars, root, scale and seed come back as numbers and
 names as names; `I.clampState` then puts anything that does not exist back
 to its default.
@@ -582,7 +585,8 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 The sweep tallies each rule over every note it applies to and reports the
 rule once, with a count and the first idea that broke it. **Run the deep
 sweep after any musical change**: rare cases (one idea in thousands) only show
-there. At 40x it is about 39,000 ideas and 25.8 million checks in 1.16 (28.6 million
+there. At 40x it is about 39,000 ideas and 25.8 million checks in 1.16 and
+1.17 (28.6 million
 in 1.2, when a Measure had drums to check); it has found
 real bugs in every release so far.
 
@@ -697,7 +701,7 @@ this order:
 
 ## What has been learned
 
-Hard-won, over 1.0 to 1.16. Read before changing anything.
+Hard-won, over 1.0 to 1.17. Read before changing anything.
 
 **Working with the user.** A musician, not a programmer: every reply in
 musical terms (what you will hear, which bars, which chords), with numbers
@@ -792,6 +796,19 @@ MISSED / DID NOT APPLY):
   the code while a batch runs**. A batch of a dozen takes 30-60 minutes;
   give the background job a long timeout (the default stops it at 30).
 
+**REAPER-facing work (1.17).** The user tested 1.17 inside REAPER on
+2026-10-07 and reported it all working - the first release known to have
+been run there. What made it go smoothly: every new `reaper.` call checked
+against the API page before use (the user's 7.79 upload when it is there,
+else ReaTeam/Doc's copy on GitHub - reaper.fm is blocked), the mock written
+from those signatures, extension functions (SWS, js_ReaScriptAPI) tested
+for and given a core-only fallback, and the timing reasoned from the
+page's own words (`GetPlayPosition2`, "the next audio block being
+processed", not `GetPlayPosition`, what is heard). A test helper can lie
+too: test_ui's first `checked()` asked only whether a checkbox was drawn,
+not whether it was ticked. And a test that looks only at one moment misses
+drift: Audition's loop was right as it went round and wrong a beat later.
+
 **Where bugs have hidden.** Repeats and copies: anything decided per chord
 (flavours, inversions) must follow a copied chord's original (`sl.origin`),
 or a Period's answer and a Loop drift. Tests comparing repeats must switch
@@ -840,9 +857,11 @@ Pages on the web are mostly blocked (Wikipedia, pressbooks, university
 sites); web search excerpts are what can be quoted, and a decision record
 says so when it does.
 
-**Left open** (none asked for yet): not run inside REAPER (1.17's play
-along with REAPER above all: its timing and `GetPlayPosition2` are
-reasoned from the API page, not heard); the
+**Left open** (none asked for yet): the tests run against mocked REAPER
+and ReaImGui (the user ran 1.17 in REAPER and reports it working, but
+nothing here can hear it); Play with REAPER plays a second time over an
+inserted idea (said in its tooltip, not detected); the preview's timing is
+a deferred script's, to the nearest wake-up (about 30 ms); the
 common-tone diminished seventh on IV or as an incomplete neighbour (0028);
 tunes for the Romanesca, Fonte and Monte; per-drum choices in drum ideas; a drum idea matched to a
 Measure's kick-and-bass; with Mixed figures, a dotted tune can rub against
