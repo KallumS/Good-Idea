@@ -19,7 +19,7 @@ in doubt, do what Midi Catalogue does.
 | `reascripts/gi_theory.lua` | Keys, scales, chords on a degree, **which chord follows which**, cadences, voicing. ScaleView's ROOTS and SCALES and Starting Blocks' chord table, unchanged. |
 | `reascripts/gi_idea.lua` | The settings, the dice, metre, the plan, harmony, rhythm, melody, chords/bass parts, drum ideas, the block. |
 | `reascripts/gi_midi.lua` | The MIDI file writer (Midi Catalogue's, plus a channel per note). |
-| `reascripts/gi_place.lua` | Everything that touches REAPER. |
+| `reascripts/gi_place.lua` | Everything that touches REAPER: insert, export (and its folder), the preview on its own clock or REAPER's. |
 | `tools/demo.lua` | Ideas printed as note names. **Read this before and after any musical change.** |
 | `tools/bite.sh` | Breaks the code on purpose in a copy and runs a suite: proves a test bites. |
 | `docs/HANDOVER.md` | The prompt to start a fresh session with. |
@@ -509,9 +509,17 @@ to its default.
 
 Every `reaper.` call here was checked on 2026-10-01 against the REAPER API
 functions page (REAPER 7.79) the user uploaded: all signatures match.
-`ImGui_GetBuiltinPath` is ReaImGui's, so it is not on that page. Good Idea
-calls nothing Midi Catalogue did not already call. Re-check any new call
-there before using it, and write its mock from the same page.
+`ImGui_GetBuiltinPath` is ReaImGui's, so it is not on that page. Until
+1.17 Good Idea called nothing Midi Catalogue did not already call. 1.17
+([0029](docs/decisions/0029-play-with-reaper-and-the-export-folder.md))
+added `GetPlayState`, `GetPlayPosition2`, `TimeMap_QNToMeasures`,
+`SetEditCurPos`, `EnumProjects`, `GetOS`, `ExecProcess`, `GetUserInputs`
+and two extension functions tested for before use (SWS's
+`CF_ShellExecute`, js_ReaScriptAPI's `JS_Dialog_BrowseForFolder`),
+checked against ReaTeam/Doc's copy of the API page on GitHub
+(`raw.githubusercontent.com/ReaTeam/Doc/master/reascripthelp.html`,
+REAPER 6.09; reaper.fm is blocked from the container). Re-check any new
+call there before using it, and write its mock from the same page.
 
 - `TimeMap_GetTimeSigAtTime` returns `num, denom, tempo` - no retval first.
 - `MIDI_InsertNote(take, sel, muted, startppq, endppq, chan, pitch, vel,
@@ -525,9 +533,32 @@ there before using it, and write its mock from the same page.
   status byte (`0x90 + chan`). A sounding note in the preview is keyed by
   channel and pitch.
 - `set_action_options(1)`: running the action again ends the script.
+- **The preview** (`gi_place`, 1.17) is a position in the idea, in quarter
+  notes, from one of two clocks: Audition's own (`previewStart(block,
+  tempo, now, from)`), or REAPER's with **Play with REAPER** (`st.follow`,
+  `Place.follow` once a frame: starts on REAPER's play, stops on its stop,
+  never while recording - `GetPlayState` & 4). With REAPER the idea starts
+  on the bar the edit cursor is in (`anchorQN`) and its position is the
+  project's quarter note at `GetPlayPosition2` (the block a stuffed note
+  joins) minus that. `playTo` plays what is due; a jump (backwards, or more
+  than a beat forwards) is a `seek`: all off, then the notes held across
+  the new place struck again. `previewSwap` puts a new idea in at the same
+  place; `previewFrom` (a click on the roll, on the nearest beat) moves
+  REAPER's play position with `SetEditCurPos(..., true)` when playing with
+  REAPER, else auditions from there.
+- **Export's folder** (`Place.exportDir(st.exportTo, ui.exportDir)`):
+  Project (a `Good Idea` folder beside the `.rpp`, from `EnumProjects(-1)`;
+  REAPER's until saved), REAPER (the resource path's, 1.0-1.16's, hidden by
+  the Finder and Explorer), Folder (chosen; saved in its own ExtState key,
+  `GoodIdea/exportDir`, as a path may hold `;` or `=`). `openFolder`:
+  `CF_ShellExecute`, else `ExecProcess(open / explorer / xdg-open, -1)` by
+  `GetOS`. `chooseFolder`: `JS_Dialog_BrowseForFolder`, else
+  `GetUserInputs`.
 - `tests/reaper_mock.lua` is Midi Catalogue's, written **from the documented
-  signatures**. It raises on anything it does not have. Add to it from the
-  API docs, never from what the code expects.
+  signatures**. It raises on anything it does not have - but for extension
+  functions (`CF_ShellExecute`, `JS_Dialog_BrowseForFolder`), which read nil
+  as in a REAPER without the extension unless a test sets `P.sws` / `P.js`.
+  Add to it from the API docs, never from what the code expects.
 
 ## Tests
 
@@ -541,8 +572,8 @@ GOOD_IDEA_SWEEP=40 tools/test.sh      # the idea sweep forty times deeper
 | `test_theory.lua` | Scales against ScaleView, positions, spelling, every chord of every scale in every colour in key and named, the walk's tendencies, cadences per scale, 7,680 progressions keeping their shape, voicing; every flavour of every chord of every seven-note scale (in key, named, the interval it claims), every voicing of every C major chord by its definition (Drop 4 since 1.14), and the low interval limit. |
 | `test_idea.lua` | 980 ideas of all four kinds across six metres and every scale, every note and chord checked rule by rule against the scale sounding under it, every drum idea against its fills (about 667,000 checks in all, 1.16); then by name: the same number is the same idea, Keep, hidden settings, separate dice, a key change moves the same tune, Any rolls everything it offers (and never 1.5 or 4 a bar), each setting does what its hint says, the four forms, the bass (and no drums in a Measure), 4 a bar on every beat, figures (triplets whole; on every chord style and the walking bass; the tune's quarters and halves, and tune and chords figured together), pushes, pulls, swing, borrowed chords, the retired drums switch, drum ideas (styles, cymbals, the answering bar, fills, 1 to 16 bars), and flavours (all kinds, rare, never at a cadence, the same round a Loop), voicings in real ideas (and the bass under them), inversions (all three, each where it does its job - the six-fours as the textbooks allow them - diminished triads in first inversion, C/E), Common against Rare, part-writing by the book against Free (doubling, sevenths, the bass's spacing, the chords under the tune, parallels, half closes), shaped velocity, applied chords (rates, bent notes, D7 in C and the tune's F#, Loops, hidden) the 1.8 forms and deceptive close, named progressions (each as written, the blues bar by bar, the fallback and its reason, Any named suiting the key, a flavoured named chord keeping its bass), tension and the second voice (rates, all three kinds, Common keeping Rare's, a Loop leaning alike, the resolution left out by the book and kept under a 9-8, hidden, the tune untouched by a second voice, channels and tracks), the 1.11 chord styles and named rhythms (in chords, bass and kick, Syncopated elsewhere, never rolled), and 1.12's 6/9 (half the 6s, the same round a Loop), Power (root and fifth, never rolled) and key change (the same degrees moved up, the tune with them, from B to the C# above, the new key from the change even after Puff's I, the truck driver's V into the new tonic, hidden in a Phrase), and 1.13's hidden settings (not shown, half the ideas named, every form about one in ten, Keep leaving them), what outlines a triad, the minor V (and the tune's leading note; Aeolian's v kept), the evaded close (half Extended's stretches, on I6, the tune leaping up), the Do-Re-Mi, Romanesca, Fonte and Monte as written, the dembow (and a backbeat in 3/4), and the six-four's doubled bass; and 1.14's flavours with Triads and Sevenths (the ones each can take, a 7sus4 keeping its seventh), a named Loop's flavours the same each time round, ghost notes (none when Off, in most ideas on Rare, Common keeping Rare's, never in a fill, the same every bar, the rest of the drums unchanged), the bass with pulled chords (changing where they come, the note before held, on the beat the bass with no pull, the tune the same, half the ideas, not shown), the galant schemata in minor as written, the truck driver changing gear in nearly every Measure, and an applied chord it cuts off made plain; and 1.15's chromatic chords (all four kinds turn up, Common more than Rare, none with Borrowed off, three-note ones with Triads, the Neapolitan doubling its bass, fi rising to sol) and passing diminished chords (a seventh, or with Triads a triad, the window saying what it passes to, none with Applied off); and 1.16's common-tone diminished sevenths (Common more than Rare, named, none with Triads or Applied off), the Swiss sixth (in major only, the German still in major), the Aprile, Pastorella and Ponte as written in major and minor, and the schemata singing their tunes (70% of stages or more, the Aprile's re and the Meyer's fa over the same V6/5). The sweep checks each chromatic chord's notes and bass and that it goes to V (the German through the six-four), and a passing chord's bass climbing by semitones. The tests' `make` walks unless a test names a progression, and keeps the bass on the beat under pulled chords unless a test says. The sweep plays every idea in one of the nine voicings, every third on Common, every fifth with Free part-writing, every fourth Measure in a 1.8 form, every third idea with a named progression (the rest as the engine rolls it), Tension on Common with the other Commons (Off every seventh), a second voice every fourth, a 1.11 chord style every sixth and a named rhythm every fifth, a key change every seventh Measure (and Power and Drop 4 among the voicings), ghost notes in turn and the bass pull as the engine rolls it (1.14), and checks by the book on the rest; a ghost note is checked as a quiet snare on a weak place, alone. `GOOD_IDEA_SAY=1` prints passing checks too, with their numbers. |
 | `test_midi.lua` | The writer, read back by a parser that is not itself, format 0 and 1, channels. |
-| `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER. |
-| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (with every colour since 1.14), the nine voicings, inversions, Progression, Part-writing and Form not shown (1.13), a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the chromatic-chord line (1.15), the time signature, saved and nonsense settings. |
+| `test_place.lua` | One item with channels, a track per part, export, audition on channel 10, against the mocked REAPER; and (1.17) playing with REAPER (from the edit cursor's bar, the notes held across a jump struck, in time round a loop, silent before its bar and after with Loop off, stopping with REAPER, never while recording, the switch, stopped by hand, a new idea swapped in at the same beat, a click moving REAPER the same time round, or auditioning from a beat), and Export's folder (project, REAPER, chosen; Open folder with SWS and by system; choosing with js_ReaScriptAPI or a pasted path). |
+| `test_ui.lua` | The real script against a mocked ReaImGui: every value of every setting has a button and can be chosen, every button in every kind clicked with the steps folded and open, steps folding and their summary lines, the Drums kind, pull, 1.5 a bar, the chord paces in numbers and 4 a bar, flavours (with every colour since 1.14), the nine voicings, inversions, Progression, Part-writing and Form not shown (1.13), a Measure's three tracks, the layout by the buttons, steps shown and numbered, New Idea / back / forward / the number / Keep, insert, export, audition, Play new ideas, the swing slider (and its absence in 6/8 and 7/8), the borrowed-chord flag, the chromatic-chord line (1.15), the time signature, saved and nonsense settings; and (1.17) Play with REAPER (on by default, playing and stopping with REAPER, a new idea coming straight in - with Play new ideas too - Audition joining REAPER after a Stop, off ignoring play, saved), a click on the roll (auditioning, or moving REAPER), and Save .mid to (project, REAPER, chosen and kept, a cancelled chooser, Open folder). |
 
 The sweep tallies each rule over every note it applies to and reports the
 rule once, with a count and the first idea that broke it. **Run the deep
@@ -645,7 +676,7 @@ hash, so a release is: commit the code, then add a new `<version>` block
 pointing at that commit. Never edit an existing one. ReaPack keys a package by
 its name, so do not rename `Good Idea.lua`.
 
-Every change the user asks for has been a release (1.0 to 1.16 so far), in
+Every change the user asks for has been a release (1.0 to 1.17 so far), in
 this order:
 
 1. Read the demo before; make the change; read the demo after.
@@ -805,7 +836,9 @@ Pages on the web are mostly blocked (Wikipedia, pressbooks, university
 sites); web search excerpts are what can be quoted, and a decision record
 says so when it does.
 
-**Left open** (none asked for yet): not run inside REAPER; the
+**Left open** (none asked for yet): not run inside REAPER (1.17's play
+along with REAPER above all: its timing and `GetPlayPosition2` are
+reasoned from the API page, not heard); the
 common-tone diminished seventh on IV or as an incomplete neighbour (0028);
 tunes for the Romanesca, Fonte and Monte; per-drum choices in drum ideas; a drum idea matched to a
 Measure's kick-and-bass; with Mixed figures, a dotted tune can rub against

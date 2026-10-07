@@ -541,6 +541,8 @@ function M.newState()
   st.seed = 1
   st.autoplay = 0
   st.swing = 0
+  st.follow = 1            -- 1.17: play along when REAPER plays
+  st.exportTo = "Project"  -- 1.17: where Export writes (gi_place's exportDir)
   return st
 end
 
@@ -558,6 +560,8 @@ function M.clampState(st)
   st.autoplay = (tonumber(st.autoplay) == 1) and 1 or 0
   local swing = tonumber(st.swing)
   st.swing = (swing and swing >= 0 and swing <= 100) and math.floor(swing) or 0
+  st.follow = (tonumber(st.follow) == 0) and 0 or 1
+  if st.exportTo ~= "REAPER" and st.exportTo ~= "Folder" then st.exportTo = "Project" end
   return st
 end
 

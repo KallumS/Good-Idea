@@ -13,7 +13,7 @@ calculated from the rules of music and put into the project as MIDI. I'm a
 musician, not a programmer, so please explain everything in musical terms
 (what I'll hear, which bars, which chords), with numbers you've measured.
 
-Where we are: **version 1.16**, published in `index.xml`. Since 1.6 it has
+Where we are: **version 1.17**, published in `index.xml`. Since 1.6 it has
 been brought in line with the theory books I uploaded (part-writing by the
 book, shaped velocity, applied chords, deceptive and evaded cadences, more
 forms, named progressions and galant schemata, suspensions and
@@ -26,7 +26,9 @@ driver that nearly always changes gear, chromatic chords - the
 Neapolitan, the augmented sixths (Swiss too), a passing and a common-tone
 diminished seventh - and the galant Aprile, Pastorella and Ponte, the
 schemata singing their tunes - the chromatic chords come under the
-existing Borrowed and Applied rows rather than new buttons). In 1.13 the
+existing Borrowed and Applied rows rather than new buttons; and in 1.17,
+playing along when REAPER plays, a click on the roll to play from a beat,
+and a choice of where Export saves with a button to open that folder). In 1.13 the
 engine took over three choices to keep the window simple: the progression
 (walk or a named one, half and half), the part-writing (always by the book)
 and the form (each about one idea in ten) are decided under the hood and not
@@ -40,7 +42,7 @@ Before you change anything, please:
    idea is a number), "Releasing" (the order every change is done in) and
    "What has been learned" (mistakes already made once - it is long
    because each of them cost time).
-2. Skim `docs/decisions/README.md` (latest: 0028) and the end of the latest
+2. Skim `docs/decisions/README.md` (latest: 0029) and the end of the latest
    session log in `docs/sessions/` to see where we left off.
 3. Install Lua if it is missing (`apt-get install -y lua5.4`), run
    `tools/test.sh` and confirm everything passes before you start.

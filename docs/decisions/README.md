@@ -39,3 +39,4 @@ the standing rules; this holds the decisions behind them.
 | [0026](0026-flavours-ghosts-bass-pull-minor-schemata.md) | Flavours with every colour, Drop 4, ghost notes, the bass lying back with pulled chords, the galant schemata in minor, the truck driver into the tonic |
 | [0027](0027-chromatic-chords.md) | Chromatic chords: the Neapolitan and the augmented sixths before a close's V (with Borrowed), the passing diminished seventh (with Applied) |
 | [0028](0028-common-tone-swiss-and-the-schemata-tunes.md) | The common-tone diminished seventh, the Swiss sixth, the Aprile, Pastorella and Ponte, and the schemata's tunes |
+| [0029](0029-play-with-reaper-and-the-export-folder.md) | Play with REAPER, a click on the roll plays from there, and Export's folder (the project's by default, REAPER's, or one chosen; Open folder) |

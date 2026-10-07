@@ -11,12 +11,13 @@
  *                 a contour on the chords - so the same number always gives
  *                 the same idea. Leave any setting on Any to have it rolled.
  *                 Insert it at the edit cursor, write it out as a .mid, or
- *                 audition it.
+ *                 audition it - on its own, or playing along when you
+ *                 press play in REAPER.
  *
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.16
+ * Version:        1.17
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -124,6 +125,7 @@ local ui = {
   dirty = true, playhead = nil, playNext = false,
   history = {}, at = 0,     -- the ideas made this session, and where we are in them
   open = {},                -- which folded steps are open: the view, not saved
+  exportDir = "",           -- the folder chosen for Export, saved on its own
 }
 
 local ctx
@@ -140,10 +142,17 @@ local function rebuild()
   ui.meter = I.meter(num, den)
   ui.idea = I.make(st, ui.meter, st.seed)
   ui.dirty = false
-  if ui.playNext then
-    ui.playNext = false
+  -- What plays is the idea showing: with REAPER playing, a new idea comes
+  -- in where the old one was, in time; on its own, Play new ideas starts it
+  -- from the top, and otherwise it takes over where the old one was.
+  if Place.previewWithReaper() then
+    Place.previewSwap(ui.idea.block)
+  elseif ui.playNext then
     Place.previewStart(ui.idea.block, Place.tempo())
+  elseif Place.previewRunning() then
+    Place.previewSwap(ui.idea.block)
   end
+  ui.playNext = false
 end
 
 -- The idea number for New Idea: from the clock, never the one showing.
@@ -169,13 +178,15 @@ end
 -- Settings that outlive the window
 ------------------------------------------------------------------------------
 
-local SAVED = { "seed", "autoplay", "swing" }
+local SAVED = { "seed", "autoplay", "swing", "follow", "exportTo" }
 for _, s in ipairs(I.SETTINGS) do SAVED[#SAVED + 1] = s.id end
 
 local function saveState()
   local out = {}
   for _, k in ipairs(SAVED) do out[#out + 1] = k .. "=" .. tostring(st[k]) end
   reaper.SetExtState(SECTION, "state", table.concat(out, ";"), true)
+  -- A folder's path can hold any character, ";" and "=" too: its own key.
+  reaper.SetExtState(SECTION, "exportDir", ui.exportDir, true)
 end
 
 local function loadState()
@@ -192,6 +203,7 @@ local function loadState()
     if got[k] then st[k] = tonumber(got[k]) or got[k] end
   end
   I.clampState(st)
+  ui.exportDir = reaper.GetExtState(SECTION, "exportDir") or ""
 end
 
 ------------------------------------------------------------------------------
@@ -313,15 +325,26 @@ end
 -- idea in lanes.
 ------------------------------------------------------------------------------
 
+-- Returns the quarter note clicked, on the nearest beat, if the roll was
+-- clicked (1.17: play from there).
 local function pianoRoll(block, width, height, playhead)
   local dl = ImGui.GetWindowDrawList(ctx)
   local x, y = ImGui.GetCursorScreenPos(ctx)
-  ImGui.InvisibleButton(ctx, "##roll", width, height)
+  local clicked = ImGui.InvisibleButton(ctx, "##roll", width, height)
+  tip(block and #block.notes > 0 and "Click to play from here (from the nearest beat)" or nil)
 
   ImGui.DrawList_AddRectFilled(dl, x, y, x + width, y + height, ROLL_BG, 3)
   if not block or #block.notes == 0 then return end
 
   local beats = math.max(block.beats, 1e-9)
+  local at
+  if clicked then
+    local mx = ImGui.GetMousePos(ctx)
+    local beatQN = ui.meter and (ui.meter.beat / 4) or 1
+    local q = math.max(0, math.min(1, (mx - x) / math.max(width, 1))) * beats
+    at = math.floor(q / beatQN + 0.5) * beatQN
+    if at >= beats - 1e-9 then at = math.max(0, at - beatQN) end
+  end
   local bar = math.max(ui.meter and ui.meter.barBeats or 4, 1e-9)
   local beat = ui.meter and (ui.meter.beat / 4) or 1
   local b = 0
@@ -385,6 +408,7 @@ local function pianoRoll(block, width, height, playhead)
     local px = x + width * math.min(1, playhead)
     ImGui.DrawList_AddLine(dl, px, y, px, y + height, PLAYHEAD, 2)
   end
+  return at
 end
 
 ------------------------------------------------------------------------------
@@ -569,7 +593,13 @@ local function drawResult()
   heading(nil, block and block.name or "")
 
   local w = select(1, ImGui.GetContentRegionAvail(ctx))
-  pianoRoll(block, math.max(120, w), 130, Place.previewRunning() and ui.playhead or nil)
+  local from = pianoRoll(block, math.max(120, w), 130, Place.previewRunning() and ui.playhead or nil)
+  if from and block then
+    Place.previewFrom(block, from, Place.tempo(), ui.loop)
+    local bar = ui.meter and ui.meter.barBeats or 4
+    say(("Playing from bar %d, beat %d"):format(math.floor(from / bar + 1e-9) + 1,
+        math.floor((from % bar) / ((ui.meter and ui.meter.beat or 4) / 4) + 1e-9) + 1))
+  end
 
   if idea then
     dimWrapped(idea.summary)
@@ -638,26 +668,66 @@ local function drawActions()
            or "As one item on the selected track, at the edit cursor")
 
   ImGui.SameLine(ctx)
+  local dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
   if pick("Export .mid", false, 120) then
-    local res, path = Place.export(block)
-    if res == Place.OK then say("Wrote " .. tostring(path))
+    local res, path = Place.export(block, dir)
+    if res == Place.OK then say("Wrote " .. tostring(path:match("[^/\\]+$")) .. "  -  Open folder shows it")
     elseif res == Place.NOTHING then say("Nothing to write", true)
-    else say("Could not write the file", true) end
+    else say("Could not write into " .. dir, true) end
   end
-  tip("Into the Good Idea folder in REAPER's resource path" ..
-      (many and ", one track per part" or ""))
+  tip("Writes the idea as a .mid file into the folder below" .. (many and ", one track per part" or ""))
 
   ImGui.SameLine(ctx, 0, 16)
-  if pick(Place.previewRunning() and "Stop" or "Audition", Place.previewRunning(), 96) then
-    if Place.previewRunning() then Place.previewStop()
+  local playing = Place.previewRunning()
+  if pick(playing and "Stop" or "Audition", playing, 96) then
+    if playing then Place.previewStop()
+    elseif st.follow == 1 and Place.reaperPlaying() then Place.previewWithReaperStart(block)
     else Place.previewStart(block, Place.tempo()) end
   end
   tip("Plays through the virtual keyboard, so a record-armed monitored track " ..
-      "will sound it. Timing is a preview, not a performance.")
+      "will sound it. Timing is a preview, not a performance. Click the roll to play from a beat.")
 
   ImGui.SameLine(ctx)
   local _
   _, ui.loop = ImGui.Checkbox(ctx, "Loop", ui.loop)
+
+  ImGui.SameLine(ctx, 0, 16)
+  local follow
+  _, follow = ImGui.Checkbox(ctx, "Play with REAPER", st.follow == 1)
+  st.follow = follow and 1 or 0
+  tip("Ticked, pressing play in REAPER plays the idea along with the project, in its tempo, " ..
+      "starting on the bar the edit cursor is in - where Insert would put it. A new idea comes in " ..
+      "in time. Untick to have Good Idea ignore REAPER's play button. It never plays while REAPER " ..
+      "records, so it cannot end up in a take; once an idea is inserted, untick it or you will hear it twice.")
+
+  -- Where Export writes, and a way to see it.
+  dim("Save .mid to")
+  ImGui.SameLine(ctx)
+  local WHERE = { "Project", "REAPER", "Folder" }
+  local NAMES = { Project = "Project folder", REAPER = "REAPER folder", Folder = "Choose folder..." }
+  local HINTS = {
+    Project = "A Good Idea folder beside the saved project (REAPER's Good Idea folder until the project is saved)",
+    REAPER = "The Good Idea folder in REAPER's resource path, where 1.0 to 1.16 wrote. " ..
+             "The Finder and Explorer hide it: Open folder goes there.",
+    Folder = "A folder of your choice",
+  }
+  local c = flow("exportTo", WHERE, function(x) return st.exportTo == x end,
+                 function(x) return NAMES[x] end, function(x) return HINTS[x] end, 60)
+  if c then
+    if WHERE[c] == "Folder" then
+      local got = Place.chooseFolder(ui.exportDir ~= "" and ui.exportDir or dir)
+      if got then ui.exportDir, st.exportTo = got, "Folder"; saveState() end
+    else
+      st.exportTo = WHERE[c]
+    end
+    dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
+  end
+  ImGui.SameLine(ctx, 0, 16)
+  if pick("Open folder", false, 100) then
+    if not Place.openFolder(dir) then say("Could not open " .. dir, true) end
+  end
+  tip("Shows the folder in the Finder or Explorer")
+  dimWrapped(dir .. ((not asked and st.exportTo == "Project") and "   (the project is not saved yet)" or ""))
 
   if ui.status ~= "" then
     ImGui.PushStyleColor(ctx, ImGui.Col_Text, ui.warn and WARN or DIM)
@@ -671,6 +741,7 @@ local function frame()
   local num, den = Place.timeSigNow()
   if num .. "/" .. den ~= ui.sig then touched() end
   if ui.dirty then rebuild() end
+  Place.follow(ui.idea and ui.idea.block, st.follow == 1)
   ui.playhead = Place.previewTick(nil, ui.loop)
 
   -- The steps are numbered as they are shown: a Motif has no Chords step,

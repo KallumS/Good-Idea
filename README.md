@@ -248,12 +248,30 @@ And get it out - at the bottom, with the buttons that send it:
   action (search the action list for "explode").
 - **Insert on new tracks** (a Measure laid out on Tracks) makes a track for
   each part - Melody, Chords, Bass - under the selected track.
-- **Export .mid** writes a MIDI file into a `Good Idea` folder in REAPER's
-  resource path. Point the Media Explorer at it and every idea you export is
-  one drag away.
+- **Export .mid** writes a MIDI file into the folder chosen under **Save .mid
+  to**, which is shown in full underneath:
+  - **Project folder** (the default) - a `Good Idea` folder beside your saved
+    project. Until the project is saved, REAPER's folder instead (it says so).
+  - **REAPER folder** - a `Good Idea` folder in REAPER's resource path, where
+    1.0 to 1.16 wrote. The Mac's Finder and Windows' Explorer hide that
+    folder, which is why exported files seemed to vanish.
+  - **Choose folder...** - any folder. With the js_ReaScriptAPI extension
+    (ReaPack, ReaTeam Extensions) you get the system's folder chooser;
+    without it, a box to paste a folder's path into.
+  - **Open folder** shows the folder in the Finder or Explorer.
 - **Audition** plays it through the virtual keyboard, so a record-armed track
   with monitoring on will sound it. It is a preview, not a performance - for
-  exact timing, insert it and press play.
+  exact timing, insert it and press play. **Loop** plays it round and round.
+- **Click the roll** (the picture of the notes) to play from that beat: on
+  its own, Audition starts there; with REAPER playing along, REAPER's play
+  position (and the edit cursor) jumps there.
+- **Play with REAPER** (ticked to begin with): press play in REAPER and the
+  idea plays along with your project, in its tempo, starting on the bar the
+  edit cursor is in - where Insert would put it. Make a new idea or change a
+  setting while it plays and the new one comes in in time. Untick it to have
+  Good Idea ignore REAPER's play button. It never plays while REAPER
+  records, so it cannot end up in a take. Once you have inserted an idea,
+  untick it, or you will hear the idea twice.
 
 A drum idea is on **MIDI channel 10** with General MIDI notes (kick 36, snare
 38, clap 39, closed hat 42, pedal hat 44, open hat 46, crash 49, ride 51,
@@ -313,7 +331,15 @@ version the script asks for; update it through ReaPack.
 
 **Audition makes no sound.** It plays through REAPER's virtual MIDI keyboard,
 so it needs a track that is record-armed with input monitoring on, with an
-instrument on it. Insert and Export do not need that.
+instrument on it. Insert and Export do not need that. The same goes for Play
+with REAPER.
+
+**I cannot find the exported file.** The full folder is written under the
+Save .mid to row; **Open folder** opens it. Before 1.17 every export went to
+REAPER's resource path (on a Mac, `~/Library/Application Support/REAPER/Good
+Idea`; on Windows, `%APPDATA%\REAPER\Good Idea`), which the Finder and
+Explorer hide - your earlier exports are probably there: choose **REAPER
+folder** and press **Open folder**.
 
 **The drums play as piano notes.** The instrument on the track is not a drum
 kit. Put the drum idea's track through a General MIDI drum instrument.
@@ -322,7 +348,7 @@ kit. Put the drum idea's track through a General MIDI drum instrument.
 
 For anyone changing the code: `tools/test.sh` runs every test. The tests run
 the real engine and the real window against stand-ins for REAPER and ReaImGui
-and check over half a million things about what comes out (22 million in
+and check over half a million things about what comes out (about 26 million in
 the deep sweep) - that every note
 is in the key, that the tune is on the chord on every beat, that phrases end
 on real cadences, that a Loop's chords really do go round, that the drums are
