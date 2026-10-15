@@ -189,6 +189,14 @@ The music is unchanged: the same idea number with the same settings gives the sa
         <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_midi.lua</source>
         <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/ee586c2ff925eef902b0f5efc1b29e1a391708fa/reascripts/gi_place.lua</source>
       </version>
+      <version name="1.17.1" author="kallums" time="2026-10-15T12:00:00Z">
+        <changelog><![CDATA[Wording in the window follows Apple's writing guidelines: buttons read Insert at Cursor, Insert on New Tracks, Export MIDI File, Open Folder, Play New Ideas and Choose Folder…; the first row is labelled Kind (it said "Make a"); values read 2 Bars, 1 a Bar, One Item, Every 4 Bars, Step Up, Truck Driver and so on; and messages say what to do next. Your saved settings and the music are unchanged: the same idea number with the same settings gives the same idea as 1.17.]]></changelog>
+        <source main="main" file="Good Idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd82cabbd6e98b7a2d371e7196fddfa8c9410da2/reascripts/Good%20Idea.lua</source>
+        <source file="gi_theory.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd82cabbd6e98b7a2d371e7196fddfa8c9410da2/reascripts/gi_theory.lua</source>
+        <source file="gi_idea.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd82cabbd6e98b7a2d371e7196fddfa8c9410da2/reascripts/gi_idea.lua</source>
+        <source file="gi_midi.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd82cabbd6e98b7a2d371e7196fddfa8c9410da2/reascripts/gi_midi.lua</source>
+        <source file="gi_place.lua">https://raw.githubusercontent.com/KallumS/Good-Idea/cd82cabbd6e98b7a2d371e7196fddfa8c9410da2/reascripts/gi_place.lua</source>
+      </version>
     </reapack>
 
   </category>
