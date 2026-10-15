@@ -193,7 +193,7 @@ end
 -- extension is installed, otherwise a box to paste a folder's path into.
 -- Returns the folder, or nil if cancelled.
 function M.chooseFolder(current)
-  local title = "Good Idea: save .mid files in"
+  local title = "Choose a Folder for MIDI Files"
   if reaper.JS_Dialog_BrowseForFolder then
     local rv, folder = reaper.JS_Dialog_BrowseForFolder(title, current or "")
     if rv == 1 and folder and folder ~= "" then return folder end

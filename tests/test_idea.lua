@@ -990,8 +990,8 @@ do
     end
   end
   ok(slots > 0 and long == 0, ("4 a bar changes chord on every beat: %d of %d chords longer than a beat"):format(long, slots))
-  eq(I.valueName(I.BY_ID.chordPace, "Slow"), "0.5 a bar", "Slow is shown as 0.5 a bar")
-  eq(I.valueName(I.BY_ID.chordPace, "Two a bar"), "2 a bar", "and Two a bar as 2 a bar")
+  eq(I.valueName(I.BY_ID.chordPace, "Slow"), "0.5 a Bar", "Slow is shown as 0.5 a Bar")
+  eq(I.valueName(I.BY_ID.chordPace, "Two a bar"), "2 a Bar", "and Two a bar as 2 a Bar")
   -- 1.5 a bar in 4/4 is three chords to two bars, laid 3+3+2 beats.
   local shaped, all = 0, 0
   for seed = 1, 40 do

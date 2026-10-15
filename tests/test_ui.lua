@@ -482,14 +482,14 @@ clickIn("content", "Melody")
 ok(not stepShown("Chords"), "a melody-only phrase hides the Chords step")
 clickIn("kind", "Measure")
 ok(stepShown("Arrangement"), "a Measure shows the Arrangement")
-eq(count("Insert on new tracks"), 1, "and inserts on new tracks")
+eq(count("Insert on New Tracks"), 1, "and inserts on new tracks")
 local bars = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "measureBars" then bars[#bars + 1] = b end end
-eq(table.concat(bars, ","), "Any,8 bars,12 bars,16 bars", "a Measure is 8, 12 or 16 bars")
+eq(table.concat(bars, ","), "Any,8 Bars,12 Bars,16 Bars", "a Measure is 8, 12 or 16 bars")
 clickIn("kind", "Motif")
 bars = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "motifBars" then bars[#bars + 1] = b end end
-eq(table.concat(bars, ","), "Any,1 bar,2 bars,3 bars,4 bars", "a Motif is 1 to 4")
+eq(table.concat(bars, ","), "Any,1 Bar,2 Bars,3 Bars,4 Bars", "a Motif is 1 to 4")
 
 -- The steps are numbered as they show.
 fresh()
@@ -537,12 +537,12 @@ local dbars = {}
 for i, b in ipairs(g.buttons) do if g.paths[i] == "drumBars" then dbars[#dbars + 1] = b end end
 eq(#dbars, 17, "Any and 1 to 16 bars")
 clickIn("drumBars", "4")
-clickIn("fills", "Every 2 bars")
+clickIn("fills", "Every 2 Bars")
 ok(has(g.texts, "fills in bars 2, 4"), "the fills are said: " .. tostring(g.texts[#g.texts]))
 ok(#g.rects > 10, "the roll draws the drums")
 ok(not rowShown("layout"), "a drum idea is one item: no layout to choose")
 tr = P.selTracks[1]
-click("Insert at cursor")
+click("Insert at Cursor")
 eq(#P.tracks, 1, "it goes on the selected track")
 local drumOnTen = #tr.items[1].take.notes > 0
 for _, n in ipairs(tr.items[1].take.notes) do if n.chan ~= 9 then drumOnTen = false end end
@@ -561,17 +561,17 @@ for seed = 1, 12 do
   if has(g.texts, "_ pulled an eighth late") then pulled = true; break end
 end
 ok(pulled, "a pulled chord is marked _ in the chord line, and the mark explained")
-clickIn("chordPace", "1.5 a bar")
-eq(chosenIn("chordPace"), "1.5 a bar", "1.5 a bar can be chosen")
+clickIn("chordPace", "1.5 a Bar")
+eq(chosenIn("chordPace"), "1.5 a Bar", "1.5 a bar can be chosen")
 
 -- 1.3: the chord paces in numbers, 0.5 to 4 a bar.
 local paces = {}
 reach("chordPace")
 frame()
 for i, b in ipairs(g.buttons) do if g.paths[i] == "chordPace" then paces[#paces + 1] = b end end
-eq(table.concat(paces, ","), "Any,0.5 a bar,1 a bar,1.5 a bar,2 a bar,4 a bar", "the chord paces read as numbers")
-clickIn("chordPace", "4 a bar")
-eq(chosenIn("chordPace"), "4 a bar", "4 a bar can be chosen")
+eq(table.concat(paces, ","), "Any,0.5 a Bar,1 a Bar,1.5 a Bar,2 a Bar,4 a Bar", "the chord paces read as numbers")
+clickIn("chordPace", "4 a Bar")
+eq(chosenIn("chordPace"), "4 a Bar", "4 a bar can be chosen")
 
 -- 1.5: flavours, voicing and inversions, in the Chords step.
 eq(I.BY_ID.flavours.step .. I.BY_ID.voicing.step .. I.BY_ID.inversions.step, "ChordsChordsChords",
@@ -668,7 +668,7 @@ ok(has(g.texts, "Kept"), "and says so")
 
 -- A motif inserts one item on the selected track.
 tr = fresh()
-click("Insert at cursor")
+click("Insert at Cursor")
 eq(#tr.items, 1, "Insert at cursor makes one item")
 ok(#tr.items[1].take.notes > 0, "with notes in it")
 -- Shaped by default (1.7): the downbeats loudest, every velocity a real one.
@@ -684,14 +684,14 @@ ok(has(g.texts, "Inserted at the edit cursor"), "and says so")
 
 -- Flat is every note at 100.
 clickIn("velocity", "Flat")
-click("Insert at cursor")
+click("Insert at Cursor")
 local allHundred = true
 for _, n in ipairs(tr.items[2].take.notes) do if n.vel ~= 100 then allHundred = false end end
 ok(allHundred, "Flat: every one at velocity 100")
 
 -- Accents are 100 and 115.
 clickIn("velocity", "Accents")
-click("Insert at cursor")
+click("Insert at Cursor")
 local sawAccent = false
 for _, n in ipairs(tr.items[3].take.notes) do
   ok(n.vel == 100 or n.vel == 115, "an accented idea is 100 and 115 only")
@@ -705,20 +705,20 @@ clickIn("kind", "Measure")
 ok(not rowShown("drums"), "there is no drums switch")
 ok(rowShown("layout"), "the layout is down by the output buttons, with no step to open")
 clickIn("layout", "Tracks")
-click("Insert on new tracks")
+click("Insert on New Tracks")
 eq(#P.tracks, 4, "a Measure: three new tracks under the selected one")
 eq(P.tracks[2].name, "Melody", "named Melody")
 eq(P.tracks[3].name, "Chords", "Chords")
 eq(P.tracks[4].name, "Bass", "and Bass")
 ok(has(g.texts, "Inserted 3 tracks"), "and says so")
-clickIn("layout", "One item")
-eq(count("Insert at cursor"), 1, "in one item it inserts at the cursor")
-click("Insert at cursor")
+clickIn("layout", "One Item")
+eq(count("Insert at Cursor"), 1, "in one item it inserts at the cursor")
+click("Insert at Cursor")
 eq(#P.tracks, 4, "with no new tracks")
 
 -- Export writes a file.
-click("Export .mid")
-ok(has(g.texts, "Wrote "), "Export .mid writes a file")
+click("Export MIDI File")
+ok(has(g.texts, "Saved “"), "Export .mid writes a file")
 
 -- Audition sends notes and stops them.
 fresh()
@@ -735,7 +735,7 @@ ok(ons > 0 and offs >= 1, "on and off")
 
 -- Play new ideas plays each new idea as it is made.
 fresh()
-frame(nil, "Play new ideas")
+frame(nil, "Play New Ideas")
 frame()
 click("New Idea")
 eq(count("Stop"), 1, "with Play new ideas ticked, a new idea starts playing")
@@ -765,7 +765,7 @@ eq(count("Audition"), 1, "REAPER stops: so does the idea")
 
 -- With Play new ideas ticked too, a new idea still comes in with REAPER.
 fresh()
-frame(nil, "Play new ideas")
+frame(nil, "Play New Ideas")
 P.cursor, P.playing, P.playPos = 0, true, 0.01
 frame()
 click("New Idea")
@@ -820,50 +820,50 @@ frame()
 frame(nil, nil, nil, nil, 999)
 ok(P.cursor > 0, "with REAPER playing, a click moves REAPER's play position: " .. P.cursor)
 
--- Save .mid to: the project's folder, REAPER's, or one chosen; and Open folder.
+-- Save MIDI files to: the project's folder, REAPER's, or one chosen; and Open Folder.
 fresh()
-eq(chosenIn("exportTo"), "Project folder", "Export goes beside the project unless told otherwise")
-ok(has(g.texts, "the project is not saved yet"), "an unsaved project says where it goes instead")
+eq(chosenIn("exportTo"), "Project Folder", "Export goes beside the project unless told otherwise")
+ok(has(g.texts, "the project isn’t saved yet"), "an unsaved project says where it goes instead")
 local proj = os.tmpname()
 os.remove(proj)
 os.execute('mkdir -p "' .. proj .. '"')
 P.project = proj .. "/Song.rpp"
-click("Export .mid")
+click("Export MIDI File")
 local inProject = io.open(proj .. "/Good Idea/" .. (heading():gsub("[^%w%s%-%+#&%.]", "_"):gsub("#", "sharp")) .. ".mid", "rb")
 ok(inProject, "a saved project: into a Good Idea folder beside it")
 if inProject then inProject:close() end
 ok(has(g.texts, proj .. "/Good Idea"), "and the folder is shown")
-click("Open folder")
+click("Open Folder")
 eq(P.execs[#P.execs] and P.execs[#P.execs].cmd, 'open "' .. proj .. '/Good Idea"', "Open folder opens it")
-clickIn("exportTo", "REAPER folder")
+clickIn("exportTo", "REAPER Folder")
 ok(has(g.texts, P.resource .. "/Good Idea"), "REAPER's folder, shown")
 P.js, P.jsFolder = true, proj .. "/Chosen"
-clickIn("exportTo", "Choose folder...")
-eq(chosenIn("exportTo"), "Choose folder...", "a folder chosen")
-click("Export .mid")
+clickIn("exportTo", "Choose Folder…")
+eq(chosenIn("exportTo"), "Choose Folder…", "a folder chosen")
+click("Export MIDI File")
 local chosenFiles = io.popen('ls "' .. proj .. '/Chosen"'):read("a")
 ok(chosenFiles:find("%.mid"), "Export writes into it")
 eq(P.ext["GoodIdea:exportDir"], proj .. "/Chosen", "and it is saved")
 atexitFn()
 start()
 frame()
-eq(chosenIn("exportTo"), "Choose folder...", "it comes back after a restart")
+eq(chosenIn("exportTo"), "Choose Folder…", "it comes back after a restart")
 ok(has(g.texts, proj .. "/Chosen"), "the folder itself too")
 P.jsFolder = nil
-clickIn("exportTo", "REAPER folder")
-clickIn("exportTo", "Choose folder...")
-eq(chosenIn("exportTo"), "REAPER folder", "cancelling the chooser changes nothing")
+clickIn("exportTo", "REAPER Folder")
+clickIn("exportTo", "Choose Folder…")
+eq(chosenIn("exportTo"), "REAPER Folder", "cancelling the chooser changes nothing")
 atexitFn()
 start()
 frame()
-eq(chosenIn("exportTo"), "REAPER folder", "the choice comes back")
+eq(chosenIn("exportTo"), "REAPER Folder", "the choice comes back")
 os.execute('rm -rf "' .. proj .. '"')
 
 -- No track selected: said, in red, and nothing breaks.
 fresh()
 P.selTracks = {}
-click("Insert at cursor")
-ok(has(g.texts, "No track selected"), "no track selected is said")
+click("Insert at Cursor")
+ok(has(g.texts, "No track is selected."), "no track selected is said")
 
 ------------------------------------------------------------------------------
 -- The project
@@ -895,14 +895,14 @@ eq(#g.sliders, 1, "a swing slider in 4/4")
 eq(g.sliders[1].v, 0, "starting straight")
 eq(g.sliders[1].lo .. "-" .. g.sliders[1].hi, "0-100", "from 0 to 100")
 tr = P.selTracks[1]
-click("Insert at cursor")
+click("Insert at Cursor")
 local straight = {}
 for _, n in ipairs(tr.items[1].take.notes) do straight[#straight + 1] = n.sp end
 frame(nil, nil, nil, 100)
 frame()
 eq(g.sliders[1].v, 100, "the slider moves")
 ok(has(g.texts, "100% swing"), "and the idea says it is swung")
-click("Insert at cursor")
+click("Insert at Cursor")
 local later, earlier = 0, 0
 for i, n in ipairs(tr.items[2].take.notes) do
   if straight[i] and n.sp > straight[i] + 1 then later = later + 1 end
@@ -1010,7 +1010,7 @@ ok(marked, "a pushed chord is marked ^ in the chord line, and the mark is explai
 
 fresh()
 clickIn("kind", "Phrase")
-clickIn("phraseBars", "3 bars")
+clickIn("phraseBars", "3 Bars")
 clickIn("root", "D")
 clickIn("scale", "Dorian")
 clickIn("content", "Both")
@@ -1031,7 +1031,7 @@ start()
 local good, err = pcall(frame)
 ok(good, "a nonsense saved state still draws: " .. tostring(err))
 ok(heading():find("^Good Idea 1 %- Motif"), "as the first motif: " .. heading())
-eq(chosenIn("exportTo"), "Project folder", "a nonsense export folder: the project's")
+eq(chosenIn("exportTo"), "Project Folder", "a nonsense export folder: the project's")
 frame()
 ok(checked("Play with REAPER"), "and a nonsense switch: on")
 
