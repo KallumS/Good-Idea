@@ -156,13 +156,15 @@ function ImGui.DrawList_AddRectFilled(_, x1, y1, x2, y2, col)
     if type(v) ~= "number" or v ~= v then error("rect argument is " .. tostring(v)) end
   end
   if x2 < x1 or y2 < y1 then error("rect is inside out") end
-  g.rects[#g.rects + 1] = col
+  -- The ink bars under chosen buttons (decision 0031) are not the roll.
+  if col ~= 0x14171CFF then g.rects[#g.rects + 1] = col end
 end
 function ImGui.DrawList_AddLine(_, x1, y1, x2, y2, col)
   for _, v in ipairs({ x1, y1, x2, y2, col }) do
     if type(v) ~= "number" or v ~= v then error("line argument is " .. tostring(v)) end
   end
 end
+local HIG = dofile(HERE .. "/hig_mock.lua")(ImGui)
 setmetatable(ImGui, { __index = function(_, k)
   error("the script called ImGui." .. tostring(k) .. ", which the mock does not have")
 end })
@@ -1034,5 +1036,27 @@ ok(heading():find("^Good Idea 1 %- Motif"), "as the first motif: " .. heading())
 eq(chosenIn("exportTo"), "Project Folder", "a nonsense export folder: the project's")
 frame()
 ok(checked("Play with REAPER"), "and a nonsense switch: on")
+
+
+------------------------------------------------------------------------------
+-- Apple's Human Interface Guidelines (decision 0031)
+------------------------------------------------------------------------------
+
+HIG.check({
+  ok = ok, eq = eq, frame = function() frame() end,
+  loaded = function() fresh(); frame() end,
+  warned = function()
+    fresh()
+    P.selTracks = {}
+    click("Insert at Cursor")
+    return "No track is selected."
+  end,
+  dismiss = function() click("Dismiss") end,
+  quit = function() atexitFn() end,
+  restart = function() start(); frame() end,
+  saved = function() return P.ext["GoodIdea:view"] end,
+  setSaved = function(v) P.ext["GoodIdea:view"] = v end,
+  sizeKey = "textSize",
+})
 
 C.done()

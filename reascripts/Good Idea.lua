@@ -17,7 +17,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.17.1
+ * Version:        1.18
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -85,6 +85,9 @@ local THEME = {
   { "Col_ScrollbarGrab",     0x585F6BFF },
   { "Col_ScrollbarGrabHovered", 0x6D7581FF },
   { "Col_ScrollbarGrabActive",  0xA9AFBAFF },
+  -- The keyboard's focus ring: near-white, because yellow means "on" and a
+  -- focused control need not be.
+  { "Col_NavHighlight",      0xF2F4F7FF },
 }
 
 local SELECTED  = 0xFFF200FF   -- the accent: what is switched on, and the tune
@@ -96,8 +99,11 @@ local ROLL_BG   = 0x111419FF
 local ROLL_BAR  = 0x3A404AFF
 local ROLL_BEAT = 0x1E2228FF
 local PLAYHEAD  = 0xF2F4F7FF
-local DIM       = 0x8A919CFF
-local WARN      = 0xD2483FFF
+-- Secondary text and warnings are 7:1 against the ground, Apple's target
+-- for small text in a dark window (0031). The ramp's #8A919C was 4.7:1 and
+-- the house red #D2483F 3.4:1, so neither is used for words any more.
+local DIM       = 0xB0B6C0FF
+local WARN      = 0xFF9E96FF
 
 -- Shifts a colour towards white or black, so the chosen state needs one colour
 -- rather than three. Arithmetic rather than bit operators, and it keeps the
@@ -129,6 +135,28 @@ local ui = {
 }
 
 local ctx
+
+------------------------------------------------------------------------------
+-- Apple's Human Interface Guidelines (0031, docs/apple-hig-review.md)
+--
+-- Text Size, in the View menu: Apple asks that text can be made at least
+-- twice as big, and 13 points is the Mac's default text size. Every fixed
+-- width in the window goes through px(), so it grows with the text. It is a
+-- preference about the window, so it is kept on `ui` and saved under its own
+-- key rather than in `st`, which the engine clamps.
+------------------------------------------------------------------------------
+
+local TEXT_SIZES = { 100, 125, 150, 200 }
+local BASE_TEXT = 13
+local fonts = {}           -- one per size, made and attached once in main()
+local S = 1                -- the chosen size as a scale: 1, 1.25, 1.5 or 2
+ui.textSize = 1
+local function px(n) return math.floor(n * S + 0.5) end
+
+local function setTextSize(i)
+  ui.textSize = math.max(1, math.min(#TEXT_SIZES, math.floor(tonumber(i) or 1)))
+  S = TEXT_SIZES[ui.textSize] / 100
+end
 
 local function touched() ui.dirty = true end
 local function say(text, warn) ui.status, ui.warn = text, warn or false end
@@ -185,11 +213,14 @@ local function saveState()
   local out = {}
   for _, k in ipairs(SAVED) do out[#out + 1] = k .. "=" .. tostring(st[k]) end
   reaper.SetExtState(SECTION, "state", table.concat(out, ";"), true)
+  reaper.SetExtState(SECTION, "view", "textSize=" .. ui.textSize, true)
   -- A folder's path can hold any character, ";" and "=" too: its own key.
   reaper.SetExtState(SECTION, "exportDir", ui.exportDir, true)
 end
 
 local function loadState()
+  -- The window's own preference, clamped by setTextSize.
+  setTextSize((reaper.GetExtState(SECTION, "view") or ""):match("textSize=([%-%d%.]+)"))
   local blob = reaper.GetExtState(SECTION, "state")
   if not blob or blob == "" then return end
   local got = {}
@@ -215,9 +246,32 @@ local function pushTheme()
 end
 local function popTheme() ImGui.PopStyleColor(ctx, #THEME) end
 
+-- The text size and Apple's Mac control: 28 points tall at 100% (a 13-point
+-- line and 7.5 above and below), about 12 points between controls. Pushed
+-- before Begin and popped after End, like the theme.
+local SIZE_VARS = 3
+local function pushSize()
+  ImGui.PushFont(ctx, fonts[ui.textSize])
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, px(8), 7.5 * S)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemSpacing, px(12), px(12))
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing, px(8), px(6))
+end
+local function popSize()
+  ImGui.PopStyleVar(ctx, SIZE_VARS)
+  ImGui.PopFont(ctx)
+end
+
+-- A button's width: the width asked for (0 is its label's), grown with the
+-- text size, and never narrower than its label, so nothing is cut short. An
+-- exact width was measured in the current font already and is not grown again.
+local function fit(label, width, exact)
+  local text = label:gsub("##.*$", "")
+  return math.max(exact and width or px(width or 0), select(1, ImGui.CalcTextSize(ctx, text)) + px(16))
+end
+
 -- An unchosen button wears the theme's grey, a chosen one the accent. Either
 -- way the text on it goes to INK: both are far lighter than the chrome.
-local function pick(label, selected, width, height)
+local function pick(label, selected, width, height, exact)
   local pushed = 1
   if selected then
     ImGui.PushStyleColor(ctx, ImGui.Col_Button, SELECTED)
@@ -226,8 +280,15 @@ local function pick(label, selected, width, height)
     pushed = 4
   end
   ImGui.PushStyleColor(ctx, ImGui.Col_Text, INK)
-  local hit = ImGui.Button(ctx, label, width or 0, height or 0)
+  local hit = ImGui.Button(ctx, label, fit(label, width, exact), height and px(height) or 0)
   ImGui.PopStyleColor(ctx, pushed)
+  -- Not colour alone: a chosen button also carries a bar under its label.
+  if selected then
+    local x1 = ImGui.GetItemRectMin(ctx)
+    local x2, y2 = ImGui.GetItemRectMax(ctx)
+    ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
+                                 x1 + px(8), y2 - px(5), x2 - px(8), y2 - px(3), INK)
+  end
   return hit
 end
 
@@ -236,14 +297,14 @@ local function heading(n, text)
     ImGui.PushStyleColor(ctx, ImGui.Col_Text, STEP)
     ImGui.Text(ctx, tostring(n))
     ImGui.PopStyleColor(ctx, 1)
-    ImGui.SameLine(ctx, 0, 10)
+    ImGui.SameLine(ctx, 0, px(10))
   end
   ImGui.SeparatorText(ctx, text)
 end
 
 -- The space between one numbered step and the next. A gap, not an arrow.
 local STEP_GAP = 6
-local function stepGap() ImGui.Dummy(ctx, 16, STEP_GAP) end
+local function stepGap() ImGui.Dummy(ctx, px(16), px(STEP_GAP)) end
 
 local function tip(text)
   if text and ImGui.IsItemHovered(ctx) then ImGui.SetTooltip(ctx, text) end
@@ -271,13 +332,14 @@ local function flow(id, items, isChosen, label, hint, minWidth)
   ImGui.PushID(ctx, id)
   for i, item in ipairs(items) do
     local text = label and label(item, i) or tostring(item)
-    local w = math.max(minWidth or 0, select(1, ImGui.CalcTextSize(ctx, text)) + PAD)
+    local w = fit(text, math.max(minWidth or 0, 0), false)
+    w = math.max(w, select(1, ImGui.CalcTextSize(ctx, text)) + px(PAD))
     if i > 1 then
-      if x + 8 + w <= avail then ImGui.SameLine(ctx); x = x + 8 else x = 0 end
+      if x + px(12) + w <= avail then ImGui.SameLine(ctx); x = x + px(12) else x = 0 end
     end
     x = x + w
     ImGui.PushID(ctx, i)
-    if pick(text, isChosen(item, i), w) then chosen = i end
+    if pick(text, isChosen(item, i), w, nil, true) then chosen = i end
     if hint then tip(hint(item, i)) end
     ImGui.PopID(ctx)
   end
@@ -303,7 +365,7 @@ local function settingRow(ids, minWidth)
   for _, id in ipairs(ids) do
     local s = I.BY_ID[id]
     if I.shows(s, st) then
-      if not first then ImGui.SameLine(ctx, 0, 24) end
+      if not first then ImGui.SameLine(ctx, 0, px(24)) end
       first = false
       dim(s.label)
       ImGui.SameLine(ctx)
@@ -433,7 +495,7 @@ local function fold(n, name, summary, draw)
   ImGui.PushStyleColor(ctx, ImGui.Col_Text, STEP)
   ImGui.Text(ctx, tostring(n))
   ImGui.PopStyleColor(ctx, 1)
-  ImGui.SameLine(ctx, 0, 10)
+  ImGui.SameLine(ctx, 0, px(10))
   local isOpen = ui.open[name]
   ImGui.PushID(ctx, "open:" .. name)
   if pick(name .. (isOpen and "  -" or "  +"), false, 128) then
@@ -445,7 +507,7 @@ local function fold(n, name, summary, draw)
   if isOpen then
     draw()
   else
-    ImGui.SameLine(ctx, 0, 14)
+    ImGui.SameLine(ctx, 0, px(14))
     dim(summary)
   end
 end
@@ -453,7 +515,7 @@ end
 local function drawIdea(n)
   heading(n, "Idea")
   settingRow({ "kind" }, 84)
-  ImGui.SameLine(ctx, 0, 24)
+  ImGui.SameLine(ctx, 0, px(24))
   settingRow({ I.barsSetting(st.kind) }, st.kind == "Drums" and 30 or 52)
   settingRow({ "content" }, 64)
 end
@@ -484,7 +546,7 @@ local function drawSwing()
   -- one has nothing to swing, so it says so instead of offering a slider
   -- that would do nothing.
   if ui.meter and I.swings(ui.meter) then
-    ImGui.SetNextItemWidth(ctx, 240)
+    ImGui.SetNextItemWidth(ctx, px(240))
     local changed, v = ImGui.SliderInt(ctx, "##swing", st.swing, 0, 100, "%d%%")
     if changed and v then
       st.swing = math.max(0, math.min(100, math.floor(v)))
@@ -547,10 +609,10 @@ local function drawDrums(n)
 end
 
 local function drawNew()
-  ImGui.Dummy(ctx, 0, 4)
+  ImGui.Dummy(ctx, 0, px(4))
   if pick("New Idea", false, 160, 34) then go(newSeed(), true) end
   tip("A new idea of the kind chosen, with every Any rolled again")
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   if ui.at > 1 then
     if pick("<", false, 30, 34) then ui.at = ui.at - 1; go(ui.history[ui.at], false) end
     tip("Back to the idea before")
@@ -561,10 +623,10 @@ local function drawNew()
     tip("Forward again")
     ImGui.SameLine(ctx)
   end
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   dim("Idea number")
   ImGui.SameLine(ctx)
-  ImGui.SetNextItemWidth(ctx, 110)
+  ImGui.SetNextItemWidth(ctx, px(110))
   local changed, v = ImGui.InputInt(ctx, "##seed", st.seed, 1, 100)
   if changed and v then
     st.seed = math.max(1, math.min(I.MAX_SEED, math.floor(v)))
@@ -572,7 +634,7 @@ local function drawNew()
   end
   tip("Every idea has a number. The same number with the same settings is always the same idea — "
       .. "write one down to come back to it, or change a setting to hear the same idea another way.")
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   if pick("Keep", false, 60) then
     I.keep(st, ui.idea)
     touched()
@@ -580,7 +642,7 @@ local function drawNew()
   end
   tip("Turns every Any above into what this idea rolled, so the next New Idea keeps the "
       .. "key, length and feel and changes only the music.")
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   local _, play = ImGui.Checkbox(ctx, "Play New Ideas", st.autoplay == 1)
   st.autoplay = play and 1 or 0
   tip("Audition each new idea as soon as it is made")
@@ -589,11 +651,11 @@ end
 local function drawResult()
   local idea = ui.idea
   local block = idea and idea.block
-  ImGui.Dummy(ctx, 0, 6)
+  ImGui.Dummy(ctx, 0, px(6))
   heading(nil, block and block.name or "")
 
   local w = select(1, ImGui.GetContentRegionAvail(ctx))
-  local from = pianoRoll(block, math.max(120, w), 130, Place.previewRunning() and ui.playhead or nil)
+  local from = pianoRoll(block, math.max(px(120), w), px(130), Place.previewRunning() and ui.playhead or nil)
   if from and block then
     Place.previewFrom(block, from, Place.tempo(), ui.loop)
     local bar = ui.meter and ui.meter.barBeats or 4
@@ -649,11 +711,11 @@ end
 
 local function drawActions()
   local block = ui.idea and ui.idea.block
-  ImGui.Dummy(ctx, 0, 4)
+  ImGui.Dummy(ctx, 0, px(4))
   -- How it goes out: the velocity, and for a Measure whether it lands as a
   -- track per part or one item - beside the buttons that send it.
   settingRow({ "velocity", "layout" }, 64)
-  ImGui.Dummy(ctx, 0, 2)
+  ImGui.Dummy(ctx, 0, px(2))
   if not block then return end
 
   local many = block.layout == "tracks" and #block.parts > 1
@@ -677,7 +739,7 @@ local function drawActions()
   end
   tip("Saves the idea as a .mid file in the folder below" .. (many and ", one track per part" or ""))
 
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   local playing = Place.previewRunning()
   if pick(playing and "Stop" or "Audition", playing, 96) then
     if playing then Place.previewStop()
@@ -691,7 +753,7 @@ local function drawActions()
   local _
   _, ui.loop = ImGui.Checkbox(ctx, "Loop", ui.loop)
 
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   local follow
   _, follow = ImGui.Checkbox(ctx, "Play with REAPER", st.follow == 1)
   st.follow = follow and 1 or 0
@@ -722,18 +784,60 @@ local function drawActions()
     end
     dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
   end
-  ImGui.SameLine(ctx, 0, 16)
+  ImGui.SameLine(ctx, 0, px(16))
   if pick("Open Folder", false, 100) then
     if not Place.openFolder(dir) then say("Couldn’t open " .. dir .. ".", true) end
   end
   tip("Shows the folder in the Finder or Explorer")
   dimWrapped(dir .. ((not asked and st.exportTo == "Project") and "   (the project isn’t saved yet)" or ""))
 
-  if ui.status ~= "" then
-    ImGui.PushStyleColor(ctx, ImGui.Col_Text, ui.warn and WARN or DIM)
-    ImGui.Text(ctx, ui.status)
-    ImGui.PopStyleColor(ctx, 1)
+end
+
+-- The View menu: Text Size, with the Mac's own zoom keys.
+local SHORTCUT_KEY = (reaper.GetOS():find("OSX") or reaper.GetOS():find("mac")) and "Cmd" or "Ctrl"
+local function menuBar()
+  if not ImGui.BeginMenuBar(ctx) then return end
+  if ImGui.BeginMenu(ctx, "View") then
+    for i, size in ipairs(TEXT_SIZES) do
+      local keys = (i == 1 and SHORTCUT_KEY .. "+0") or nil
+      if ImGui.MenuItem(ctx, ("Text Size %d%%"):format(size), keys, ui.textSize == i) then
+        setTextSize(i)
+      end
+    end
+    ImGui.Separator(ctx)
+    if ImGui.MenuItem(ctx, "Bigger Text", SHORTCUT_KEY .. "+=", false, ui.textSize < #TEXT_SIZES) then
+      setTextSize(ui.textSize + 1)
+    end
+    if ImGui.MenuItem(ctx, "Smaller Text", SHORTCUT_KEY .. "+-", false, ui.textSize > 1) then
+      setTextSize(ui.textSize - 1)
+    end
+    ImGui.EndMenu(ctx)
   end
+  ImGui.EndMenuBar(ctx)
+end
+
+-- Cmd (Ctrl on Windows) with =, - or 0, as in every Mac app that zooms.
+local function zoomKeys()
+  if ImGui.GetKeyMods(ctx) & ImGui.Mod_Shortcut == 0 then return end
+  if ImGui.IsKeyPressed(ctx, ImGui.Key_Equal) or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadAdd) then
+    setTextSize(ui.textSize + 1)
+  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Minus) or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadSubtract) then
+    setTextSize(ui.textSize - 1)
+  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_0) then
+    setTextSize(1)
+  end
+end
+
+-- What just happened, at the top of the window where it cannot fall off
+-- the bottom of the screen, and there until it is dismissed or replaced:
+-- Apple asks for nothing that goes away on a timer.
+local function drawMessage()
+  if ui.status == "" then return end
+  ImGui.PushStyleColor(ctx, ImGui.Col_Text, ui.warn and WARN or DIM)
+  ImGui.Text(ctx, ui.status)
+  ImGui.PopStyleColor(ctx, 1)
+  ImGui.SameLine(ctx, 0, px(16))
+  if pick("Dismiss", false) then say("") end
 end
 
 local function frame()
@@ -749,6 +853,9 @@ local function frame()
   -- first fold away.
   local n = 0
   local function step(draw) n = n + 1; draw(n); stepGap() end
+  menuBar()
+  zoomKeys()
+  drawMessage()
   step(drawIdea)
   if st.kind ~= "Drums" then step(drawKey) end
   step(drawFeel)
@@ -772,11 +879,13 @@ local function loop()
   -- Solid rather than the half-transparent window ReaImGui opens by default.
   ImGui.SetNextWindowBgAlpha(ctx, 1.0)
   pushTheme()
-  local visible, open = ImGui.Begin(ctx, TITLE, true)
+  pushSize()
+  local visible, open = ImGui.Begin(ctx, TITLE, true, ImGui.WindowFlags_MenuBar)
   if visible then
     frame()
     ImGui.End(ctx)
   end
+  popSize()
   popTheme()   -- outside the visible test: a push always needs its pop
   if open and not ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     reaper.defer(loop)
@@ -801,7 +910,13 @@ local function main()
   reaper.RefreshToolbar2(sectionID, cmdID)
   reaper.atexit(shutdown)
   reaper.set_action_options(1)
-  ctx = ImGui.CreateContext(TITLE)
+  -- The keyboard alone: Tab and the arrow keys move between controls, Space
+  -- or Return presses one, and a ring shows where you are.
+  ctx = ImGui.CreateContext(TITLE, ImGui.ConfigFlags_NavEnableKeyboard)
+  for i, size in ipairs(TEXT_SIZES) do
+    fonts[i] = ImGui.CreateFont("sans-serif", math.floor(BASE_TEXT * size / 100 + 0.5))
+    ImGui.Attach(ctx, fonts[i])
+  end
   reaper.defer(loop)
 end
 
