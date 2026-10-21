@@ -40,3 +40,4 @@ the standing rules; this holds the decisions behind them.
 | [0027](0027-chromatic-chords.md) | Chromatic chords: the Neapolitan and the augmented sixths before a close's V (with Borrowed), the passing diminished seventh (with Applied) |
 | [0028](0028-common-tone-swiss-and-the-schemata-tunes.md) | The common-tone diminished seventh, the Swiss sixth, the Aprile, Pastorella and Ponte, and the schemata's tunes |
 | [0029](0029-play-with-reaper-and-the-export-folder.md) | Play with REAPER, a click on the roll plays from there, and Export's folder (the project's by default, REAPER's, or one chosen; Open folder) |
+| [0030](0030-the-windows-text-follows-apples-writing-guidelines.md) | The window's text follows Apple's writing guidelines (title-style buttons and value labels, "Kind" for "Make a", em dashes and curly quotes, messages that say what to do); stored values unchanged |

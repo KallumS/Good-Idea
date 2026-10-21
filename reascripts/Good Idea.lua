@@ -17,7 +17,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.17
+ * Version:        1.17.1
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -37,7 +37,7 @@ local imgui_path = reaper.ImGui_GetBuiltinPath and
 if not imgui_path then
   reaper.MB("Good Idea needs the ReaImGui extension.\n\n" ..
             "Install it with ReaPack, from the ReaTeam Extensions repository.",
-            "Missing dependency", 0)
+            "Good Idea", 0)
   return
 end
 local ImGui = dofile(imgui_path)("0.9")
@@ -331,7 +331,7 @@ local function pianoRoll(block, width, height, playhead)
   local dl = ImGui.GetWindowDrawList(ctx)
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local clicked = ImGui.InvisibleButton(ctx, "##roll", width, height)
-  tip(block and #block.notes > 0 and "Click to play from here (from the nearest beat)" or nil)
+  tip(block and #block.notes > 0 and "Click to play from the nearest beat" or nil)
 
   ImGui.DrawList_AddRectFilled(dl, x, y, x + width, y + height, ROLL_BG, 3)
   if not block or #block.notes == 0 then return end
@@ -471,7 +471,7 @@ local function drawKey(n)
     settingRow({ "scale" }, 84)
     local names = {}
     for d = 0, T.scaleLen(key) - 1 do names[#names + 1] = T.noteName(key, d) end
-    dim((rolled and ("This idea: " .. I.keyName(key) .. "  -  ") or "") .. table.concat(names, "  "))
+    dim((rolled and ("This idea: " .. I.keyName(key) .. "  —  ") or "") .. table.concat(names, "  "))
     settingRow({ "borrowed" }, 52)
     settingRow({ "applied" }, 52)
   end)
@@ -493,9 +493,9 @@ local function drawSwing()
     tip("0 is straight. 100 is a full triplet swing: the off-beat eighth lands two thirds of the way " ..
         "through the beat. Every part swings, and what is inserted and exported swings too.")
   elseif ui.meter and ui.meter.beat == 6 then
-    dim(("none in %s: it is in threes already"):format(ui.sig))
+    dim(("None in %s — its beats are in threes already"):format(ui.sig))
   else
-    dim(("none in %s: there are no quarter-note beats to swing"):format(ui.sig))
+    dim(("None in %s — there are no quarter-note beats to swing"):format(ui.sig))
   end
 end
 
@@ -570,7 +570,7 @@ local function drawNew()
     st.seed = math.max(1, math.min(I.MAX_SEED, math.floor(v)))
     touched()
   end
-  tip("Every idea has a number. The same number with the same settings is always the same idea - "
+  tip("Every idea has a number. The same number with the same settings is always the same idea — "
       .. "write one down to come back to it, or change a setting to hear the same idea another way.")
   ImGui.SameLine(ctx, 0, 16)
   if pick("Keep", false, 60) then
@@ -581,7 +581,7 @@ local function drawNew()
   tip("Turns every Any above into what this idea rolled, so the next New Idea keeps the "
       .. "key, length and feel and changes only the music.")
   ImGui.SameLine(ctx, 0, 16)
-  local _, play = ImGui.Checkbox(ctx, "Play new ideas", st.autoplay == 1)
+  local _, play = ImGui.Checkbox(ctx, "Play New Ideas", st.autoplay == 1)
   st.autoplay = play and 1 or 0
   tip("Audition each new idea as soon as it is made")
 end
@@ -634,7 +634,7 @@ local function drawResult()
     -- And a key change: where, and to what.
     if idea.keyChange then
       ImGui.TextWrapped(ctx, "Key change: " .. idea.keyChange.text)
-      tip("The last section, tune, chords and bass, in a key a step higher - the pop key change.")
+      tip("The last section, tune, chords and bass, in a key a step higher — the pop key change.")
     end
     local parts = {}
     for _, p in ipairs(block.parts) do parts[#parts + 1] = p.name end
@@ -657,25 +657,25 @@ local function drawActions()
   if not block then return end
 
   local many = block.layout == "tracks" and #block.parts > 1
-  if pick(many and "Insert on new tracks" or "Insert at cursor", false, 170) then
+  if pick(many and "Insert on New Tracks" or "Insert at Cursor", false, 170) then
     local res = Place.insert(block)
     if res == Place.OK then say(many and ("Inserted " .. #block.parts .. " tracks at the edit cursor")
                                       or "Inserted at the edit cursor")
     elseif res == Place.NOTHING then say("Nothing to insert", true)
-    else say("No track selected", true) end
+    else say("No track is selected. Select a track, then insert.", true) end
   end
-  tip(many and "One new track per part - Melody, Chords, Bass - under the selected track"
+  tip(many and "One new track per part — Melody, Chords, Bass — under the selected track"
            or "As one item on the selected track, at the edit cursor")
 
   ImGui.SameLine(ctx)
   local dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
-  if pick("Export .mid", false, 120) then
+  if pick("Export MIDI File", false, 130) then
     local res, path = Place.export(block, dir)
-    if res == Place.OK then say("Wrote " .. tostring(path:match("[^/\\]+$")) .. "  -  Open folder shows it")
+    if res == Place.OK then say("Saved “" .. tostring(path:match("[^/\\]+$")) .. "”. Open Folder shows it.")
     elseif res == Place.NOTHING then say("Nothing to write", true)
-    else say("Could not write into " .. dir, true) end
+    else say("Couldn’t write to " .. dir .. ". Choose another folder below.", true) end
   end
-  tip("Writes the idea as a .mid file into the folder below" .. (many and ", one track per part" or ""))
+  tip("Saves the idea as a .mid file in the folder below" .. (many and ", one track per part" or ""))
 
   ImGui.SameLine(ctx, 0, 16)
   local playing = Place.previewRunning()
@@ -684,8 +684,8 @@ local function drawActions()
     elseif st.follow == 1 and Place.reaperPlaying() then Place.previewWithReaperStart(block)
     else Place.previewStart(block, Place.tempo()) end
   end
-  tip("Plays through the virtual keyboard, so a record-armed monitored track " ..
-      "will sound it. Timing is a preview, not a performance. Click the roll to play from a beat.")
+  tip("Plays through the virtual keyboard, so a record-armed, monitored track " ..
+      "sounds it. The timing is a preview, not a performance. Click the roll to play from a beat.")
 
   ImGui.SameLine(ctx)
   local _
@@ -695,20 +695,20 @@ local function drawActions()
   local follow
   _, follow = ImGui.Checkbox(ctx, "Play with REAPER", st.follow == 1)
   st.follow = follow and 1 or 0
-  tip("Ticked, pressing play in REAPER plays the idea along with the project, in its tempo, " ..
-      "starting on the bar the edit cursor is in - where Insert would put it. A new idea comes in " ..
-      "in time. Untick to have Good Idea ignore REAPER's play button. It never plays while REAPER " ..
-      "records, so it cannot end up in a take; once an idea is inserted, untick it or you will hear it twice.")
+  tip("When this is on, pressing Play in REAPER plays the idea along with the project, in its tempo, " ..
+      "from the bar the edit cursor is in — where Insert would put it. A new idea comes in " ..
+      "in time. Turn it off to have Good Idea ignore REAPER’s Play button. It never plays while REAPER " ..
+      "records, so it can’t end up in a take. Once an idea is inserted, turn this off, or you’ll hear it twice.")
 
   -- Where Export writes, and a way to see it.
-  dim("Save .mid to")
+  dim("Save MIDI files to")
   ImGui.SameLine(ctx)
   local WHERE = { "Project", "REAPER", "Folder" }
-  local NAMES = { Project = "Project folder", REAPER = "REAPER folder", Folder = "Choose folder..." }
+  local NAMES = { Project = "Project Folder", REAPER = "REAPER Folder", Folder = "Choose Folder…" }
   local HINTS = {
-    Project = "A Good Idea folder beside the saved project (REAPER's Good Idea folder until the project is saved)",
-    REAPER = "The Good Idea folder in REAPER's resource path, where 1.0 to 1.16 wrote. " ..
-             "The Finder and Explorer hide it: Open folder goes there.",
+    Project = "A Good Idea folder beside the saved project (REAPER’s Good Idea folder until the project is saved)",
+    REAPER = "The Good Idea folder in REAPER’s resource path, where 1.0 to 1.16 saved. " ..
+             "The Finder and Explorer hide it; Open Folder goes there.",
     Folder = "A folder of your choice",
   }
   local c = flow("exportTo", WHERE, function(x) return st.exportTo == x end,
@@ -723,11 +723,11 @@ local function drawActions()
     dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
   end
   ImGui.SameLine(ctx, 0, 16)
-  if pick("Open folder", false, 100) then
-    if not Place.openFolder(dir) then say("Could not open " .. dir, true) end
+  if pick("Open Folder", false, 100) then
+    if not Place.openFolder(dir) then say("Couldn’t open " .. dir .. ".", true) end
   end
   tip("Shows the folder in the Finder or Explorer")
-  dimWrapped(dir .. ((not asked and st.exportTo == "Project") and "   (the project is not saved yet)" or ""))
+  dimWrapped(dir .. ((not asked and st.exportTo == "Project") and "   (the project isn’t saved yet)" or ""))
 
   if ui.status ~= "" then
     ImGui.PushStyleColor(ctx, ImGui.Col_Text, ui.warn and WARN or DIM)

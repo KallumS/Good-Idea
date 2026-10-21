@@ -120,7 +120,7 @@ To keep the window short, **every step but the first is folded**: one line
 with its name and what is chosen in it ("pace Any  /  groove Syncopated
 ..."). Click the step's name to open it, and again to fold it away.
 
-1. **Idea** - Motif, Phrase, Measure or Drums, and how many **bars**. For a
+1. **Idea** - the **kind** (Motif, Phrase, Measure or Drums), and how many **bars**. For a
    Phrase, the **content**: Melody, Chords or Both.
 2. **Key** - the key note and the scale: major, minor, the modes, pentatonic,
    blues, whole tone, diminished (ScaleView's sixteen). Its notes are spelled
@@ -168,8 +168,8 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      top); and where the chords have sevenths, a 7sus4, a 9th, or the
      diminished chord on its third (G7 becomes Bm7b5). Always built from
      the scale; never the first chord or the cadence.
-   - **Chord pace** - 0.5 a bar (a chord every two bars), 1 a bar, 1.5 a
-     bar (three chords over two bars, 3+3+2 beats), 2 a bar, or 4 a bar (a
+   - **Chord pace** - 0.5 a Bar (a chord every two bars), 1 a Bar, 1.5 a
+     Bar (three chords over two bars, 3+3+2 beats), 2 a Bar, or 4 a Bar (a
      chord on every beat; three a bar in 3/4). Any rolls 0.5, 1 and 2; 1.5
      and 4 are there to choose.
    - **Style** - Block, Pulse, Broken; and, to choose (Any leaves them
@@ -199,16 +199,16 @@ with its name and what is chosen in it ("pace Any  /  groove Syncopated
      octaves.
 6. **Arrangement** (Measure only) - the **bass** (Held;
    Pulse, in the rhythm a kick drum would play; Moving, stepping into each
-   new chord), and a **key change** for the last section: None, Step up (a
-   whole tone), Half step up, or Truck driver (a whole tone, through the
+   new chord), and a **key change** for the last section: None, Step Up (a
+   whole tone), Half Step Up, or Truck Driver (a whole tone, through the
    new key's V7 - C ... A7 | D - into the new key's tonic: if no section
    in the second half starts on the tonic, one is made to). The window says
    where it changes, and to what. A Measure has no drums: make a groove with **Drums**, the
    fourth kind, and put it on a track of its own.
 7. **Drums** (a drum idea's steps are just Idea, Feel and Drums) - the
-   **beat** (Backbeat, Half-time, Four on the floor, Breakbeat, Reggaeton -
+   **beat** (Backbeat, Half-Time, Four on the Floor, Breakbeat, Reggaeton -
    the kick on every beat under the snare's 3+3+2), the
-   **fills** (None, At the end, Every 4 bars, Every 2 bars), the
+   **fills** (None, At the End, Every 4 Bars, Every 2 Bars), the
    **cymbal** (Hats, or Ride) and **ghost notes** (Off, Rare - the default -
    or Common: the snare tapped very quietly on the sixteenths, mostly
    around the backbeat, the same in every bar).
@@ -231,7 +231,7 @@ Minor".
 - **Idea number** - type a number to go straight to that idea.
 - **Keep** turns every Any into what this idea rolled, so the next New Idea
   keeps the key, length and feel and changes only the music.
-- **Play new ideas** auditions each idea as soon as it is made.
+- **Play New Ideas** auditions each idea as soon as it is made.
 And get it out - at the bottom, with the buttons that send it:
 
 - **Velocity** - **Shaped** (the default) plays it as a player would: the
@@ -239,26 +239,26 @@ And get it out - at the bottom, with the buttons that send it:
   chord's inner notes under its top. **Flat** is everything at 100;
   **Accents** is 100 with the downbeats and the start of each part of the idea
   at 115.
-- **Layout** (a Measure) - **Tracks**, a new track per part, or **One item**,
+- **Layout** (a Measure) - **Tracks**, a new track per part, or **One Item**,
   every part in one item on its own MIDI channel.
 
-- **Insert at cursor** puts it on the selected track at the edit cursor, as
+- **Insert at Cursor** puts it on the selected track at the edit cursor, as
   one item. A Phrase with melody and chords keeps them on MIDI channels 1 and
   2, so you can split them apart later with REAPER's explode-by-channel
   action (search the action list for "explode").
-- **Insert on new tracks** (a Measure laid out on Tracks) makes a track for
+- **Insert on New Tracks** (a Measure laid out on Tracks) makes a track for
   each part - Melody, Chords, Bass - under the selected track.
-- **Export .mid** writes a MIDI file into the folder chosen under **Save .mid
-  to**, which is shown in full underneath:
-  - **Project folder** (the default) - a `Good Idea` folder beside your saved
+- **Export MIDI File** saves a .mid file in the folder chosen under **Save
+  MIDI files to**, which is shown in full underneath:
+  - **Project Folder** (the default) - a `Good Idea` folder beside your saved
     project. Until the project is saved, REAPER's folder instead (it says so).
-  - **REAPER folder** - a `Good Idea` folder in REAPER's resource path, where
+  - **REAPER Folder** - a `Good Idea` folder in REAPER's resource path, where
     1.0 to 1.16 wrote. The Mac's Finder and Windows' Explorer hide that
     folder, which is why exported files seemed to vanish.
-  - **Choose folder...** - any folder. With the js_ReaScriptAPI extension
+  - **Choose Folder…** - any folder. With the js_ReaScriptAPI extension
     (ReaPack, ReaTeam Extensions) you get the system's folder chooser;
     without it, a box to paste a folder's path into.
-  - **Open folder** shows the folder in the Finder or Explorer.
+  - **Open Folder** shows the folder in the Finder or Explorer.
 - **Audition** plays it through the virtual keyboard, so a record-armed track
   with monitoring on will sound it. It is a preview, not a performance - for
   exact timing, insert it and press play. **Loop** plays it round and round.
@@ -335,11 +335,11 @@ instrument on it. Insert and Export do not need that. The same goes for Play
 with REAPER.
 
 **I cannot find the exported file.** The full folder is written under the
-Save .mid to row; **Open folder** opens it. Before 1.17 every export went to
+Save MIDI files to row; **Open Folder** opens it. Before 1.17 every export went to
 REAPER's resource path (on a Mac, `~/Library/Application Support/REAPER/Good
 Idea`; on Windows, `%APPDATA%\REAPER\Good Idea`), which the Finder and
 Explorer hide - your earlier exports are probably there: choose **REAPER
-folder** and press **Open folder**.
+Folder** and press **Open Folder**.
 
 **The drums play as piano notes.** The instrument on the track is not a drum
 kit. Put the drum idea's track through a General MIDI drum instrument.
