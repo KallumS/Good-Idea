@@ -42,3 +42,32 @@ The same as Midi Suggester's 0009, so the family's windows behave alike:
   Contrast, right to left. Escape still closes the window.
 - Unverified in REAPER: the zoom keys reaching the window, and which face
   "sans-serif" resolves to.
+
+## 16 October 2026: the final sweep (1.19)
+
+Every implementable guideline checked again (`docs/apple-hig-review.md`,
+*Final sweep*), with the family's shared choices:
+
+- **Raised surfaces are lighter**: `Col_PopupBg` `#2A2F37`, `Col_Border`
+  `#3A404A`; the menu bar `#1B1F25` and menu highlight `#3A404A` (pressed
+  `#22262D`) instead of ImGui's defaults; `Col_TextDisabled` `#BFC5CE`,
+  because ImGui writes menu keys in it.
+- **Non-text 3:1**: scrollbar thumb and resize corner `#6D7581`; tick
+  boxes, the idea number and the swing slider through `edged()`, a 1-point
+  `#8A919C` edge.
+- **Rows wrap**: a fixed row's next item goes through `beside(w, gap)`;
+  `dim()` and the message wrap; tooltips go through `lines()` (64
+  characters). A smallest window size, `px(400)` × `px(300)`.
+- **Esc** lets go of focus, an open menu or a field being typed in before it
+  closes the window (`ui.escTaken`, read at the end of the frame before).
+- **Sound that plays by itself** (Play New Ideas, Play with REAPER): both
+  switches were already remembered; a Stop in the menu bar now shows
+  whenever anything plays.
+- **Undo** for Keep (`say(text, warn, undo)`); any other change to a
+  setting drops it. Chosen over a question first: Keep is quick and often
+  wanted.
+- **The roll**, pressed from the keyboard, plays from the top.
+- **The title** names the idea (`title()`, `###` keeps the window).
+- Not taken: bold headings (the family's look; offered), dimming the chosen
+  state when REAPER has focus, letting colours be chosen (settled), REAPER
+  actions for the window's commands (a new feature).

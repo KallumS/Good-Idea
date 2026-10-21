@@ -17,7 +17,7 @@
  *                 Needs ReaImGui, from the ReaTeam Extensions repository.
  * Author:         Kallum Shah
  * Links:          https://github.com/KallumS/Good-Idea
- * Version:        1.18
+ * Version:        1.19
  * Provides:
  *   gi_theory.lua
  *   gi_idea.lua
@@ -64,16 +64,28 @@ Place.setMidi(Midi)
 
 local THEME = {
   { "Col_Text",              0xDDE1E7FF },
-  { "Col_TextDisabled",      0x8A919CFF },
+  -- ImGui writes a menu item's keys (Cmd+=) in this colour, so it is a word
+  -- and 7:1 on the menu too (#8A919C was 4.2:1 there). A disabled item is
+  -- drawn faded on top of this, which Apple exempts.
+  { "Col_TextDisabled",      0xBFC5CEFF },
   { "Col_WindowBg",          0x23272EFF },   -- the chrome: dark grey, cool
-  { "Col_PopupBg",           0x1B1F25FF },
-  { "Col_Border",            0x14171CFF },
+  -- Menus and tooltips sit in front of the window, so they are a step
+  -- lighter than it, as Apple's Dark Mode asks of raised surfaces, with an
+  -- edge from the ramp (16 October 2026).
+  { "Col_PopupBg",           0x2A2F37FF },
+  { "Col_Border",            0x3A404AFF },
   { "Col_FrameBg",           0x1A1D23FF },
   { "Col_FrameBgHovered",    0x22262DFF },
   { "Col_FrameBgActive",     0x2A2F37FF },
   { "Col_TitleBg",           0x1B1F25FF },
   { "Col_TitleBgActive",     0x23272EFF },
   { "Col_TitleBgCollapsed",  0x1B1F25FF },
+  { "Col_MenuBarBg",         0x1B1F25FF },
+  -- A menu item under the pointer, and pressed: lighter, then darker, as a
+  -- button is. ImGui's own were a blue the words were 3:1 on.
+  { "Col_Header",            0x3A404AFF },
+  { "Col_HeaderHovered",     0x3A404AFF },
+  { "Col_HeaderActive",      0x22262DFF },
   { "Col_Button",            0xA9AFBAFF },   -- the controls: light grey, raised
   { "Col_ButtonHovered",     0xC0C6CFFF },
   { "Col_ButtonActive",      0x8F96A2FF },
@@ -82,9 +94,13 @@ local THEME = {
   { "Col_SliderGrabActive",  0xFFF200FF },
   { "Col_Separator",         0x3A404AFF },
   { "Col_ScrollbarBg",       0x1A1D23FF },
-  { "Col_ScrollbarGrab",     0x585F6BFF },
-  { "Col_ScrollbarGrabHovered", 0x6D7581FF },
+  -- Marks that can be grabbed are 3:1 on what they sit on (16 October 2026).
+  { "Col_ScrollbarGrab",     0x6D7581FF },
+  { "Col_ScrollbarGrabHovered", 0x8A919CFF },
   { "Col_ScrollbarGrabActive",  0xA9AFBAFF },
+  { "Col_ResizeGrip",        0x6D7581FF },
+  { "Col_ResizeGripHovered", 0x8A919CFF },
+  { "Col_ResizeGripActive",  0xA9AFBAFF },
   -- The keyboard's focus ring: near-white, because yellow means "on" and a
   -- focused control need not be.
   { "Col_NavHighlight",      0xF2F4F7FF },
@@ -104,6 +120,10 @@ local PLAYHEAD  = 0xF2F4F7FF
 -- the house red #D2483F 3.4:1, so neither is used for words any more.
 local DIM       = 0xB0B6C0FF
 local WARN      = 0xFF9E96FF
+-- The edge of a tick box, the idea number's field and the swing slider:
+-- 4.7:1 on the ground, so they can be seen at all (their frames are
+-- #1A1D23, 1.1:1). The family's frame edge.
+local EDGE      = 0x8A919CFF
 
 -- Shifts a colour towards white or black, so the chosen state needs one colour
 -- rather than three. Arithmetic rather than bit operators, and it keeps the
@@ -159,7 +179,9 @@ local function setTextSize(i)
 end
 
 local function touched() ui.dirty = true end
-local function say(text, warn) ui.status, ui.warn = text, warn or false end
+-- A message, and optionally a way to take back what it reports: Apple asks
+-- that a change that loses something can be undone (16 October 2026).
+local function say(text, warn, undo) ui.status, ui.warn, ui.undo = text, warn or false, undo end
 
 -- The idea for the settings and the idea number. Made when something
 -- changes, never per frame.
@@ -269,6 +291,18 @@ local function fit(label, width, exact)
   return math.max(exact and width or px(width or 0), select(1, ImGui.CalcTextSize(ctx, text)) + px(16))
 end
 
+-- Puts the next item on this line if `w` more fits before the window's edge,
+-- else starts a new line: a row of fixed things wraps like flow() does, so a
+-- larger text size or a narrower window never pushes one out of sight
+-- (16 October 2026; before, the New Idea row ran off the edge at 200%).
+local function beside(w, gap)
+  ImGui.SameLine(ctx, 0, px(gap or 12))
+  if select(1, ImGui.GetContentRegionAvail(ctx)) < w then ImGui.NewLine(ctx) end
+end
+local function textWidth(text) return (select(1, ImGui.CalcTextSize(ctx, text))) end
+-- A tick box's width: the box, the gap, the words.
+local function checkWidth(label) return px(28) + px(8) + textWidth(label) end
+
 -- An unchosen button wears the theme's grey, a chosen one the accent. Either
 -- way the text on it goes to INK: both are far lighter than the chrome.
 local function pick(label, selected, width, height, exact)
@@ -306,13 +340,57 @@ end
 local STEP_GAP = 6
 local function stepGap() ImGui.Dummy(ctx, px(16), px(STEP_GAP)) end
 
-local function tip(text)
-  if text and ImGui.IsItemHovered(ctx) then ImGui.SetTooltip(ctx, text) end
+-- A tooltip, broken into lines of about TIP_CHARS characters: a long one
+-- on a single line ran off the screen at 200%, and Apple's Layout page asks
+-- for a readable line length. A line already short enough is left alone.
+local TIP_CHARS = 64
+local function lines(text)
+  local out = {}
+  for para in (text .. "\n"):gmatch("(.-)\n") do
+    if (utf8.len(para) or #para) <= TIP_CHARS then
+      out[#out + 1] = para
+    else
+      local line = ""
+      for word in para:gmatch("%S+") do
+        local longer = (line == "") and word or (line .. " " .. word)
+        if line ~= "" and (utf8.len(longer) or #longer) > TIP_CHARS then
+          out[#out + 1] = line
+          line = word
+        else
+          line = longer
+        end
+      end
+      out[#out + 1] = line
+    end
+  end
+  return table.concat(out, "\n")
 end
 
+-- Shown on hover, and on keyboard focus too: ImGui counts the focused item
+-- as hovered while the keyboard is in use.
+local function tip(text)
+  if text and ImGui.IsItemHovered(ctx) then ImGui.SetTooltip(ctx, lines(text)) end
+end
+
+-- A tick box, field or slider with an edge 3:1 on the ground. Their frames
+-- are nearly the ground's own colour, so without one only the tick, the
+-- number or the grab could be seen.
+local function edged(draw)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, math.max(1, px(1)))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Border, EDGE)
+  local changed, v = draw()
+  ImGui.PopStyleColor(ctx, 1)
+  ImGui.PopStyleVar(ctx, 1)
+  return changed, v
+end
+local function check(label, value)
+  return edged(function() return ImGui.Checkbox(ctx, label, value) end)
+end
+
+-- Secondary text, wrapped at the window's edge rather than cut off by it.
 local function dim(text)
   ImGui.PushStyleColor(ctx, ImGui.Col_Text, DIM)
-  ImGui.Text(ctx, text)
+  ImGui.TextWrapped(ctx, text)
   ImGui.PopStyleColor(ctx, 1)
 end
 
@@ -365,7 +443,7 @@ local function settingRow(ids, minWidth)
   for _, id in ipairs(ids) do
     local s = I.BY_ID[id]
     if I.shows(s, st) then
-      if not first then ImGui.SameLine(ctx, 0, px(24)) end
+      if not first then beside(textWidth(s.label) + px(12 + (minWidth or 44)), 24) end
       first = false
       dim(s.label)
       ImGui.SameLine(ctx)
@@ -375,7 +453,11 @@ local function settingRow(ids, minWidth)
       local c = flow(id, items, function(x) return st[id] == x end,
                      function(x) return I.valueName(s, x) end,
                      function(x) return hintFor(s, x) end, minWidth or 44)
-      if c then st[id] = items[c]; touched() end
+      if c then
+        st[id] = items[c]
+        ui.undo = nil      -- an older Undo would throw this change away too
+        touched()
+      end
     end
   end
 end
@@ -393,7 +475,9 @@ local function pianoRoll(block, width, height, playhead)
   local dl = ImGui.GetWindowDrawList(ctx)
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local clicked = ImGui.InvisibleButton(ctx, "##roll", width, height)
-  tip(block and #block.notes > 0 and "Click to play from the nearest beat" or nil)
+  tip(block and #block.notes > 0 and
+      "Click to play from the nearest beat, or press Space here to play from the top. " ..
+      "The tune is in yellow, the chords and bass in grey." or nil)
 
   ImGui.DrawList_AddRectFilled(dl, x, y, x + width, y + height, ROLL_BG, 3)
   if not block or #block.notes == 0 then return end
@@ -401,9 +485,12 @@ local function pianoRoll(block, width, height, playhead)
   local beats = math.max(block.beats, 1e-9)
   local at
   if clicked then
-    local mx = ImGui.GetMousePos(ctx)
+    local mx, my = ImGui.GetMousePos(ctx)
     local beatQN = ui.meter and (ui.meter.beat / 4) or 1
-    local q = math.max(0, math.min(1, (mx - x) / math.max(width, 1))) * beats
+    -- Pressed from the keyboard (Space or Return on the roll), the pointer is
+    -- anywhere: it plays from the top (16 October 2026).
+    local mouse = mx >= x and mx <= x + width and my >= y and my <= y + height
+    local q = mouse and math.max(0, math.min(1, (mx - x) / math.max(width, 1))) * beats or 0
     at = math.floor(q / beatQN + 0.5) * beatQN
     if at >= beats - 1e-9 then at = math.max(0, at - beatQN) end
   end
@@ -515,7 +602,8 @@ end
 local function drawIdea(n)
   heading(n, "Idea")
   settingRow({ "kind" }, 84)
-  ImGui.SameLine(ctx, 0, px(24))
+  local bars = I.BY_ID[I.barsSetting(st.kind)]
+  beside(textWidth(bars.label) + px(12 + 52), 24)
   settingRow({ I.barsSetting(st.kind) }, st.kind == "Drums" and 30 or 52)
   settingRow({ "content" }, 64)
 end
@@ -547,7 +635,7 @@ local function drawSwing()
   -- that would do nothing.
   if ui.meter and I.swings(ui.meter) then
     ImGui.SetNextItemWidth(ctx, px(240))
-    local changed, v = ImGui.SliderInt(ctx, "##swing", st.swing, 0, 100, "%d%%")
+    local changed, v = edged(function() return ImGui.SliderInt(ctx, "##swing", st.swing, 0, 100, "%d%%") end)
     if changed and v then
       st.swing = math.max(0, math.min(100, math.floor(v)))
       touched()
@@ -612,38 +700,42 @@ local function drawNew()
   ImGui.Dummy(ctx, 0, px(4))
   if pick("New Idea", false, 160, 34) then go(newSeed(), true) end
   tip("A new idea of the kind chosen, with every Any rolled again")
-  ImGui.SameLine(ctx, 0, px(16))
   if ui.at > 1 then
+    beside(fit("<", 30), 16)
     if pick("<", false, 30, 34) then ui.at = ui.at - 1; go(ui.history[ui.at], false) end
     tip("Back to the idea before")
-    ImGui.SameLine(ctx)
   end
   if ui.at < #ui.history then
+    beside(fit(">", 30))
     if pick(">", false, 30, 34) then ui.at = ui.at + 1; go(ui.history[ui.at], false) end
     tip("Forward again")
-    ImGui.SameLine(ctx)
   end
-  ImGui.SameLine(ctx, 0, px(16))
+  beside(textWidth("Idea number") + px(12 + 110), 16)
   dim("Idea number")
   ImGui.SameLine(ctx)
   ImGui.SetNextItemWidth(ctx, px(110))
-  local changed, v = ImGui.InputInt(ctx, "##seed", st.seed, 1, 100)
+  local changed, v = edged(function() return ImGui.InputInt(ctx, "##seed", st.seed, 1, 100) end)
   if changed and v then
     st.seed = math.max(1, math.min(I.MAX_SEED, math.floor(v)))
     touched()
   end
   tip("Every idea has a number. The same number with the same settings is always the same idea — "
       .. "write one down to come back to it, or change a setting to hear the same idea another way.")
-  ImGui.SameLine(ctx, 0, px(16))
+  beside(fit("Keep", 60), 16)
   if pick("Keep", false, 60) then
+    local was = {}
+    for _, s in ipairs(I.SETTINGS) do was[s.id] = st[s.id] end
     I.keep(st, ui.idea)
     touched()
-    say("Kept: every Any is now what this idea rolled")
+    say("Kept: every Any is now what this idea rolled", false, function()
+      for id, v in pairs(was) do st[id] = v end
+      touched()
+    end)
   end
   tip("Turns every Any above into what this idea rolled, so the next New Idea keeps the "
       .. "key, length and feel and changes only the music.")
-  ImGui.SameLine(ctx, 0, px(16))
-  local _, play = ImGui.Checkbox(ctx, "Play New Ideas", st.autoplay == 1)
+  beside(checkWidth("Play New Ideas"), 16)
+  local _, play = check("Play New Ideas", st.autoplay == 1)
   st.autoplay = play and 1 or 0
   tip("Audition each new idea as soon as it is made")
 end
@@ -729,7 +821,7 @@ local function drawActions()
   tip(many and "One new track per part — Melody, Chords, Bass — under the selected track"
            or "As one item on the selected track, at the edit cursor")
 
-  ImGui.SameLine(ctx)
+  beside(fit("Export MIDI File", 130))
   local dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
   if pick("Export MIDI File", false, 130) then
     local res, path = Place.export(block, dir)
@@ -739,7 +831,7 @@ local function drawActions()
   end
   tip("Saves the idea as a .mid file in the folder below" .. (many and ", one track per part" or ""))
 
-  ImGui.SameLine(ctx, 0, px(16))
+  beside(fit("Audition", 96), 16)
   local playing = Place.previewRunning()
   if pick(playing and "Stop" or "Audition", playing, 96) then
     if playing then Place.previewStop()
@@ -749,13 +841,14 @@ local function drawActions()
   tip("Plays through the virtual keyboard, so a record-armed, monitored track " ..
       "sounds it. The timing is a preview, not a performance. Click the roll to play from a beat.")
 
-  ImGui.SameLine(ctx)
+  beside(checkWidth("Loop"))
   local _
-  _, ui.loop = ImGui.Checkbox(ctx, "Loop", ui.loop)
+  _, ui.loop = check("Loop", ui.loop)
+  tip("Play it round and round until Stop")
 
-  ImGui.SameLine(ctx, 0, px(16))
+  beside(checkWidth("Play with REAPER"), 16)
   local follow
-  _, follow = ImGui.Checkbox(ctx, "Play with REAPER", st.follow == 1)
+  _, follow = check("Play with REAPER", st.follow == 1)
   st.follow = follow and 1 or 0
   tip("When this is on, pressing Play in REAPER plays the idea along with the project, in its tempo, " ..
       "from the bar the edit cursor is in — where Insert would put it. A new idea comes in " ..
@@ -764,7 +857,7 @@ local function drawActions()
 
   -- Where Export writes, and a way to see it.
   dim("Save MIDI files to")
-  ImGui.SameLine(ctx)
+  beside(px(110))
   local WHERE = { "Project", "REAPER", "Folder" }
   local NAMES = { Project = "Project Folder", REAPER = "REAPER Folder", Folder = "Choose Folder…" }
   local HINTS = {
@@ -784,7 +877,7 @@ local function drawActions()
     end
     dir, asked = Place.exportDir(st.exportTo, ui.exportDir)
   end
-  ImGui.SameLine(ctx, 0, px(16))
+  beside(fit("Open Folder", 100), 16)
   if pick("Open Folder", false, 100) then
     if not Place.openFolder(dir) then say("Couldn’t open " .. dir .. ".", true) end
   end
@@ -813,6 +906,13 @@ local function menuBar()
     end
     ImGui.EndMenu(ctx)
   end
+  -- While anything plays - Audition, Play New Ideas, Play with REAPER - a
+  -- Stop in the menu bar, which never scrolls out of sight the way the one
+  -- under the roll can (16 October 2026).
+  if Place.previewRunning() then
+    if pick("Stop##menu", true) then Place.previewStop() end
+    tip("Stop playing. Play New Ideas and Play with REAPER, by the Audition button, turn the playing off for good.")
+  end
   ImGui.EndMenuBar(ctx)
 end
 
@@ -834,9 +934,17 @@ end
 local function drawMessage()
   if ui.status == "" then return end
   ImGui.PushStyleColor(ctx, ImGui.Col_Text, ui.warn and WARN or DIM)
-  ImGui.Text(ctx, ui.status)
+  ImGui.TextWrapped(ctx, ui.status)
   ImGui.PopStyleColor(ctx, 1)
-  ImGui.SameLine(ctx, 0, px(16))
+  if ui.undo then
+    beside(fit("Undo"), 16)
+    if pick("Undo", false) then
+      ui.undo()
+      say("")
+    end
+    tip("Put every setting back as it was before Keep")
+  end
+  beside(fit("Dismiss"), 16)
   if pick("Dismiss", false) then say("") end
 end
 
@@ -866,6 +974,11 @@ local function frame()
   drawNew()
   drawResult()
   drawActions()
+  -- Esc lets go of what has it first: a menu that is open, a control the
+  -- keyboard is on, the idea number being typed. Read here, in this frame,
+  -- for the next one: by the time Esc arrives, ImGui has already let go.
+  ui.escTaken = ImGui.IsAnyItemFocused(ctx) or ImGui.IsAnyItemActive(ctx) or
+                ImGui.IsPopupOpen(ctx, "", ImGui.PopupFlags_AnyPopupId | ImGui.PopupFlags_AnyPopupLevel)
 end
 
 ------------------------------------------------------------------------------
@@ -874,20 +987,35 @@ end
 
 local sectionID, cmdID
 
+-- The smallest the window may be made, grown with the text. Every row wraps
+-- at the window's edge (beside() and flow()), so nothing falls out of reach.
+local MIN_W, MIN_H = 400, 300
+
+-- The title names the idea showing, which is all a screen reader can read
+-- of the window. "###" keeps it the same window as the name changes.
+local function title()
+  local block = ui.idea and ui.idea.block
+  return TITLE .. (block and (" — " .. block.name) or "") .. "###" .. TITLE
+end
+
 local function loop()
   ImGui.SetNextWindowSize(ctx, 1000, 900, ImGui.Cond_FirstUseEver)
+  ImGui.SetNextWindowSizeConstraints(ctx, px(MIN_W), px(MIN_H), 100000, 100000)
   -- Solid rather than the half-transparent window ReaImGui opens by default.
   ImGui.SetNextWindowBgAlpha(ctx, 1.0)
   pushTheme()
   pushSize()
-  local visible, open = ImGui.Begin(ctx, TITLE, true, ImGui.WindowFlags_MenuBar)
+  local taken = ui.escTaken
+  ui.escTaken = false
+  local visible, open = ImGui.Begin(ctx, title(), true, ImGui.WindowFlags_MenuBar)
   if visible then
     frame()
     ImGui.End(ctx)
   end
   popSize()
   popTheme()   -- outside the visible test: a push always needs its pop
-  if open and not ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  -- Esc: let go of what had it, and only then close the window.
+  if open and not (ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) and not taken) then
     reaper.defer(loop)
   end
 end
