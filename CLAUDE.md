@@ -503,6 +503,37 @@ which `frame` compares every frame.
 History is a browser's: New Idea after going back drops the ideas ahead. It
 is not saved; the idea number is.
 
+**The rest of Apple's HIG Foundations**
+([0031](docs/decisions/0031-apples-hig-foundations.md),
+[`docs/apple-hig-review.md`](docs/apple-hig-review.md), after Midi Suggester's
+0009 and Transient Shuffler): every line of text is **7:1** on the ground
+(secondary `#B0B6C0`, warnings `#FF9E96` - the house red and `#8A919C` are
+not for words); **View → Text Size** 100-200% (Cmd+= / Cmd+- / Cmd+0),
+saved as `textSize`, the system sans-serif at 13 points; controls **28
+points tall, 12 apart** (`pushSize`, before `Begin`, popped after `End` like
+the theme); **keyboard navigation** on, its ring `#F2F4F7`; a chosen button
+also carries an **ink bar** (not colour alone); the **message at the top**
+until *Dismiss*. Rules for new code: every fixed size goes through `px()`,
+every button through `pick()` (never narrower than its label), every text
+colour 7:1. `tests/hig_mock.lua` - the same file in every ReaImGui repo of
+the family - adds the calls to the mock and checks each of these per widget.
+The text size is `ui.textSize`, saved under its own ExtState key `view` (`I.clampState` owns `st`). `test_ui` counts the roll's rects without the chosen buttons' ink bars. `docs/COLOUR.md` gained `#B0B6C0`, `#FF9E96` and the focus ring.
+
+**The final sweep (1.19, 16 October 2026,
+[0031](docs/decisions/0031-apples-hig-foundations.md))** added rules for new
+code: a fixed row's next item goes through **`beside(w, gap)`** (never a
+bare `SameLine` before something that might not fit), secondary text
+through `dim()` (wrapped), tooltips through `tip()` (broken into
+64-character lines by `lines()`), tick boxes, fields and sliders through
+**`edged()`** / `check()` (a `#8A919C` edge, 4.7:1). Menus and tooltips
+are `#2A2F37`, lighter than the window; nothing keeps ImGui's default blue
+or neutral greys. Esc lets go of focus, a menu or a field before it closes
+the window (`ui.escTaken`). Whenever anything plays, a Stop sits in the menu
+bar. A change that loses the user's choices leaves an **Undo** in the
+message (`say(text, warn, undo)`). `test_ui`'s mock lays out every item and
+fails if anything runs off the window's edge, at 100%, 200% and the
+smallest width: add a new state to its list.
+
 ## Colour
 
 The house scheme, unchanged: see `docs/COLOUR.md` (kept by hand). Every grey
@@ -700,7 +731,7 @@ hash, so a release is: commit the code, then add a new `<version>` block
 pointing at that commit. Never edit an existing one. ReaPack keys a package by
 its name, so do not rename `Good Idea.lua`.
 
-Every change the user asks for has been a release (1.0 to 1.17.1 so far), in
+Every change the user asks for has been a release (1.0 to 1.19 so far), in
 this order:
 
 1. Read the demo before; make the change; read the demo after.

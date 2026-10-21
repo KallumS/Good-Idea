@@ -21,11 +21,14 @@ local SCRIPT = C.SCRIPTS .. "Good Idea.lua"
 ------------------------------------------------------------------------------
 
 local g = {}
+local HIG          -- the shared HIG checks, loaded below
 local function resetFrame()
   g.idDepth, g.colDepth, g.colStack, g.idStack, g.paths = 0, 0, {}, {}, {}
   g.buttons, g.ink, g.texts, g.checkboxes, g.headings, g.tooltips = {}, {}, {}, {}, {}, {}
   g.inputs, g.sliders, g.ticked = {}, {}, {}
   g.rects, g.bgAlpha, g.windowBg = {}, nil, nil
+  g.theme, g.begun, g.varStack, g.edges, g.newLines, g.menuButtons = {}, false, {}, {}, 0, {}
+  g.lineX, g.same, g.sameGap, g.overflow = 0, false, 0, nil
 end
 resetFrame()
 
@@ -34,8 +37,13 @@ local consts = { "Col_Text", "Col_TextDisabled", "Col_WindowBg", "Col_PopupBg", 
   "Col_FrameBg", "Col_FrameBgHovered", "Col_FrameBgActive", "Col_TitleBg", "Col_TitleBgActive",
   "Col_TitleBgCollapsed", "Col_Button", "Col_ButtonHovered", "Col_ButtonActive", "Col_CheckMark",
   "Col_SliderGrab", "Col_SliderGrabActive", "Col_Separator", "Col_ScrollbarBg", "Col_ScrollbarGrab",
-  "Col_ScrollbarGrabHovered", "Col_ScrollbarGrabActive", "Cond_FirstUseEver", "Key_Escape" }
+  "Col_ScrollbarGrabHovered", "Col_ScrollbarGrabActive", "Cond_FirstUseEver", "Key_Escape",
+  -- The final HIG sweep (16 October 2026).
+  "Col_MenuBarBg", "Col_Header", "Col_HeaderHovered", "Col_HeaderActive", "Col_ResizeGrip",
+  "Col_ResizeGripHovered", "Col_ResizeGripActive", "StyleVar_FrameBorderSize" }
 for i, k in ipairs(consts) do ImGui[k] = i end
+-- Flags are bits, as in ReaImGui.
+ImGui.PopupFlags_AnyPopupId, ImGui.PopupFlags_AnyPopupLevel = 128, 256
 
 local function effective(idx)
   for i = #g.colStack, 1, -1 do if g.colStack[i].idx == idx then return g.colStack[i].col end end
@@ -47,19 +55,61 @@ function ImGui.SetNextWindowBgAlpha(_, a)
   if type(a) ~= "number" or a < 0 or a > 1 then error("window alpha " .. tostring(a)) end
   g.bgAlpha = a
 end
-function ImGui.Begin() g.windowBg = effective(ImGui.Col_WindowBg); return not g.collapsed, true end
+function ImGui.Begin(_, name) g.title = name; g.begun = true; g.windowBg = effective(ImGui.Col_WindowBg); return not g.collapsed, true end
+-- SetNextWindowSizeConstraints(ctx, size_min_w, size_min_h, size_max_w, size_max_h)
+function ImGui.SetNextWindowSizeConstraints(_, a, b, c, d)
+  for _, v in ipairs({ a, b, c, d }) do if type(v) ~= "number" then error("size constraint " .. tostring(v)) end end
+  g.minSize = { a, b }
+end
+-- Where the keyboard is, as the script asks at the end of a frame.
+function ImGui.IsAnyItemFocused() return g.focused == true end
+function ImGui.IsAnyItemActive() return g.active == true end
+function ImGui.IsPopupOpen(_, id, flags)
+  if type(id) ~= "string" or (flags ~= nil and math.type(flags) ~= "integer") then error("IsPopupOpen(ctx, str_id, flags)") end
+  return g.popup == true
+end
+-- A stack of style variables, so a widget can be asked what it was drawn with.
+function ImGui.PushStyleVar(_, idx, a, b) g.varStack[#g.varStack + 1] = { idx = idx, a = a, b = b } end
+function ImGui.PopStyleVar(_, n) for _ = 1, (n or 1) do g.varStack[#g.varStack] = nil end end
+local function effectiveVar(idx)
+  for i = #g.varStack, 1, -1 do if g.varStack[i].idx == idx then return g.varStack[i].a end end
+end
+local function edgeOf(label)
+  g.edges[label] = { size = effectiveVar(ImGui.StyleVar_FrameBorderSize) or 0, col = effective(ImGui.Col_Border) }
+end
+-- Where each item would sit, to catch a row that runs off the window's edge:
+-- the window is g.avail wide (1000 unless a test narrows it), and what is
+-- left of a line after SameLine shrinks, as in ImGui. Wrapped text and
+-- headings take what is left; anything else must fit in it.
+local function avail() return g.avail or 1000 end
+local function lineStart() return g.same and (g.lineX + g.sameGap) or 0 end
+local function layout(label, w, wraps)
+  local x = lineStart()
+  g.same = false
+  if wraps then w = math.min(w, avail() - x) end
+  g.lineX = x + w
+  if x + w > avail() + 0.5 or (wraps and x > avail() - 1) then g.overflow = g.overflow or label end
+end
+local function measure(s) return (ImGui.CalcTextSize(nil, s)) end
+local function frameH() return (HIG.font and HIG.font.size or 13) + 2 * (HIG.framePad or 0) end
+function ImGui.NewLine() g.newLines = g.newLines + 1; g.same = false end
 function ImGui.End() end
 function ImGui.IsKeyPressed() return false end
 function ImGui.SeparatorText(_, s)
   if type(s) ~= "string" then error("SeparatorText got a " .. type(s)) end
+  layout(s, measure(s), true)
   g.headings[#g.headings + 1] = s
 end
 function ImGui.Text(_, s)
   if type(s) ~= "string" then error("Text got a " .. type(s)) end
+  layout(s, measure(s))
   g.texts[#g.texts + 1] = s
 end
-function ImGui.SameLine() end
-function ImGui.Dummy() end
+function ImGui.SameLine(_, _, spacing)
+  g.same = true
+  g.sameGap = (spacing and spacing >= 0) and spacing or (HIG.spacing or 8)
+end
+function ImGui.Dummy(_, w) layout("a gap", w or 0) end
 function ImGui.PushID(_, v)
   if v == nil then error("PushID with nil") end
   g.idDepth = g.idDepth + 1
@@ -75,6 +125,8 @@ function ImGui.PushStyleColor(_, idx, col)
   if type(col) ~= "number" or col % 256 == 0 then error("style colour must be an opaque 0xRRGGBBAA") end
   g.colStack[#g.colStack + 1] = { idx = idx, col = col }
   g.colDepth = g.colDepth + 1
+  -- The theme: what is pushed before the window begins.
+  if not g.begun then g.theme[idx] = col end
 end
 function ImGui.PopStyleColor(_, n)
   for _ = 1, (n or 1) do g.colStack[#g.colStack] = nil end
@@ -84,7 +136,9 @@ end
 function ImGui.Button(_, label, w, h)
   if type(label) ~= "string" then error("Button label is a " .. type(label)) end
   if w ~= nil and type(w) ~= "number" then error("Button width is a " .. type(w)) end
+  layout(label, (w and w > 0) and w or (measure((label:gsub("##.*$", ""))) + 16))
   g.buttons[#g.buttons + 1] = label
+  if HIG and HIG.inMenuBar then g.menuButtons[#g.menuButtons + 1] = label end
   -- Where the button is: the row it was drawn in, from the ID stack.
   g.paths[#g.buttons] = g.idStack[1] or ""
   -- Recorded per button: a scheme can ink the chosen button alone and leave
@@ -95,10 +149,13 @@ function ImGui.Button(_, label, w, h)
 end
 function ImGui.TextWrapped(_, s)
   if type(s) ~= "string" then error("TextWrapped got a " .. type(s)) end
+  layout(s, measure(s), true)
   g.texts[#g.texts + 1] = s
 end
 function ImGui.Checkbox(_, label, v)
   if type(v) ~= "boolean" then error("Checkbox value is a " .. type(v)) end
+  layout(label, frameH() + (HIG.spacing or 8) * 2 / 3 + measure(label))
+  edgeOf(label)
   g.checkboxes[#g.checkboxes + 1] = label
   g.ticked[label] = v
   if g.toggle == label then return true, not v end
@@ -110,6 +167,8 @@ function ImGui.InputInt(_, label, v, step, fast)
   if type(label) ~= "string" then error("InputInt label is a " .. type(label)) end
   if math.type(v) ~= "integer" then error("InputInt value is not an integer: " .. tostring(v)) end
   g.inputs[#g.inputs + 1] = { label = label, v = v }
+  layout(label, g.nextWidth or 100)
+  edgeOf(label)
   if g.typeSeed then return true, g.typeSeed end
   return false, v
 end
@@ -122,11 +181,14 @@ function ImGui.SliderInt(_, label, v, lo, hi, fmt)
   end
   if type(fmt) ~= "string" then error("SliderInt format is a " .. type(fmt)) end
   g.sliders[#g.sliders + 1] = { label = label, v = v, lo = lo, hi = hi }
+  layout(label, g.nextWidth or 100)
+  edgeOf(label)
   if g.slide then return true, g.slide end
   return false, v
 end
 function ImGui.SetNextItemWidth(_, w)
   if type(w) ~= "number" then error("SetNextItemWidth with a " .. type(w)) end
+  g.nextWidth = w
 end
 function ImGui.IsItemHovered() return true end
 function ImGui.SetTooltip(_, s)
@@ -139,7 +201,7 @@ function ImGui.CalcTextSize(_, s)
   if type(s) ~= "string" then error("CalcTextSize got a " .. type(s)) end
   return #s * 7, 13
 end
-function ImGui.GetContentRegionAvail() return 1000, 400 end
+function ImGui.GetContentRegionAvail() return avail() - lineStart(), 400 end
 function ImGui.GetWindowDrawList() return {} end
 function ImGui.GetCursorScreenPos() return 0, 0 end
 -- The roll is an InvisibleButton; g.rollAt, an x in pixels, clicks it there.
@@ -147,22 +209,27 @@ function ImGui.InvisibleButton(_, id, w, h)
   if type(id) ~= "string" or type(w) ~= "number" or type(h) ~= "number" then
     error("InvisibleButton(ctx, str_id, size_w, size_h)")
   end
-  return g.rollAt ~= nil
+  layout(id, w)
+  return g.rollAt ~= nil or g.rollKey == true
 end
--- ReaImGui's GetMousePos(ctx) returns x and y.
-function ImGui.GetMousePos() return g.rollAt or 0, 0 end
+-- ReaImGui's GetMousePos(ctx) returns x and y. g.rollKey presses the roll
+-- from the keyboard, with the pointer somewhere else - here off to its
+-- right, where a click's sums would land on the last beat.
+function ImGui.GetMousePos() if g.rollKey then return 5000, 5000 end return g.rollAt or 0, 0 end
 function ImGui.DrawList_AddRectFilled(_, x1, y1, x2, y2, col)
   for _, v in ipairs({ x1, y1, x2, y2, col }) do
     if type(v) ~= "number" or v ~= v then error("rect argument is " .. tostring(v)) end
   end
   if x2 < x1 or y2 < y1 then error("rect is inside out") end
-  g.rects[#g.rects + 1] = col
+  -- The ink bars under chosen buttons (decision 0031) are not the roll.
+  if col ~= 0x14171CFF then g.rects[#g.rects + 1] = col end
 end
 function ImGui.DrawList_AddLine(_, x1, y1, x2, y2, col)
   for _, v in ipairs({ x1, y1, x2, y2, col }) do
     if type(v) ~= "number" or v ~= v then error("line argument is " .. tostring(v)) end
   end
 end
+HIG = dofile(HERE .. "/hig_mock.lua")(ImGui)
 setmetatable(ImGui, { __index = function(_, k)
   error("the script called ImGui." .. tostring(k) .. ", which the mock does not have")
 end })
@@ -1034,5 +1101,196 @@ ok(heading():find("^Good Idea 1 %- Motif"), "as the first motif: " .. heading())
 eq(chosenIn("exportTo"), "Project Folder", "a nonsense export folder: the project's")
 frame()
 ok(checked("Play with REAPER"), "and a nonsense switch: on")
+
+
+------------------------------------------------------------------------------
+-- Apple's HIG Foundations, the final sweep (16 October 2026, decision 0031)
+------------------------------------------------------------------------------
+
+local function rgb(col)
+  return math.floor(col / 16777216) % 256, math.floor(col / 65536) % 256, math.floor(col / 256) % 256
+end
+local function lum(col) return HIG.contrast(col, 0x000000FF) end   -- lighter is larger
+local GROUND = 0x23272EFF
+
+fresh()
+local th = g.theme
+ok(lum(th[ImGui.Col_PopupBg]) > lum(th[ImGui.Col_WindowBg]),
+   "Dark Mode: menus and tooltips are lighter than the window they sit in front of")
+ok(lum(th[ImGui.Col_Border]) > lum(th[ImGui.Col_PopupBg]), "with an edge lighter still")
+for _, name in ipairs({ "Col_PopupBg", "Col_MenuBarBg", "Col_HeaderHovered", "Col_HeaderActive", "Col_Header" }) do
+  local c = th[ImGui[name]] and HIG.contrast(th[ImGui.Col_Text], th[ImGui[name]]) or 0
+  ok(c >= 7, ("words are 7:1 on %s too (%.2f)"):format(name, c))
+end
+local keysOnMenu = HIG.contrast(th[ImGui.Col_TextDisabled], th[ImGui.Col_PopupBg])
+ok(keysOnMenu >= 7, ("a menu item's keys (Cmd+=) are 7:1 on the menu (%.2f)"):format(keysOnMenu))
+for _, name in ipairs({ "Col_ScrollbarGrab", "Col_ResizeGrip" }) do
+  local c = math.min(HIG.contrast(th[ImGui[name]], GROUND), HIG.contrast(th[ImGui[name]], th[ImGui.Col_ScrollbarBg]))
+  ok(c >= 3, ("%s can be seen: 3:1 on what it sits on (%.2f)"):format(name, c))
+end
+local flat
+for idx, col in pairs(th) do
+  local r, gg, b = rgb(col)
+  if col ~= 0xFFF200FF and not (r < gg and gg < b) then flat = flat or idx end
+end
+ok(not flat, "every grey in the theme is still blue-shifted, R < G < B: " .. tostring(flat))
+
+-- Tick boxes, the idea number and the swing slider have an edge that can be seen.
+openStep("Feel")
+frame()
+for _, label in ipairs({ "Loop", "Play New Ideas", "Play with REAPER", "##seed", "##swing" }) do
+  local e = g.edges[label]
+  ok(e and e.size >= 1 and HIG.contrast(e.col, GROUND) >= 4.5,
+     ("%s has an edge 4.5:1 on the ground (%s)"):format(label, e and ("%.2f"):format(HIG.contrast(e.col, GROUND)) or "none"))
+end
+
+-- Esc lets go of what has it before it closes the window.
+local function esc()
+  HIG.keys = { [ImGui.Key_Escape] = true }
+  frame()
+  HIG.keys = {}
+  return deferred ~= nil
+end
+fresh()
+ok(not esc(), "Esc with nothing else to let go of closes the window")
+for _, what in ipairs({ "focused", "active", "popup" }) do
+  fresh()
+  g[what] = true
+  frame()
+  g[what] = false
+  ok(esc(), "Esc lets go of " .. ({ focused = "the control the keyboard is on", active = "the idea number being typed",
+                                   popup = "an open menu" })[what] .. ", and the window stays")
+  ok(not esc(), "the next Esc closes it")
+end
+
+-- Anything playing has a Stop that cannot scroll away: in the menu bar.
+fresh()
+eq(#g.menuButtons, 0, "nothing playing: no Stop in the menu bar")
+click("Audition")
+ok(has(g.menuButtons, "Stop"), "auditioning: a Stop in the menu bar")
+if count("Stop##menu") == 1 then click("Stop##menu") end
+eq(count("Audition"), 1, "which stops it")
+eq(#g.menuButtons, 0, "and goes away")
+fresh()
+frame(nil, "Play New Ideas")
+frame()
+click("New Idea")
+ok(has(g.menuButtons, "Stop"), "a new idea playing by itself: a Stop in the menu bar")
+fresh()
+P.cursor, P.playing, P.playPos = 0, true, 0.01
+frame()
+frame()
+ok(has(g.menuButtons, "Stop"), "playing with REAPER: a Stop in the menu bar")
+P.playing = false
+frame()
+frame()
+-- Both switches that make it play by itself are remembered.
+fresh()
+frame(nil, "Play New Ideas")
+frame()
+atexitFn()
+ok(P.ext["GoodIdea:state"]:find("autoplay=1", 1, true), "Play New Ideas is remembered")
+
+-- The roll pressed from the keyboard plays from the top.
+fresh()
+g.rollKey = true
+frame()
+g.rollKey = nil
+frame()
+eq(count("Stop"), 1, "Space on the roll auditions")
+ok(has(g.texts, "Playing from bar 1, beat 1"), "from the top")
+
+-- Keep can be undone.
+local function anys()
+  openAll()
+  local n = 0
+  for i, b in ipairs(g.buttons) do if b == "Any" and g.ink[i].bg == 0xFFF200FF then n = n + 1 end end
+  return n
+end
+fresh()
+local before = anys()
+ok(before > 0, "some settings are on Any: " .. before)
+click("Keep")
+eq(anys(), 0, "Keep turns every Any into what the idea rolled")
+eq(count("Undo"), 1, "and leaves an Undo beside its message")
+if count("Undo") == 1 then click("Undo") end
+eq(anys(), before, "which puts every Any back")
+click("Keep")
+clickIn("kind", "Phrase")
+eq(count("Undo"), 0, "another change to a setting takes the Undo away, so it cannot undo that too")
+
+-- Tooltips are broken into lines a reader can follow.
+local longest, which = 0, nil
+local function tips()
+  frame()
+  for _, t in ipairs(g.tooltips) do
+    for line in (t .. "\n"):gmatch("(.-)\n") do
+      local n = utf8.len(line) or #line
+      if n > longest then longest, which = n, line end
+    end
+  end
+end
+for _, kind in ipairs({ "Motif", "Measure", "Drums" }) do
+  fresh(); clickIn("kind", kind); openAll(); tips()
+end
+ok(longest > 0 and longest <= 64, ("no tooltip line is longer than 64 characters (%d: %s)"):format(longest, tostring(which)))
+
+-- The title names the idea, and stays one window.
+fresh()
+frame()
+ok(g.title and g.title:find("^Good Idea — Good Idea %d+") and g.title:find("###Good Idea$"),
+   "the title names the idea: " .. tostring(g.title))
+ok(g.minSize and g.minSize[1] >= 300 and g.minSize[2] >= 200, "the window has a smallest size")
+
+-- Nothing runs off the window's edge, at 100% or 200%, in any state, and
+-- at the window's smallest.
+local function noOverflow(what)
+  frame()
+  ok(not g.overflow, what .. ": nothing runs off the window's edge: " .. tostring(g.overflow))
+end
+for _, size in ipairs({ "Text Size 100%", "Text Size 200%" }) do
+  local big = size:find("200") and 2 or 1
+  for _, kind in ipairs({ "Motif", "Phrase", "Measure", "Drums" }) do
+    fresh()
+    HIG.menuFrame({ frame = function() frame() end }, size)
+    clickIn("kind", kind)
+    noOverflow(size .. ", " .. kind .. ", folded")
+    openAll(); noOverflow(size .. ", " .. kind .. ", every step open")
+    click("New Idea"); click("New Idea"); click("<"); noOverflow(size .. ", " .. kind .. ", back and forward")
+    click("Keep"); noOverflow(size .. ", " .. kind .. ", a message with Undo")
+    click("Audition"); noOverflow(size .. ", " .. kind .. ", playing")
+    click("Export MIDI File"); noOverflow(size .. ", " .. kind .. ", a saved file's name")
+    P.selTracks = {}
+    click(count("Insert on New Tracks") > 0 and "Insert on New Tracks" or "Insert at Cursor")
+    noOverflow(size .. ", " .. kind .. ", a warning")
+    -- The smallest window, 400 wide, less ImGui's padding either side.
+    g.avail = 384 * big
+    noOverflow(size .. ", " .. kind .. ", the window at its smallest")
+    g.avail = nil
+    atexitFn()
+  end
+end
+P.ext["GoodIdea:view"] = nil
+
+------------------------------------------------------------------------------
+-- Apple's Human Interface Guidelines (decision 0031)
+------------------------------------------------------------------------------
+
+HIG.check({
+  ok = ok, eq = eq, frame = function() frame() end,
+  loaded = function() fresh(); frame() end,
+  warned = function()
+    fresh()
+    P.selTracks = {}
+    click("Insert at Cursor")
+    return "No track is selected."
+  end,
+  dismiss = function() click("Dismiss") end,
+  quit = function() atexitFn() end,
+  restart = function() start(); frame() end,
+  saved = function() return P.ext["GoodIdea:view"] end,
+  setSaved = function(v) P.ext["GoodIdea:view"] = v end,
+  sizeKey = "textSize",
+})
 
 C.done()
