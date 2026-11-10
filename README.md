@@ -284,6 +284,8 @@ you were on are remembered between sessions.
 
 **In Ableton Live:** `ableton/` has Good Idea as a Max for Live MIDI effect. See [`ableton/README.md`](ableton/README.md).
 
+![Good Idea in Ableton Live](ableton/window.png)
+
 ## Installing
 
 **1. Install ReaImGui.** The script will not start without it.
