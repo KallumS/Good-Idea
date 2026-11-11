@@ -282,9 +282,10 @@ The tempo and time signature are read from your project: an idea in 3/4 or
 6/8 has bars of that length and is felt that way. Your choices and the idea
 you were on are remembered between sessions.
 
-**In Ableton Live:** `ableton/` has Good Idea as a Max for Live MIDI effect. See [`ableton/README.md`](ableton/README.md).
+**In Ableton Live:** `ableton/` has Good Idea as a Max for Live MIDI effect. See [`ableton/README.md`](ableton/README.md). It is also a **MIDI Tool** in the clip view's **Generate** panel (`ableton/tool/`).
 
 ![Good Idea in Ableton Live](ableton/window.png)
+![Good Idea in Live's Generate panel](ableton/tool/window.png)
 
 ## Installing
 

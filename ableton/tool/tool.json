@@ -1,0 +1,32 @@
+{
+  "name": "Good Idea",
+  "slug": "GoodIdeaTool",
+  "kind": "generator",
+  "template": "midi_tool",
+  "description": "Good Idea in Live's Generate panel: a motif, a phrase, a measure or a drum idea in the clip's scale, a new one each time you click Generate.",
+  "device": {
+    "generator": "good-idea",
+    "tool": "generate",
+    "result": "Idea"
+  },
+  "files": {
+    "good-idea/gi_theory.lua": "../../reascripts/gi_theory.lua",
+    "good-idea/gi_idea.lua": "../../reascripts/gi_idea.lua",
+    "adapters/common.lua": "../adapters/common.lua",
+    "adapters/good_idea.lua": "../adapters/good_idea.lua",
+    "adapters/index.lua": {
+      "text": "return { \"adapters/good_idea.lua\" }\n"
+    }
+  },
+  "scripts": [
+    "../kit/palette.js",
+    "../kit/runtime/polyfill.js",
+    "../kit/runtime/lua_parse.js",
+    "../kit/runtime/lua_runtime.js",
+    "../kit/runtime/lua_compile.js",
+    "../kit/runtime/host.js",
+    "../kit/ui.js",
+    "../kit/live.js",
+    "../kit/miditool.js"
+  ]
+}
